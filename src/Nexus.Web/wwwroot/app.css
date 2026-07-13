@@ -9,6 +9,156 @@
     --color-danger: #dc2626;
     --radius: 8px;
     --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+
+    --badge-priority-low-bg: #eef2ff;
+    --badge-priority-low-fg: #4338ca;
+    --badge-priority-medium-bg: #fef9c3;
+    --badge-priority-medium-fg: #854d0e;
+    --badge-priority-high-bg: #fee2e2;
+    --badge-priority-high-fg: #991b1b;
+
+    --badge-status-todo-bg: #f1f5f9;
+    --badge-status-todo-fg: #475569;
+    --badge-status-inprogress-bg: #dbeafe;
+    --badge-status-inprogress-fg: #1d4ed8;
+    --badge-status-done-bg: #dcfce7;
+    --badge-status-done-fg: #15803d;
+
+    --alert-danger-bg: #fef2f2;
+    --alert-danger-fg: #991b1b;
+    --alert-danger-border: #fecaca;
+    --alert-success-bg: #f0fdf4;
+    --alert-success-fg: #166534;
+    --alert-success-border: #bbf7d0;
+    --alert-info-bg: #eff6ff;
+    --alert-info-fg: #1e40af;
+    --alert-info-border: #bfdbfe;
+    --alert-warning-bg: #fffbeb;
+    --alert-warning-fg: #92400e;
+    --alert-warning-border: #fde68a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-bg: #101218;
+        --color-surface: #191c25;
+        --color-border: #2c3140;
+        --color-text: #e7e9ee;
+        --color-text-muted: #9198a8;
+        --color-primary: #818cf8;
+        --color-primary-hover: #a5b0fb;
+        --color-danger: #f87171;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+
+        --badge-priority-low-bg: rgba(129, 140, 248, 0.18);
+        --badge-priority-low-fg: #b4bcfa;
+        --badge-priority-medium-bg: rgba(250, 204, 21, 0.16);
+        --badge-priority-medium-fg: #fbe089;
+        --badge-priority-high-bg: rgba(248, 113, 113, 0.18);
+        --badge-priority-high-fg: #fca5a5;
+
+        --badge-status-todo-bg: rgba(148, 163, 184, 0.16);
+        --badge-status-todo-fg: #cbd5e1;
+        --badge-status-inprogress-bg: rgba(96, 165, 250, 0.18);
+        --badge-status-inprogress-fg: #93c5fd;
+        --badge-status-done-bg: rgba(74, 222, 128, 0.16);
+        --badge-status-done-fg: #86efac;
+
+        --alert-danger-bg: rgba(248, 113, 113, 0.12);
+        --alert-danger-fg: #fca5a5;
+        --alert-danger-border: rgba(248, 113, 113, 0.35);
+        --alert-success-bg: rgba(74, 222, 128, 0.12);
+        --alert-success-fg: #86efac;
+        --alert-success-border: rgba(74, 222, 128, 0.35);
+        --alert-info-bg: rgba(96, 165, 250, 0.12);
+        --alert-info-fg: #93c5fd;
+        --alert-info-border: rgba(96, 165, 250, 0.35);
+        --alert-warning-bg: rgba(250, 204, 21, 0.12);
+        --alert-warning-fg: #fde68a;
+        --alert-warning-border: rgba(250, 204, 21, 0.35);
+    }
+}
+
+:root[data-theme="dark"] {
+    --color-bg: #101218;
+    --color-surface: #191c25;
+    --color-border: #2c3140;
+    --color-text: #e7e9ee;
+    --color-text-muted: #9198a8;
+    --color-primary: #818cf8;
+    --color-primary-hover: #a5b0fb;
+    --color-danger: #f87171;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+
+    --badge-priority-low-bg: rgba(129, 140, 248, 0.18);
+    --badge-priority-low-fg: #b4bcfa;
+    --badge-priority-medium-bg: rgba(250, 204, 21, 0.16);
+    --badge-priority-medium-fg: #fbe089;
+    --badge-priority-high-bg: rgba(248, 113, 113, 0.18);
+    --badge-priority-high-fg: #fca5a5;
+
+    --badge-status-todo-bg: rgba(148, 163, 184, 0.16);
+    --badge-status-todo-fg: #cbd5e1;
+    --badge-status-inprogress-bg: rgba(96, 165, 250, 0.18);
+    --badge-status-inprogress-fg: #93c5fd;
+    --badge-status-done-bg: rgba(74, 222, 128, 0.16);
+    --badge-status-done-fg: #86efac;
+
+    --alert-danger-bg: rgba(248, 113, 113, 0.12);
+    --alert-danger-fg: #fca5a5;
+    --alert-danger-border: rgba(248, 113, 113, 0.35);
+    --alert-success-bg: rgba(74, 222, 128, 0.12);
+    --alert-success-fg: #86efac;
+    --alert-success-border: rgba(74, 222, 128, 0.35);
+    --alert-info-bg: rgba(96, 165, 250, 0.12);
+    --alert-info-fg: #93c5fd;
+    --alert-info-border: rgba(96, 165, 250, 0.35);
+    --alert-warning-bg: rgba(250, 204, 21, 0.12);
+    --alert-warning-fg: #fde68a;
+    --alert-warning-border: rgba(250, 204, 21, 0.35);
+}
+
+:root[data-theme="light"] {
+    --color-bg: #f7f8fa;
+    --color-surface: #ffffff;
+    --color-border: #e2e5ea;
+    --color-text: #1f2430;
+    --color-text-muted: #6b7280;
+    --color-primary: #4f46e5;
+    --color-primary-hover: #4338ca;
+    --color-danger: #dc2626;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+
+    --badge-priority-low-bg: #eef2ff;
+    --badge-priority-low-fg: #4338ca;
+    --badge-priority-medium-bg: #fef9c3;
+    --badge-priority-medium-fg: #854d0e;
+    --badge-priority-high-bg: #fee2e2;
+    --badge-priority-high-fg: #991b1b;
+
+    --badge-status-todo-bg: #f1f5f9;
+    --badge-status-todo-fg: #475569;
+    --badge-status-inprogress-bg: #dbeafe;
+    --badge-status-inprogress-fg: #1d4ed8;
+    --badge-status-done-bg: #dcfce7;
+    --badge-status-done-fg: #15803d;
+
+    --alert-danger-bg: #fef2f2;
+    --alert-danger-fg: #991b1b;
+    --alert-danger-border: #fecaca;
+    --alert-success-bg: #f0fdf4;
+    --alert-success-fg: #166534;
+    --alert-success-border: #bbf7d0;
+    --alert-info-bg: #eff6ff;
+    --alert-info-fg: #1e40af;
+    --alert-info-border: #bfdbfe;
+    --alert-warning-bg: #fffbeb;
+    --alert-warning-fg: #92400e;
+    --alert-warning-border: #fde68a;
+}
+
+html {
+    transition: background-color 0.15s ease;
 }
 
 * {
@@ -60,6 +210,24 @@ a:hover {
 .topnav-user {
     color: var(--color-text-muted);
     font-size: 0.9rem;
+}
+
+.theme-toggle {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    width: 2.1rem;
+    height: 2.1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.theme-toggle:hover {
+    border-color: var(--color-primary);
 }
 
 .page-container {
@@ -190,27 +358,27 @@ a:hover {
 }
 
 .alert-danger {
-    background: #fef2f2;
-    color: #991b1b;
-    border: 1px solid #fecaca;
+    background: var(--alert-danger-bg);
+    color: var(--alert-danger-fg);
+    border: 1px solid var(--alert-danger-border);
 }
 
 .alert-success {
-    background: #f0fdf4;
-    color: #166534;
-    border: 1px solid #bbf7d0;
+    background: var(--alert-success-bg);
+    color: var(--alert-success-fg);
+    border: 1px solid var(--alert-success-border);
 }
 
 .alert-info {
-    background: #eff6ff;
-    color: #1e40af;
-    border: 1px solid #bfdbfe;
+    background: var(--alert-info-bg);
+    color: var(--alert-info-fg);
+    border: 1px solid var(--alert-info-border);
 }
 
 .alert-warning {
-    background: #fffbeb;
-    color: #92400e;
-    border: 1px solid #fde68a;
+    background: var(--alert-warning-bg);
+    color: var(--alert-warning-fg);
+    border: 1px solid var(--alert-warning-border);
 }
 
 .validation-errors {
@@ -321,13 +489,13 @@ table.data-table tr:last-child td {
     white-space: nowrap;
 }
 
-.badge-priority-lowest, .badge-priority-low { background: #eef2ff; color: #4338ca; }
-.badge-priority-medium { background: #fef9c3; color: #854d0e; }
-.badge-priority-high, .badge-priority-highest { background: #fee2e2; color: #991b1b; }
+.badge-priority-lowest, .badge-priority-low { background: var(--badge-priority-low-bg); color: var(--badge-priority-low-fg); }
+.badge-priority-medium { background: var(--badge-priority-medium-bg); color: var(--badge-priority-medium-fg); }
+.badge-priority-high, .badge-priority-highest { background: var(--badge-priority-high-bg); color: var(--badge-priority-high-fg); }
 
-.badge-status-todo { background: #f1f5f9; color: #475569; }
-.badge-status-inprogress { background: #dbeafe; color: #1d4ed8; }
-.badge-status-done { background: #dcfce7; color: #15803d; }
+.badge-status-todo { background: var(--badge-status-todo-bg); color: var(--badge-status-todo-fg); }
+.badge-status-inprogress { background: var(--badge-status-inprogress-bg); color: var(--badge-status-inprogress-fg); }
+.badge-status-done { background: var(--badge-status-done-bg); color: var(--badge-status-done-fg); }
 
 .type-icon {
     display: inline-flex;
