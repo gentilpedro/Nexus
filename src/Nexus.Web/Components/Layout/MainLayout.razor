@@ -1,9 +1,13 @@
 @inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <nav class="topnav">
     <a class="topnav-brand" href="/workspaces">Nexus</a>
     <div class="topnav-links">
+        <button type="button" class="theme-toggle" title="Alternar tema" @onclick="ToggleTheme">
+            @(isDark ? "☀️" : "🌙")
+        </button>
         <AuthorizeView>
             <Authorized>
                 <span class="topnav-user">@context.User.Identity?.Name</span>
@@ -31,9 +35,33 @@
 
 @code {
     private string? currentUrl;
+    private bool isDark;
+    private IJSObjectReference? module;
 
     protected override void OnInitialized()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/theme.js");
+            var current = await module.InvokeAsync<string>("getTheme");
+            isDark = current == "dark";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        if (module is null)
+        {
+            return;
+        }
+
+        var next = await module.InvokeAsync<string>("toggleTheme");
+        isDark = next == "dark";
     }
 }
