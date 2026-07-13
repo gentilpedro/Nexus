@@ -1,0 +1,140 @@
+@page "/lists/{ListId:guid}/board"
+@attribute [Authorize]
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Components.Shared
+@using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+@inject WorkItemQueryService QueryService
+@inject IAuthorizationService AuthorizationService
+
+<PageTitle>@(taskList?.Name ?? "Board")</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Lista não encontrada ou você não tem acesso a ela.</p>
+            <a class="btn" href="/workspaces">Voltar</a>
+        </div>
+    }
+    else if (taskList is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs">
+            <a href="/workspaces">Workspaces</a> /
+            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
+            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
+            @taskList.Name
+        </div>
+
+        <div class="page-header">
+            <h1>@taskList.Name</h1>
+            <button class="btn" @onclick="OpenCreate">+ Nova task</button>
+        </div>
+
+        <ViewSwitcher ListId="ListId" ActiveView="board" />
+
+        @if (statuses is null || workItems is null)
+        {
+            <p>Carregando board...</p>
+        }
+        else
+        {
+            <div class="board">
+                @foreach (var status in statuses)
+                {
+                    <BoardColumn Status="status"
+                                 Items="workItems.Where(w => w.StatusId == status.Id).ToList()"
+                                 OnCardClick="OpenEdit"
+                                 OnCardMoved="HandleCardMoved" />
+                }
+            </div>
+        }
+
+        <TaskDetailPanel @ref="panel"
+                          TaskListId="ListId"
+                          Statuses="statuses ?? []"
+                          AssigneeOptions="assigneeOptions ?? []"
+                          OnSaved="ReloadWorkItemsAsync" />
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid ListId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private TaskList? taskList;
+    private string workspaceName = "";
+    private string spaceName = "";
+    private Guid workspaceId;
+    private List<WorkItem>? workItems;
+    private List<TaskStatusDefinition>? statuses;
+    private List<(string UserId, string DisplayName)>? assigneeOptions;
+    private bool notFound;
+    private TaskDetailPanel? panel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var resolvedWorkspaceId = await QueryService.GetWorkspaceIdForListAsync(ListId);
+        if (resolvedWorkspaceId is null)
+        {
+            notFound = true;
+            return;
+        }
+        workspaceId = resolvedWorkspaceId.Value;
+
+        var authState = await AuthStateTask!;
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        taskList = await Db.TaskLists
+            .Include(l => l.Space)
+            .ThenInclude(s => s.Workspace)
+            .FirstOrDefaultAsync(l => l.Id == ListId);
+
+        if (taskList is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        workspaceName = taskList.Space.Workspace.Name;
+        spaceName = taskList.Space.Name;
+
+        statuses = await QueryService.GetStatusesForListAsync(ListId);
+        assigneeOptions = await QueryService.GetWorkspaceMemberOptionsAsync(workspaceId);
+        await ReloadWorkItemsAsync();
+    }
+
+    private async Task ReloadWorkItemsAsync()
+    {
+        workItems = await QueryService.GetWorkItemsForListAsync(ListId);
+    }
+
+    private void OpenCreate() => panel?.OpenForCreate();
+
+    private void OpenEdit(WorkItem item) => panel?.OpenForEdit(item);
+
+    private async Task HandleCardMoved((Guid WorkItemId, Guid NewStatusId, int NewIndex) move)
+    {
+        await QueryService.UpdateWorkItemStatusAsync(move.WorkItemId, move.NewStatusId, move.NewIndex);
+        await ReloadWorkItemsAsync();
+        StateHasChanged();
+    }
+}

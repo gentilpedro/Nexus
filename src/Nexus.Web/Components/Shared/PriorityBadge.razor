@@ -1,0 +1,18 @@
+@using Nexus.Domain.Entities
+
+<span class="badge badge-priority-@Priority.ToString().ToLowerInvariant()">@Label</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public WorkItemPriority Priority { get; set; }
+
+    private string Label => Priority switch
+    {
+        WorkItemPriority.Lowest => "Baixíssima",
+        WorkItemPriority.Low => "Baixa",
+        WorkItemPriority.Medium => "Média",
+        WorkItemPriority.High => "Alta",
+        WorkItemPriority.Highest => "Altíssima",
+        _ => Priority.ToString()
+    };
+}

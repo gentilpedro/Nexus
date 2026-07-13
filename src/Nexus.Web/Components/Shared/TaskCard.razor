@@ -1,0 +1,29 @@
+@using Nexus.Domain.Entities
+
+<div class="task-card" data-workitem-id="@WorkItem.Id" @onclick="() => OnClick.InvokeAsync(WorkItem)">
+    <div class="task-card-header">
+        <WorkItemTypeIcon Type="WorkItem.Type" />
+        <PriorityBadge Priority="WorkItem.Priority" />
+    </div>
+    <div class="task-card-title">@WorkItem.Title</div>
+    <div class="task-card-footer">
+        <span>@AssigneeLabel</span>
+        @if (WorkItem.DueDateUtc is not null)
+        {
+            <span>@WorkItem.DueDateUtc.Value.ToString("dd/MM")</span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public WorkItem WorkItem { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<WorkItem> OnClick { get; set; }
+
+    private string AssigneeLabel =>
+        WorkItem.Assignee is null
+            ? "Sem responsável"
+            : (string.IsNullOrEmpty(WorkItem.Assignee.DisplayName) ? WorkItem.Assignee.Email ?? "" : WorkItem.Assignee.DisplayName);
+}

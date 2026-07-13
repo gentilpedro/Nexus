@@ -1,0 +1,19 @@
+@page "/"
+
+<PageTitle>Nexus</PageTitle>
+
+<div class="page-container">
+    <div class="empty-state">
+        <h1>Nexus</h1>
+        <p>Gerencie seus projetos combinando o melhor do Jira e do ClickUp.</p>
+        <AuthorizeView>
+            <Authorized>
+                <a class="btn" href="/workspaces">Ir para meus workspaces</a>
+            </Authorized>
+            <NotAuthorized>
+                <a class="btn" href="Account/Register">Criar conta</a>
+                <a class="btn btn-secondary" href="Account/Login">Entrar</a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</div>

@@ -1,0 +1,161 @@
+@page "/workspaces/{WorkspaceId:guid}"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+@inject NavigationManager NavigationManager
+@inject IAuthorizationService AuthorizationService
+
+<PageTitle>@(workspace?.Name ?? "Workspace")</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Workspace não encontrado ou você não tem acesso a ele.</p>
+            <a class="btn" href="/workspaces">Voltar</a>
+        </div>
+    }
+    else if (workspace is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs"><a href="/workspaces">Workspaces</a> / @workspace.Name</div>
+        <div class="page-header">
+            <h1>@workspace.Name</h1>
+            @if (canManageSpaces)
+            {
+                <button class="btn" @onclick="ToggleCreateForm">+ Novo space</button>
+            }
+        </div>
+
+        @if (showCreateForm)
+        {
+            <EditForm Model="createModel" OnValidSubmit="HandleCreateSpace" class="card" style="margin-bottom:1rem;">
+                <DataAnnotationsValidator />
+                <div class="form-field">
+                    <label for="space-name">Nome do space</label>
+                    <InputText id="space-name" @bind-Value="createModel.Name" placeholder="Ex: Marketing" />
+                    <ValidationMessage For="() => createModel.Name" />
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn" disabled="@isSaving">Criar</button>
+                    <button type="button" class="btn btn-secondary" @onclick="ToggleCreateForm">Cancelar</button>
+                </div>
+            </EditForm>
+        }
+
+        @if (spaces is null)
+        {
+            <p>Carregando spaces...</p>
+        }
+        else if (spaces.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Nenhum space criado ainda.</p>
+            </div>
+        }
+        else
+        {
+            <div class="card-list">
+                @foreach (var space in spaces)
+                {
+                    <a class="card card-link" href="@($"/workspaces/{WorkspaceId}/spaces/{space.Id}")">
+                        <strong>@space.Name</strong>
+                    </a>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid WorkspaceId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private Workspace? workspace;
+    private List<Space>? spaces;
+    private bool notFound;
+    private bool canManageSpaces;
+    private bool showCreateForm;
+    private bool isSaving;
+    private readonly CreateSpaceModel createModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask!;
+
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        var adminResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+        canManageSpaces = adminResult.Succeeded;
+
+        workspace = await Db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        if (workspace is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        await LoadSpacesAsync();
+    }
+
+    private async Task LoadSpacesAsync()
+    {
+        spaces = await Db.Spaces
+            .Where(s => s.WorkspaceId == WorkspaceId)
+            .OrderBy(s => s.SortOrder)
+            .ThenBy(s => s.Name)
+            .ToListAsync();
+    }
+
+    private void ToggleCreateForm()
+    {
+        showCreateForm = !showCreateForm;
+        createModel.Name = "";
+    }
+
+    private async Task HandleCreateSpace()
+    {
+        isSaving = true;
+
+        var maxSortOrder = spaces!.Count == 0 ? -1 : spaces.Max(s => s.SortOrder);
+
+        Db.Spaces.Add(new Space
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = WorkspaceId,
+            Name = createModel.Name.Trim(),
+            SortOrder = maxSortOrder + 1
+        });
+        await Db.SaveChangesAsync();
+
+        showCreateForm = false;
+        isSaving = false;
+        await LoadSpacesAsync();
+    }
+
+    private class CreateSpaceModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe um nome.")]
+        [System.ComponentModel.DataAnnotations.StringLength(200, ErrorMessage = "Nome muito longo.")]
+        public string Name { get; set; } = "";
+    }
+}

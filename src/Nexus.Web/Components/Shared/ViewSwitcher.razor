@@ -1,0 +1,14 @@
+@using Nexus.Domain.Entities
+
+<div class="view-tabs">
+    <a class="@(ActiveView == "list" ? "active" : "")" href="@($"/lists/{ListId}/list")">Lista</a>
+    <a class="@(ActiveView == "board" ? "active" : "")" href="@($"/lists/{ListId}/board")">Board</a>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ListId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string ActiveView { get; set; } = "list";
+}
