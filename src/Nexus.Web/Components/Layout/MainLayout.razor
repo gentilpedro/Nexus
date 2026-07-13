@@ -1,0 +1,39 @@
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+
+<nav class="topnav">
+    <a class="topnav-brand" href="/workspaces">Nexus</a>
+    <div class="topnav-links">
+        <AuthorizeView>
+            <Authorized>
+                <span class="topnav-user">@context.User.Identity?.Name</span>
+                <form action="Account/Logout" method="post">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                    <button type="submit" class="btn-link">Sair</button>
+                </form>
+            </Authorized>
+            <NotAuthorized>
+                <a href="Account/Login">Entrar</a>
+                <a href="Account/Register">Criar conta</a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</nav>
+
+@Body
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+    }
+}

@@ -1,0 +1,253 @@
+@page "/workspaces/{WorkspaceId:guid}/spaces/{SpaceId:guid}"
+@attribute [Authorize]
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+@inject NavigationManager NavigationManager
+@inject IAuthorizationService AuthorizationService
+
+<PageTitle>@(space?.Name ?? "Space")</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Space não encontrado ou você não tem acesso a ele.</p>
+            <a class="btn" href="/workspaces">Voltar</a>
+        </div>
+    }
+    else if (space is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs">
+            <a href="/workspaces">Workspaces</a> /
+            <a href="@($"/workspaces/{WorkspaceId}")">@workspace!.Name</a> /
+            @space.Name
+        </div>
+
+        @if (isRenaming)
+        {
+            <EditForm Model="renameModel" OnValidSubmit="HandleRename" class="card" style="margin-bottom:1rem;">
+                <DataAnnotationsValidator />
+                <div class="form-field">
+                    <label for="space-name">Nome do space</label>
+                    <InputText id="space-name" @bind-Value="renameModel.Name" />
+                    <ValidationMessage For="() => renameModel.Name" />
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn">Salvar</button>
+                    <button type="button" class="btn btn-secondary" @onclick="() => isRenaming = false">Cancelar</button>
+                </div>
+            </EditForm>
+        }
+        else
+        {
+            <div class="page-header">
+                <h1>@space.Name</h1>
+                @if (canManageSpace)
+                {
+                    <div class="form-actions">
+                        <button class="btn btn-secondary" @onclick="StartRename">Renomear</button>
+                        <button class="btn btn-danger" @onclick="HandleDelete">Excluir space</button>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        <div class="page-header">
+            <h2>Listas</h2>
+            @if (canManageSpace)
+            {
+                <button class="btn" @onclick="ToggleCreateListForm">+ Nova lista</button>
+            }
+        </div>
+
+        @if (showCreateListForm)
+        {
+            <EditForm Model="createListModel" OnValidSubmit="HandleCreateList" class="card" style="margin-bottom:1rem;">
+                <DataAnnotationsValidator />
+                <div class="form-field">
+                    <label for="list-name">Nome da lista</label>
+                    <InputText id="list-name" @bind-Value="createListModel.Name" placeholder="Ex: Sprint atual" />
+                    <ValidationMessage For="() => createListModel.Name" />
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn" disabled="@isSavingList">Criar</button>
+                    <button type="button" class="btn btn-secondary" @onclick="ToggleCreateListForm">Cancelar</button>
+                </div>
+            </EditForm>
+        }
+
+        @if (taskLists is null)
+        {
+            <p>Carregando listas...</p>
+        }
+        else if (taskLists.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Nenhuma lista criada ainda.</p>
+            </div>
+        }
+        else
+        {
+            <div class="card-list">
+                @foreach (var list in taskLists)
+                {
+                    <a class="card card-link" href="@($"/lists/{list.Id}/list")">
+                        <strong>@list.Name</strong>
+                    </a>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid WorkspaceId { get; set; }
+
+    [Parameter]
+    public Guid SpaceId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private Workspace? workspace;
+    private Space? space;
+    private List<TaskList>? taskLists;
+    private bool notFound;
+    private bool canManageSpace;
+    private bool isRenaming;
+    private bool showCreateListForm;
+    private bool isSavingList;
+    private string? errorMessage;
+    private readonly RenameSpaceModel renameModel = new();
+    private readonly CreateListModel createListModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask!;
+
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        var adminResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+        canManageSpace = adminResult.Succeeded;
+
+        workspace = await Db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        space = await Db.Spaces.FirstOrDefaultAsync(s => s.Id == SpaceId && s.WorkspaceId == WorkspaceId);
+
+        if (workspace is null || space is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        await LoadTaskListsAsync();
+    }
+
+    private async Task LoadTaskListsAsync()
+    {
+        taskLists = await Db.TaskLists
+            .Where(l => l.SpaceId == SpaceId)
+            .OrderBy(l => l.SortOrder)
+            .ThenBy(l => l.Name)
+            .ToListAsync();
+    }
+
+    private void ToggleCreateListForm()
+    {
+        showCreateListForm = !showCreateListForm;
+        createListModel.Name = "";
+    }
+
+    private async Task HandleCreateList()
+    {
+        isSavingList = true;
+
+        var maxSortOrder = taskLists!.Count == 0 ? -1 : taskLists.Max(l => l.SortOrder);
+
+        var taskList = new TaskList
+        {
+            Id = Guid.NewGuid(),
+            SpaceId = SpaceId,
+            Name = createListModel.Name.Trim(),
+            SortOrder = maxSortOrder + 1
+        };
+
+        taskList.Statuses.Add(new TaskStatusDefinition { Id = Guid.NewGuid(), TaskListId = taskList.Id, Name = "A Fazer", SortOrder = 0, Category = StatusCategory.ToDo, IsDefault = true });
+        taskList.Statuses.Add(new TaskStatusDefinition { Id = Guid.NewGuid(), TaskListId = taskList.Id, Name = "Em Andamento", SortOrder = 1, Category = StatusCategory.InProgress });
+        taskList.Statuses.Add(new TaskStatusDefinition { Id = Guid.NewGuid(), TaskListId = taskList.Id, Name = "Concluído", SortOrder = 2, Category = StatusCategory.Done });
+
+        Db.TaskLists.Add(taskList);
+        await Db.SaveChangesAsync();
+
+        showCreateListForm = false;
+        isSavingList = false;
+        await LoadTaskListsAsync();
+    }
+
+    private void StartRename()
+    {
+        renameModel.Name = space!.Name;
+        isRenaming = true;
+    }
+
+    private async Task HandleRename()
+    {
+        space!.Name = renameModel.Name.Trim();
+        await Db.SaveChangesAsync();
+        isRenaming = false;
+    }
+
+    private async Task HandleDelete()
+    {
+        try
+        {
+            // ExecuteDeleteAsync issues a direct SQL DELETE and lets the database resolve the
+            // cascade (Space -> TaskList -> WorkItems/Statuses) as a single set-based operation.
+            // Db.Spaces.Remove(...) would instead ask EF's client-side change tracker to walk the
+            // cascade in-memory, which throws when this DbContext also has WorkItems/Statuses
+            // tracked from an earlier query on the same circuit-scoped context (verified via a
+            // throwaway test) — DB-level cascade resolution doesn't have that failure mode.
+            await Db.Spaces.Where(s => s.Id == SpaceId).ExecuteDeleteAsync();
+            NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}");
+        }
+        catch (DbUpdateException)
+        {
+            errorMessage = "Não foi possível excluir o space.";
+        }
+    }
+
+    private class RenameSpaceModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe um nome.")]
+        [System.ComponentModel.DataAnnotations.StringLength(200, ErrorMessage = "Nome muito longo.")]
+        public string Name { get; set; } = "";
+    }
+
+    private class CreateListModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe um nome.")]
+        [System.ComponentModel.DataAnnotations.StringLength(200, ErrorMessage = "Nome muito longo.")]
+        public string Name { get; set; } = "";
+    }
+}

@@ -1,0 +1,75 @@
+@using Nexus.Domain.Entities
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="board-column" data-status-id="@Status.Id">
+    <div class="board-column-header">
+        <StatusBadge Name="@Status.Name" Category="Status.Category" />
+        <span class="board-column-count">@Items.Count</span>
+    </div>
+    <div class="board-column-body" @ref="bodyRef">
+        @foreach (var item in Items)
+        {
+            <TaskCard WorkItem="item" OnClick="OnCardClick" />
+        }
+        @if (Items.Count == 0)
+        {
+            <div class="board-column-empty">Vazio</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public TaskStatusDefinition Status { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public List<WorkItem> Items { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<WorkItem> OnCardClick { get; set; }
+
+    [Parameter]
+    public EventCallback<(Guid WorkItemId, Guid NewStatusId, int NewIndex)> OnCardMoved { get; set; }
+
+    private ElementReference bodyRef;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<BoardColumn>? selfRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/board-interop.js");
+            selfRef = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("initColumn", bodyRef, selfRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnCardDropped(Guid workItemId, Guid newStatusId, int newIndex)
+    {
+        if (OnCardMoved.HasDelegate)
+        {
+            await OnCardMoved.InvokeAsync((workItemId, newStatusId, newIndex));
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null)
+        {
+            try
+            {
+                await module.InvokeVoidAsync("destroyColumn", bodyRef);
+                await module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone (e.g. page navigation/tab close) — nothing to clean up client-side.
+            }
+        }
+
+        selfRef?.Dispose();
+    }
+}

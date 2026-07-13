@@ -1,0 +1,17 @@
+@using Nexus.Domain.Entities
+
+<span class="type-icon type-icon-@Type.ToString().ToLowerInvariant()" title="@Type">@Symbol</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public WorkItemType Type { get; set; }
+
+    private string Symbol => Type switch
+    {
+        WorkItemType.Task => "✓",
+        WorkItemType.Bug => "🐞",
+        WorkItemType.Story => "★",
+        WorkItemType.Epic => "⚡",
+        _ => "•"
+    };
+}

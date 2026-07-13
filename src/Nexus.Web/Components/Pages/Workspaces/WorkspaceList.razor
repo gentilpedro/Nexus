@@ -1,0 +1,60 @@
+@page "/workspaces"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+
+<PageTitle>Workspaces</PageTitle>
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Meus Workspaces</h1>
+        <a class="btn" href="/workspaces/new">+ Novo workspace</a>
+    </div>
+
+    @if (memberships is null)
+    {
+        <p>Carregando...</p>
+    }
+    else if (memberships.Count == 0)
+    {
+        <div class="empty-state">
+            <p>Você ainda não participa de nenhum workspace.</p>
+            <a class="btn" href="/workspaces/new">Criar meu primeiro workspace</a>
+        </div>
+    }
+    else
+    {
+        <div class="card-list">
+            @foreach (var membership in memberships)
+            {
+                <a class="card card-link" href="@($"/workspaces/{membership.WorkspaceId}")">
+                    <strong>@membership.Workspace.Name</strong>
+                    <div class="topnav-user">@membership.Role</div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private List<WorkspaceMember>? memberships;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask!;
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+        memberships = await Db.WorkspaceMembers
+            .Include(m => m.Workspace)
+            .Where(m => m.UserId == userId)
+            .OrderBy(m => m.Workspace.Name)
+            .ToListAsync();
+    }
+}

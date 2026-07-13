@@ -1,0 +1,190 @@
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+
+@if (isOpen)
+{
+    <div class="panel-overlay" @onclick="Close">
+        <div class="panel" @onclick:stopPropagation="true">
+            <div class="panel-header">
+                <h2>@(isEditing ? "Editar task" : "Nova task")</h2>
+                <button class="btn-link" type="button" @onclick="Close">✕</button>
+            </div>
+
+            <EditForm Model="model" OnValidSubmit="HandleSave">
+                <DataAnnotationsValidator />
+                <div class="form-field">
+                    <label for="task-title">Título</label>
+                    <InputText id="task-title" @bind-Value="model.Title" />
+                    <ValidationMessage For="() => model.Title" />
+                </div>
+                <div class="form-field">
+                    <label for="task-description">Descrição</label>
+                    <InputTextArea id="task-description" @bind-Value="model.Description" rows="4" />
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label for="task-type">Tipo</label>
+                        <InputSelect id="task-type" @bind-Value="model.Type">
+                            @foreach (var t in Enum.GetValues<WorkItemType>())
+                            {
+                                <option value="@t">@t</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="form-field">
+                        <label for="task-priority">Prioridade</label>
+                        <InputSelect id="task-priority" @bind-Value="model.Priority">
+                            @foreach (var p in Enum.GetValues<WorkItemPriority>())
+                            {
+                                <option value="@p">@p</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-field">
+                        <label for="task-status">Status</label>
+                        <InputSelect id="task-status" @bind-Value="model.StatusId">
+                            @foreach (var s in Statuses)
+                            {
+                                <option value="@s.Id">@s.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="form-field">
+                        <label for="task-assignee">Responsável</label>
+                        <InputSelect id="task-assignee" @bind-Value="model.AssigneeId">
+                            <option value="">Ninguém</option>
+                            @foreach (var option in AssigneeOptions)
+                            {
+                                <option value="@option.UserId">@option.DisplayName</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label for="task-due-date">Prazo</label>
+                    <InputDate id="task-due-date" @bind-Value="model.DueDate" />
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn" disabled="@isSaving">Salvar</button>
+                    <button type="button" class="btn btn-secondary" @onclick="Close">Cancelar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid TaskListId { get; set; }
+
+    [Parameter, EditorRequired]
+    public List<TaskStatusDefinition> Statuses { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public List<(string UserId, string DisplayName)> AssigneeOptions { get; set; } = [];
+
+    [Parameter]
+    public EventCallback OnSaved { get; set; }
+
+    private bool isOpen;
+    private bool isEditing;
+    private bool isSaving;
+    private Guid? editingId;
+    private readonly WorkItemFormModel model = new();
+
+    public void OpenForCreate()
+    {
+        isEditing = false;
+        editingId = null;
+        model.Reset();
+        model.StatusId = Statuses.FirstOrDefault(s => s.IsDefault)?.Id ?? Statuses.FirstOrDefault()?.Id ?? Guid.Empty;
+        isOpen = true;
+        StateHasChanged();
+    }
+
+    public void OpenForEdit(WorkItem item)
+    {
+        isEditing = true;
+        editingId = item.Id;
+        model.Title = item.Title;
+        model.Description = item.Description ?? "";
+        model.Type = item.Type;
+        model.Priority = item.Priority;
+        model.StatusId = item.StatusId;
+        model.AssigneeId = item.AssigneeId ?? "";
+        model.DueDate = item.DueDateUtc?.Date;
+        isOpen = true;
+        StateHasChanged();
+    }
+
+    private void Close()
+    {
+        isOpen = false;
+    }
+
+    private async Task HandleSave()
+    {
+        isSaving = true;
+
+        WorkItem workItem;
+        if (isEditing && editingId is not null)
+        {
+            workItem = await Db.WorkItems.FirstAsync(w => w.Id == editingId.Value);
+        }
+        else
+        {
+            workItem = new WorkItem { Id = Guid.NewGuid(), TaskListId = TaskListId, CreatedAtUtc = DateTime.UtcNow };
+            Db.WorkItems.Add(workItem);
+        }
+
+        workItem.Title = model.Title.Trim();
+        workItem.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
+        workItem.Type = model.Type;
+        workItem.Priority = model.Priority;
+        workItem.StatusId = model.StatusId;
+        workItem.AssigneeId = string.IsNullOrEmpty(model.AssigneeId) ? null : model.AssigneeId;
+        workItem.DueDateUtc = model.DueDate.HasValue ? DateTime.SpecifyKind(model.DueDate.Value, DateTimeKind.Utc) : null;
+        if (isEditing)
+        {
+            workItem.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        await Db.SaveChangesAsync();
+
+        isSaving = false;
+        isOpen = false;
+
+        if (OnSaved.HasDelegate)
+        {
+            await OnSaved.InvokeAsync();
+        }
+    }
+
+    private class WorkItemFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe um título.")]
+        [System.ComponentModel.DataAnnotations.StringLength(500, ErrorMessage = "Título muito longo.")]
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public WorkItemType Type { get; set; } = WorkItemType.Task;
+        public WorkItemPriority Priority { get; set; } = WorkItemPriority.Medium;
+        public Guid StatusId { get; set; }
+        public string AssigneeId { get; set; } = "";
+        public DateTime? DueDate { get; set; }
+
+        public void Reset()
+        {
+            Title = "";
+            Description = "";
+            Type = WorkItemType.Task;
+            Priority = WorkItemPriority.Medium;
+            AssigneeId = "";
+            DueDate = null;
+        }
+    }
+}

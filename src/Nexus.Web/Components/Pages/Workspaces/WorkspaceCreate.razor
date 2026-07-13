@@ -1,0 +1,117 @@
+@page "/workspaces/new"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject AppDbContext Db
+@inject NavigationManager NavigationManager
+
+<PageTitle>Novo workspace</PageTitle>
+
+<div class="page-container">
+    <h1>Novo workspace</h1>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    <EditForm Model="model" OnValidSubmit="HandleCreate" class="card">
+        <DataAnnotationsValidator />
+        <div class="form-field">
+            <label for="name">Nome</label>
+            <InputText id="name" @bind-Value="model.Name" placeholder="Ex: Minha Empresa" />
+            <ValidationMessage For="() => model.Name" />
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn" disabled="@isSaving">Criar</button>
+            <a class="btn btn-secondary" href="/workspaces">Cancelar</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private readonly CreateWorkspaceModel model = new();
+    private bool isSaving;
+    private string? errorMessage;
+
+    private async Task HandleCreate()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var authState = await AuthStateTask!;
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+        var slug = await GenerateUniqueSlugAsync(model.Name);
+
+        var workspace = new Workspace
+        {
+            Id = Guid.NewGuid(),
+            Name = model.Name.Trim(),
+            Slug = slug,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        workspace.Members.Add(new WorkspaceMember
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = workspace.Id,
+            UserId = userId,
+            Role = WorkspaceRole.Owner,
+            JoinedAtUtc = DateTime.UtcNow
+        });
+
+        Db.Workspaces.Add(workspace);
+
+        try
+        {
+            await Db.SaveChangesAsync();
+            NavigationManager.NavigateTo($"/workspaces/{workspace.Id}");
+        }
+        catch (Exception)
+        {
+            errorMessage = "Não foi possível criar o workspace. Tente novamente.";
+            isSaving = false;
+        }
+    }
+
+    private async Task<string> GenerateUniqueSlugAsync(string name)
+    {
+        var baseSlug = string.Concat(name.Trim().ToLowerInvariant()
+                .Select(c => char.IsLetterOrDigit(c) ? c : '-'))
+            .Trim('-');
+
+        while (baseSlug.Contains("--"))
+        {
+            baseSlug = baseSlug.Replace("--", "-");
+        }
+
+        if (string.IsNullOrEmpty(baseSlug))
+        {
+            baseSlug = "workspace";
+        }
+
+        var slug = baseSlug;
+        var suffix = 1;
+        while (await Db.Workspaces.AnyAsync(w => w.Slug == slug))
+        {
+            suffix++;
+            slug = $"{baseSlug}-{suffix}";
+        }
+
+        return slug;
+    }
+
+    private class CreateWorkspaceModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe um nome.")]
+        [System.ComponentModel.DataAnnotations.StringLength(200, ErrorMessage = "Nome muito longo.")]
+        public string Name { get; set; } = "";
+    }
+}
