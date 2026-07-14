@@ -2,7 +2,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="board-column" data-status-id="@Status.Id">
+<div class="board-column" data-drop-id="@Status.Id">
     <div class="board-column-header">
         <StatusBadge Name="@Status.Name" Category="Status.Category" />
         <span class="board-column-count">@Items.Count</span>
@@ -42,7 +42,7 @@
         {
             module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/board-interop.js");
             selfRef = DotNetObjectReference.Create(this);
-            await module.InvokeVoidAsync("initColumn", bodyRef, selfRef);
+            await module.InvokeVoidAsync("initColumn", bodyRef, selfRef, "board");
         }
     }
 

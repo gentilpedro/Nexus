@@ -24,7 +24,11 @@ public class WorkItem
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }
 
-    // Extension point: enables future Epic grouping without a schema change.
+    // Epic grouping: assigns this item under an Epic-typed WorkItem in the same list.
     public Guid? ParentEpicId { get; set; }
     public WorkItem? ParentEpic { get; set; }
+
+    // Sprint assignment: null means the item sits in the list's backlog.
+    public Guid? SprintId { get; set; }
+    public Sprint? Sprint { get; set; }
 }

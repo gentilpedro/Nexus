@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.DependencyInjection;
 using Nexus.Web.Authorization;
+using Nexus.Web.BackgroundServices;
 using Nexus.Web.Components;
 using Nexus.Web.Components.Account;
 using Nexus.Web.Services;
@@ -23,6 +24,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuth
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<IAuthorizationHandler, WorkspaceAuthorizationHandler>();
 builder.Services.AddScoped<WorkItemQueryService>();
+builder.Services.AddHostedService<SprintSnapshotHostedService>();
 
 builder.Services.AddAuthentication(options =>
     {

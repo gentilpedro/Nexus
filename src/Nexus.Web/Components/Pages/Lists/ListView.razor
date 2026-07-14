@@ -86,6 +86,7 @@
                           TaskListId="ListId"
                           Statuses="statuses ?? []"
                           AssigneeOptions="assigneeOptions ?? []"
+                          EpicOptions="epics ?? []"
                           OnSaved="ReloadWorkItemsAsync" />
     }
 </div>
@@ -104,6 +105,7 @@
     private List<WorkItem>? workItems;
     private List<TaskStatusDefinition>? statuses;
     private List<(string UserId, string DisplayName)>? assigneeOptions;
+    private List<WorkItem>? epics;
     private bool notFound;
     private TaskDetailPanel? panel;
 
@@ -146,12 +148,16 @@
 
         statuses = await QueryService.GetStatusesForListAsync(ListId);
         assigneeOptions = await QueryService.GetWorkspaceMemberOptionsAsync(workspaceId);
+        epics = await QueryService.GetEpicsForListAsync(ListId);
         await ReloadWorkItemsAsync();
     }
 
     private async Task ReloadWorkItemsAsync()
     {
         workItems = await QueryService.GetWorkItemsForListAsync(ListId);
+        // Refresh in case a new Epic was just created via the panel — it should be
+        // selectable immediately, not only after a full page reload.
+        epics = await QueryService.GetEpicsForListAsync(ListId);
     }
 
     private void OpenCreate() => panel?.OpenForCreate();
