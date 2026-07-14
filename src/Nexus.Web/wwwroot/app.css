@@ -193,6 +193,12 @@ a:hover {
     gap: 0.5rem;
 }
 
+.topnav-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
 .topnav-brand {
     font-weight: 700;
     font-size: 1.1rem;
@@ -1051,4 +1057,132 @@ table th, table td {
 
 .burndown-legend-swatch--actual {
     background: var(--color-primary);
+}
+
+/* App shell: persistent Workspace/Space/List sidebar */
+.app-shell {
+    display: flex;
+    align-items: flex-start;
+}
+
+.app-sidebar-toggle {
+    display: none;
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    width: 2.1rem;
+    height: 2.1rem;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: var(--color-text);
+}
+
+.app-sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    min-height: calc(100vh - 58px);
+    position: sticky;
+    top: 58px;
+    align-self: flex-start;
+    overflow-y: auto;
+}
+
+.app-sidebar-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.app-sidebar-back {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.35rem;
+}
+
+.app-sidebar-title {
+    display: block;
+    font-size: 0.95rem;
+    color: var(--color-text);
+}
+
+.app-sidebar-loading {
+    padding: 1rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+}
+
+.app-sidebar-tree {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+}
+
+.app-sidebar-space {
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--color-text);
+    border-radius: var(--radius);
+    margin-top: 0.5rem;
+}
+
+.app-sidebar-list {
+    padding: 0.4rem 0.75rem 0.4rem 1.5rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    border-radius: var(--radius);
+}
+
+.app-sidebar-space:hover,
+.app-sidebar-list:hover {
+    background: var(--color-bg);
+    text-decoration: none;
+}
+
+.app-sidebar-space.active,
+.app-sidebar-list.active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.app-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.app-sidebar-backdrop {
+    display: none;
+}
+
+@media (max-width: 860px) {
+    .app-sidebar-toggle {
+        display: inline-flex;
+    }
+
+    .app-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        z-index: 70;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
+    }
+
+    .app-sidebar.is-open {
+        transform: translateX(0);
+    }
+
+    .app-sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        z-index: 65;
+    }
 }

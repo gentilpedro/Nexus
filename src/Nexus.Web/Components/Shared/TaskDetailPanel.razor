@@ -1,5 +1,6 @@
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
+@using Nexus.Web.Extensions
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 
@@ -29,7 +30,7 @@
                         <InputSelect id="task-type" @bind-Value="model.Type">
                             @foreach (var t in Enum.GetValues<WorkItemType>())
                             {
-                                <option value="@t">@t</option>
+                                <option value="@t">@t.ToDisplayLabel()</option>
                             }
                         </InputSelect>
                     </div>
@@ -38,7 +39,7 @@
                         <InputSelect id="task-priority" @bind-Value="model.Priority">
                             @foreach (var p in Enum.GetValues<WorkItemPriority>())
                             {
-                                <option value="@p">@p</option>
+                                <option value="@p">@p.ToDisplayLabel()</option>
                             }
                         </InputSelect>
                     </div>

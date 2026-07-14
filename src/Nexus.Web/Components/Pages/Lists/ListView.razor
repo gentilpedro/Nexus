@@ -10,6 +10,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
 @inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
 
 <PageTitle>@(taskList?.Name ?? "Lista")</PageTitle>
 
@@ -145,6 +146,8 @@
 
         workspaceName = taskList.Space.Workspace.Name;
         spaceName = taskList.Space.Name;
+
+        NavContext.SetList(workspaceId, workspaceName, taskList.SpaceId, ListId);
 
         statuses = await QueryService.GetStatusesForListAsync(ListId);
         assigneeOptions = await QueryService.GetWorkspaceMemberOptionsAsync(workspaceId);
