@@ -1,16 +1,13 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @layout Nexus.Web.Components.Layout.MainLayout
 
-<h1>Manage your account</h1>
-
-<div>
-    <h2>Change your account settings</h2>
-    <hr />
-    <div class="row">
-        <div class="col-lg-3">
+<div class="page-container page-container--wide">
+    <h1>Gerenciar conta</h1>
+    <div class="settings-layout">
+        <nav class="settings-nav">
             <ManageNavMenu />
-        </div>
-        <div class="col-lg-9">
+        </nav>
+        <div class="settings-content">
             @Body
         </div>
     </div>
