@@ -256,6 +256,13 @@
             // tracked elsewhere. Now moot in practice since IDbContextFactory gives every operation
             // its own short-lived context, but ExecuteDeleteAsync remains the more direct approach.
             await using var db = await DbFactory.CreateDbContextAsync();
+            // StatusTransition's FKs to TaskStatusDefinition are both Restrict (see
+            // StatusTransitionConfiguration) — the Space -> TaskList -> TaskStatusDefinition
+            // cascade below would fail on any list with configured transitions unless those
+            // rows are removed first.
+            await db.StatusTransitions
+                .Where(t => t.FromStatus.TaskList.SpaceId == SpaceId)
+                .ExecuteDeleteAsync();
             await db.Spaces.Where(s => s.Id == SpaceId).ExecuteDeleteAsync();
             NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}");
         }

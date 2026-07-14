@@ -16,6 +16,10 @@
 
             <EditForm Model="model" OnValidSubmit="HandleSave">
                 <DataAnnotationsValidator />
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
                 <div class="form-field">
                     <label for="task-title">Título</label>
                     <InputText id="task-title" @bind-Value="model.Title" />
@@ -49,7 +53,7 @@
                     <div class="form-field">
                         <label for="task-status">Status</label>
                         <InputSelect id="task-status" @bind-Value="model.StatusId">
-                            @foreach (var s in Statuses)
+                            @foreach (var s in AllowedStatuses)
                             {
                                 <option value="@s.Id">@s.Name</option>
                             }
@@ -144,19 +148,47 @@
     public List<CustomFieldDefinition> CustomFieldDefinitions { get; set; } = [];
 
     [Parameter]
+    public List<StatusTransition> StatusTransitions { get; set; } = [];
+
+    [Parameter]
     public EventCallback OnSaved { get; set; }
 
     private bool isOpen;
     private bool isEditing;
     private bool isSaving;
+    private string? errorMessage;
     private Guid? editingId;
+    private Guid? originalStatusId;
     private readonly WorkItemFormModel model = new();
     private readonly Dictionary<Guid, string> customFieldValues = new();
+
+    // Unrestricted (all Statuses) when creating, or when the list has no configured
+    // transitions at all — only narrows down once editing AND rules exist for this list.
+    private List<TaskStatusDefinition> AllowedStatuses
+    {
+        get
+        {
+            if (!isEditing || originalStatusId is null || StatusTransitions.Count == 0)
+            {
+                return Statuses;
+            }
+
+            var reachableIds = StatusTransitions
+                .Where(t => t.FromStatusId == originalStatusId)
+                .Select(t => t.ToStatusId)
+                .ToHashSet();
+            reachableIds.Add(originalStatusId.Value);
+
+            return Statuses.Where(s => reachableIds.Contains(s.Id)).ToList();
+        }
+    }
 
     public void OpenForCreate()
     {
         isEditing = false;
         editingId = null;
+        originalStatusId = null;
+        errorMessage = null;
         model.Reset();
         model.StatusId = Statuses.FirstOrDefault(s => s.IsDefault)?.Id ?? Statuses.FirstOrDefault()?.Id ?? Guid.Empty;
         ResetCustomFieldValues();
@@ -168,6 +200,8 @@
     {
         isEditing = true;
         editingId = item.Id;
+        originalStatusId = item.StatusId;
+        errorMessage = null;
         model.Title = item.Title;
         model.Description = item.Description ?? "";
         model.Type = item.Type;
@@ -210,6 +244,7 @@
     private async Task HandleSave()
     {
         isSaving = true;
+        errorMessage = null;
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
@@ -224,6 +259,22 @@
                 var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
                 workItem = new WorkItem { Id = Guid.NewGuid(), TaskListId = TaskListId, CreatedAtUtc = DateTime.UtcNow, CreatedByUserId = userId };
                 db.WorkItems.Add(workItem);
+            }
+
+            if (isEditing && workItem.StatusId != model.StatusId)
+            {
+                var hasRules = await db.StatusTransitions.AnyAsync(t => t.FromStatusId == workItem.StatusId);
+                if (hasRules)
+                {
+                    var allowed = await db.StatusTransitions.AnyAsync(
+                        t => t.FromStatusId == workItem.StatusId && t.ToStatusId == model.StatusId);
+                    if (!allowed)
+                    {
+                        errorMessage = "Essa mudança de status não é permitida pelo workflow da lista.";
+                        isSaving = false;
+                        return;
+                    }
+                }
             }
 
             workItem.Title = model.Title.Trim();

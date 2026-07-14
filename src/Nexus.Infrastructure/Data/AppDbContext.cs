@@ -22,6 +22,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<CustomFieldDefinition> CustomFieldDefinitions => Set<CustomFieldDefinition>();
     public DbSet<CustomFieldOption> CustomFieldOptions => Set<CustomFieldOption>();
     public DbSet<CustomFieldValue> CustomFieldValues => Set<CustomFieldValue>();
+    public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
