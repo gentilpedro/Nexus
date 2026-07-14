@@ -19,6 +19,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<WorkItem> WorkItems => Set<WorkItem>();
     public DbSet<Sprint> Sprints => Set<Sprint>();
     public DbSet<SprintBurndownSnapshot> SprintBurndownSnapshots => Set<SprintBurndownSnapshot>();
+    public DbSet<CustomFieldDefinition> CustomFieldDefinitions => Set<CustomFieldDefinition>();
+    public DbSet<CustomFieldOption> CustomFieldOptions => Set<CustomFieldOption>();
+    public DbSet<CustomFieldValue> CustomFieldValues => Set<CustomFieldValue>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

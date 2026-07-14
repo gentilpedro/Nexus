@@ -38,10 +38,16 @@
 
         <div class="page-header">
             <h1>@taskList.Name</h1>
-            @if (canManage)
-            {
-                <button class="btn" @onclick="ToggleCreateSprintForm">+ Nova sprint</button>
-            }
+            <div class="form-actions">
+                @if (canManageFields)
+                {
+                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
+                }
+                @if (canManage)
+                {
+                    <button class="btn" @onclick="ToggleCreateSprintForm">+ Nova sprint</button>
+                }
+            </div>
         </div>
 
         <ViewSwitcher ListId="ListId" ActiveView="backlog" />
@@ -123,6 +129,7 @@
                           Statuses="statuses ?? []"
                           AssigneeOptions="assigneeOptions ?? []"
                           EpicOptions="epics ?? []"
+                          CustomFieldDefinitions="customFieldDefinitions ?? []"
                           OnSaved="ReloadAsync" />
     }
 </div>
@@ -144,8 +151,10 @@
     private List<TaskStatusDefinition>? statuses;
     private List<(string UserId, string DisplayName)>? assigneeOptions;
     private List<WorkItem>? epics;
+    private List<CustomFieldDefinition>? customFieldDefinitions;
     private bool notFound;
     private bool canManage;
+    private bool canManageFields;
     private bool showCreateSprintForm;
     private bool isSavingSprint;
     private string? errorMessage;
@@ -168,6 +177,7 @@
         statuses = null;
         assigneeOptions = null;
         epics = null;
+        customFieldDefinitions = null;
         showCreateSprintForm = false;
         errorMessage = null;
 
@@ -189,6 +199,10 @@
             return;
         }
         canManage = true;
+
+        var adminResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+        canManageFields = adminResult.Succeeded;
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
@@ -212,6 +226,7 @@
         statuses = await QueryService.GetStatusesForListAsync(ListId);
         assigneeOptions = await QueryService.GetWorkspaceMemberOptionsAsync(workspaceId);
         epics = await QueryService.GetEpicsForListAsync(ListId);
+        customFieldDefinitions = await QueryService.GetCustomFieldDefinitionsForListAsync(ListId);
         await ReloadAsync();
     }
 
@@ -224,7 +239,13 @@
         StateHasChanged();
     }
 
-    private void OpenEdit(WorkItem item) => panel?.OpenForEdit(item);
+    private async Task OpenEdit(WorkItem item)
+    {
+        if (panel is not null)
+        {
+            await panel.OpenForEdit(item);
+        }
+    }
 
     private async Task HandleCardMoved((Guid WorkItemId, Guid? NewSprintId, int NewIndex) move)
     {

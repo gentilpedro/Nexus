@@ -91,6 +91,16 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             .ToListAsync(ct);
     }
 
+    public async Task<List<CustomFieldDefinition>> GetCustomFieldDefinitionsForListAsync(Guid taskListId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.CustomFieldDefinitions
+            .Where(f => f.TaskListId == taskListId)
+            .Include(f => f.Options.OrderBy(o => o.SortOrder))
+            .OrderBy(f => f.SortOrder)
+            .ToListAsync(ct);
+    }
+
     public async Task<List<(string UserId, string DisplayName)>> GetWorkspaceMemberOptionsAsync(Guid workspaceId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);

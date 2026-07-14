@@ -24,5 +24,10 @@ public class TaskListConfiguration : IEntityTypeConfiguration<TaskList>
             .WithOne(s => s.TaskList)
             .HasForeignKey(s => s.TaskListId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(l => l.CustomFieldDefinitions)
+            .WithOne(f => f.TaskList)
+            .HasForeignKey(f => f.TaskListId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

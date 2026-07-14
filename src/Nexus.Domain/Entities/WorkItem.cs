@@ -35,4 +35,6 @@ public class WorkItem
     // Who created this item — set once at creation, never overwritten on edit.
     public string? CreatedByUserId { get; set; }
     public ApplicationUser? CreatedByUser { get; set; }
+
+    public ICollection<CustomFieldValue> CustomFieldValues { get; set; } = new List<CustomFieldValue>();
 }

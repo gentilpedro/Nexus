@@ -1,0 +1,258 @@
+@page "/lists/{ListId:guid}/fields"
+@attribute [Authorize]
+@using System.ComponentModel.DataAnnotations
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Extensions
+@using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject WorkItemQueryService QueryService
+@inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
+
+<PageTitle>Campos customizados</PageTitle>
+
+<div class="page-container">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Lista não encontrada ou você não tem acesso a ela.</p>
+            <a class="btn" href="/workspaces">Voltar</a>
+        </div>
+    }
+    else if (taskList is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs">
+            <a href="/workspaces">Workspaces</a> /
+            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
+            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
+            <a href="@($"/lists/{ListId}/list")">@taskList.Name</a> /
+            Campos customizados
+        </div>
+
+        <div class="page-header">
+            <h1>Campos customizados</h1>
+        </div>
+
+        <EditForm Model="createModel" OnValidSubmit="HandleCreate" class="card" style="margin-bottom:1.5rem;">
+            <DataAnnotationsValidator />
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="field-name">Nome</label>
+                    <InputText id="field-name" @bind-Value="createModel.Name" placeholder="Ex: Cliente" />
+                    <ValidationMessage For="() => createModel.Name" />
+                </div>
+                <div class="form-field">
+                    <label for="field-type">Tipo</label>
+                    <InputSelect id="field-type" @bind-Value="createModel.Type">
+                        @foreach (var t in Enum.GetValues<CustomFieldType>())
+                        {
+                            <option value="@t">@t.ToDisplayLabel()</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+            @if (createModel.Type == CustomFieldType.Select)
+            {
+                <div class="form-field">
+                    <label for="field-options">Opções (separadas por vírgula)</label>
+                    <InputText id="field-options" @bind-Value="createModel.OptionsCsv" placeholder="Ex: Baixa, Média, Alta" />
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+            <div class="form-actions">
+                <button type="submit" class="btn" disabled="@isSaving">Adicionar campo</button>
+            </div>
+        </EditForm>
+
+        @if (definitions is null)
+        {
+            <p>Carregando campos...</p>
+        }
+        else if (definitions.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Nenhum campo customizado ainda.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Tipo</th>
+                            <th>Opções</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var def in definitions)
+                        {
+                            <tr>
+                                <td>@def.Name</td>
+                                <td>@def.Type.ToDisplayLabel()</td>
+                                <td>@(def.Type == CustomFieldType.Select ? string.Join(", ", def.Options.Select(o => o.Label)) : "—")</td>
+                                <td><button type="button" class="btn-link" @onclick="() => HandleDelete(def.Id)">Excluir</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid ListId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private TaskList? taskList;
+    private string workspaceName = "";
+    private string spaceName = "";
+    private Guid workspaceId;
+    private List<CustomFieldDefinition>? definitions;
+    private bool notFound;
+    private bool isSaving;
+    private string? errorMessage;
+    private Guid? loadedListId;
+    private readonly CreateFieldModel createModel = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedListId == ListId)
+        {
+            return;
+        }
+
+        loadedListId = ListId;
+        notFound = false;
+        taskList = null;
+        definitions = null;
+        errorMessage = null;
+
+        var resolvedWorkspaceId = await QueryService.GetWorkspaceIdForListAsync(ListId);
+        if (resolvedWorkspaceId is null)
+        {
+            notFound = true;
+            return;
+        }
+        workspaceId = resolvedWorkspaceId.Value;
+
+        var authState = await AuthStateTask!;
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            taskList = await db.TaskLists
+                .Include(l => l.Space)
+                .ThenInclude(s => s.Workspace)
+                .FirstOrDefaultAsync(l => l.Id == ListId);
+        }
+
+        if (taskList is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        workspaceName = taskList.Space.Workspace.Name;
+        spaceName = taskList.Space.Name;
+
+        NavContext.SetList(workspaceId, workspaceName, taskList.SpaceId, ListId);
+
+        await LoadDefinitionsAsync();
+    }
+
+    private async Task LoadDefinitionsAsync()
+    {
+        definitions = await QueryService.GetCustomFieldDefinitionsForListAsync(ListId);
+    }
+
+    private async Task HandleCreate()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var maxSortOrder = definitions!.Count == 0 ? -1 : definitions.Max(d => d.SortOrder);
+
+        var definition = new CustomFieldDefinition
+        {
+            Id = Guid.NewGuid(),
+            TaskListId = ListId,
+            Name = createModel.Name.Trim(),
+            Type = createModel.Type,
+            SortOrder = maxSortOrder + 1
+        };
+
+        if (createModel.Type == CustomFieldType.Select)
+        {
+            var labels = createModel.OptionsCsv
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct()
+                .ToList();
+
+            if (labels.Count == 0)
+            {
+                errorMessage = "Informe pelo menos uma opção separada por vírgula.";
+                isSaving = false;
+                return;
+            }
+
+            for (var i = 0; i < labels.Count; i++)
+            {
+                definition.Options.Add(new CustomFieldOption { Id = Guid.NewGuid(), Label = labels[i], SortOrder = i });
+            }
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            db.CustomFieldDefinitions.Add(definition);
+            await db.SaveChangesAsync();
+        }
+
+        createModel.Name = "";
+        createModel.Type = CustomFieldType.Text;
+        createModel.OptionsCsv = "";
+        isSaving = false;
+        await LoadDefinitionsAsync();
+    }
+
+    private async Task HandleDelete(Guid definitionId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.CustomFieldValues.Where(v => v.CustomFieldDefinitionId == definitionId).ExecuteDeleteAsync();
+        await db.CustomFieldDefinitions.Where(f => f.Id == definitionId).ExecuteDeleteAsync();
+        await LoadDefinitionsAsync();
+    }
+
+    private class CreateFieldModel
+    {
+        [Required(ErrorMessage = "Informe um nome.")]
+        [StringLength(200, ErrorMessage = "Nome muito longo.")]
+        public string Name { get; set; } = "";
+        public CustomFieldType Type { get; set; } = CustomFieldType.Text;
+        public string OptionsCsv { get; set; } = "";
+    }
+}
