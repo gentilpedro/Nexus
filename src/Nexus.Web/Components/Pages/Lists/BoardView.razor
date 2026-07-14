@@ -7,7 +7,7 @@
 @using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
 @inject IAuthorizationService AuthorizationService
 
@@ -103,10 +103,13 @@
             return;
         }
 
-        taskList = await Db.TaskLists
-            .Include(l => l.Space)
-            .ThenInclude(s => s.Workspace)
-            .FirstOrDefaultAsync(l => l.Id == ListId);
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            taskList = await db.TaskLists
+                .Include(l => l.Space)
+                .ThenInclude(s => s.Workspace)
+                .FirstOrDefaultAsync(l => l.Id == ListId);
+        }
 
         if (taskList is null)
         {

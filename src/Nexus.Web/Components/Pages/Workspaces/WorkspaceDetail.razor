@@ -6,7 +6,7 @@
 @using Nexus.Web.Authorization
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager NavigationManager
 @inject IAuthorizationService AuthorizationService
 
@@ -107,7 +107,10 @@
             authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
         canManageSpaces = adminResult.Succeeded;
 
-        workspace = await Db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspace = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        }
         if (workspace is null)
         {
             notFound = true;
@@ -119,7 +122,8 @@
 
     private async Task LoadSpacesAsync()
     {
-        spaces = await Db.Spaces
+        await using var db = await DbFactory.CreateDbContextAsync();
+        spaces = await db.Spaces
             .Where(s => s.WorkspaceId == WorkspaceId)
             .OrderBy(s => s.SortOrder)
             .ThenBy(s => s.Name)
@@ -138,14 +142,17 @@
 
         var maxSortOrder = spaces!.Count == 0 ? -1 : spaces.Max(s => s.SortOrder);
 
-        Db.Spaces.Add(new Space
+        await using (var db = await DbFactory.CreateDbContextAsync())
         {
-            Id = Guid.NewGuid(),
-            WorkspaceId = WorkspaceId,
-            Name = createModel.Name.Trim(),
-            SortOrder = maxSortOrder + 1
-        });
-        await Db.SaveChangesAsync();
+            db.Spaces.Add(new Space
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = WorkspaceId,
+                Name = createModel.Name.Trim(),
+                SortOrder = maxSortOrder + 1
+            });
+            await db.SaveChangesAsync();
+        }
 
         showCreateForm = false;
         isSaving = false;

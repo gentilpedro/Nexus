@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Nexus.Web.Authorization;
 
-public class WorkspaceAuthorizationHandler(AppDbContext db)
+public class WorkspaceAuthorizationHandler(IDbContextFactory<AppDbContext> dbFactory)
     : AuthorizationHandler<WorkspaceAccessRequirement, Guid>
 {
     protected override async Task HandleRequirementAsync(
@@ -18,6 +18,8 @@ public class WorkspaceAuthorizationHandler(AppDbContext db)
         {
             return;
         }
+
+        await using var db = await dbFactory.CreateDbContextAsync();
 
         var member = await db.WorkspaceMembers
             .AsNoTracking()
