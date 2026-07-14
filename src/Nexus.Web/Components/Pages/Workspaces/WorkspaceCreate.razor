@@ -5,7 +5,7 @@
 @using Nexus.Infrastructure.Data
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager NavigationManager
 
 <PageTitle>Novo workspace</PageTitle>
@@ -48,7 +48,8 @@
         var authState = await AuthStateTask!;
         var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
-        var slug = await GenerateUniqueSlugAsync(model.Name);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var slug = await GenerateUniqueSlugAsync(db, model.Name);
 
         var workspace = new Workspace
         {
@@ -67,11 +68,11 @@
             JoinedAtUtc = DateTime.UtcNow
         });
 
-        Db.Workspaces.Add(workspace);
+        db.Workspaces.Add(workspace);
 
         try
         {
-            await Db.SaveChangesAsync();
+            await db.SaveChangesAsync();
             NavigationManager.NavigateTo($"/workspaces/{workspace.Id}");
         }
         catch (Exception)
@@ -81,7 +82,7 @@
         }
     }
 
-    private async Task<string> GenerateUniqueSlugAsync(string name)
+    private static async Task<string> GenerateUniqueSlugAsync(AppDbContext db, string name)
     {
         var baseSlug = string.Concat(name.Trim().ToLowerInvariant()
                 .Select(c => char.IsLetterOrDigit(c) ? c : '-'))
@@ -99,7 +100,7 @@
 
         var slug = baseSlug;
         var suffix = 1;
-        while (await Db.Workspaces.AnyAsync(w => w.Slug == slug))
+        while (await db.Workspaces.AnyAsync(w => w.Slug == slug))
         {
             suffix++;
             slug = $"{baseSlug}-{suffix}";

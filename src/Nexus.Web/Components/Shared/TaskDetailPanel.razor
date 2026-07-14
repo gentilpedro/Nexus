@@ -1,7 +1,7 @@
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Microsoft.EntityFrameworkCore
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 
 @if (isOpen)
 {
@@ -131,30 +131,33 @@
     {
         isSaving = true;
 
-        WorkItem workItem;
-        if (isEditing && editingId is not null)
+        await using (var db = await DbFactory.CreateDbContextAsync())
         {
-            workItem = await Db.WorkItems.FirstAsync(w => w.Id == editingId.Value);
-        }
-        else
-        {
-            workItem = new WorkItem { Id = Guid.NewGuid(), TaskListId = TaskListId, CreatedAtUtc = DateTime.UtcNow };
-            Db.WorkItems.Add(workItem);
-        }
+            WorkItem workItem;
+            if (isEditing && editingId is not null)
+            {
+                workItem = await db.WorkItems.FirstAsync(w => w.Id == editingId.Value);
+            }
+            else
+            {
+                workItem = new WorkItem { Id = Guid.NewGuid(), TaskListId = TaskListId, CreatedAtUtc = DateTime.UtcNow };
+                db.WorkItems.Add(workItem);
+            }
 
-        workItem.Title = model.Title.Trim();
-        workItem.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
-        workItem.Type = model.Type;
-        workItem.Priority = model.Priority;
-        workItem.StatusId = model.StatusId;
-        workItem.AssigneeId = string.IsNullOrEmpty(model.AssigneeId) ? null : model.AssigneeId;
-        workItem.DueDateUtc = model.DueDate.HasValue ? DateTime.SpecifyKind(model.DueDate.Value, DateTimeKind.Utc) : null;
-        if (isEditing)
-        {
-            workItem.UpdatedAtUtc = DateTime.UtcNow;
-        }
+            workItem.Title = model.Title.Trim();
+            workItem.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
+            workItem.Type = model.Type;
+            workItem.Priority = model.Priority;
+            workItem.StatusId = model.StatusId;
+            workItem.AssigneeId = string.IsNullOrEmpty(model.AssigneeId) ? null : model.AssigneeId;
+            workItem.DueDateUtc = model.DueDate.HasValue ? DateTime.SpecifyKind(model.DueDate.Value, DateTimeKind.Utc) : null;
+            if (isEditing)
+            {
+                workItem.UpdatedAtUtc = DateTime.UtcNow;
+            }
 
-        await Db.SaveChangesAsync();
+            await db.SaveChangesAsync();
+        }
 
         isSaving = false;
         isOpen = false;

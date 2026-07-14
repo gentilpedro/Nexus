@@ -5,7 +5,7 @@
 @using Nexus.Infrastructure.Data
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 
 <PageTitle>Workspaces</PageTitle>
 
@@ -51,7 +51,8 @@
         var authState = await AuthStateTask!;
         var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
-        memberships = await Db.WorkspaceMembers
+        await using var db = await DbFactory.CreateDbContextAsync();
+        memberships = await db.WorkspaceMembers
             .Include(m => m.Workspace)
             .Where(m => m.UserId == userId)
             .OrderBy(m => m.Workspace.Name)

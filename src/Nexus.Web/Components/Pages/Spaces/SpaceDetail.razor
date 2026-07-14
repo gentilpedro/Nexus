@@ -5,7 +5,7 @@
 @using Nexus.Web.Authorization
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@inject AppDbContext Db
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager NavigationManager
 @inject IAuthorizationService AuthorizationService
 
@@ -152,8 +152,11 @@
             authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
         canManageSpace = adminResult.Succeeded;
 
-        workspace = await Db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
-        space = await Db.Spaces.FirstOrDefaultAsync(s => s.Id == SpaceId && s.WorkspaceId == WorkspaceId);
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspace = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+            space = await db.Spaces.FirstOrDefaultAsync(s => s.Id == SpaceId && s.WorkspaceId == WorkspaceId);
+        }
 
         if (workspace is null || space is null)
         {
@@ -166,7 +169,8 @@
 
     private async Task LoadTaskListsAsync()
     {
-        taskLists = await Db.TaskLists
+        await using var db = await DbFactory.CreateDbContextAsync();
+        taskLists = await db.TaskLists
             .Where(l => l.SpaceId == SpaceId)
             .OrderBy(l => l.SortOrder)
             .ThenBy(l => l.Name)
@@ -197,8 +201,11 @@
         taskList.Statuses.Add(new TaskStatusDefinition { Id = Guid.NewGuid(), TaskListId = taskList.Id, Name = "Em Andamento", SortOrder = 1, Category = StatusCategory.InProgress });
         taskList.Statuses.Add(new TaskStatusDefinition { Id = Guid.NewGuid(), TaskListId = taskList.Id, Name = "Concluído", SortOrder = 2, Category = StatusCategory.Done });
 
-        Db.TaskLists.Add(taskList);
-        await Db.SaveChangesAsync();
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            db.TaskLists.Add(taskList);
+            await db.SaveChangesAsync();
+        }
 
         showCreateListForm = false;
         isSavingList = false;
@@ -213,8 +220,10 @@
 
     private async Task HandleRename()
     {
-        space!.Name = renameModel.Name.Trim();
-        await Db.SaveChangesAsync();
+        var newName = renameModel.Name.Trim();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.Spaces.Where(s => s.Id == SpaceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, newName));
+        space!.Name = newName;
         isRenaming = false;
     }
 
@@ -223,12 +232,13 @@
         try
         {
             // ExecuteDeleteAsync issues a direct SQL DELETE and lets the database resolve the
-            // cascade (Space -> TaskList -> WorkItems/Statuses) as a single set-based operation.
-            // Db.Spaces.Remove(...) would instead ask EF's client-side change tracker to walk the
-            // cascade in-memory, which throws when this DbContext also has WorkItems/Statuses
-            // tracked from an earlier query on the same circuit-scoped context (verified via a
-            // throwaway test) — DB-level cascade resolution doesn't have that failure mode.
-            await Db.Spaces.Where(s => s.Id == SpaceId).ExecuteDeleteAsync();
+            // cascade (Space -> TaskList -> WorkItems/Statuses) as a single set-based operation —
+            // deliberately not Remove()+SaveChanges(), which asks EF's client-side change tracker
+            // to walk the cascade in-memory and throws if other entities from this same chain are
+            // tracked elsewhere. Now moot in practice since IDbContextFactory gives every operation
+            // its own short-lived context, but ExecuteDeleteAsync remains the more direct approach.
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await db.Spaces.Where(s => s.Id == SpaceId).ExecuteDeleteAsync();
             NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}");
         }
         catch (DbUpdateException)
