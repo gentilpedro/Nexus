@@ -1107,12 +1107,32 @@ table th, table td {
 }
 
 .app-sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     padding: 1rem;
     border-bottom: 1px solid var(--color-border);
 }
 
+.app-sidebar-home {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: var(--radius);
+    color: var(--color-text-muted);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.app-sidebar-home:hover {
+    background: var(--color-bg);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
 .app-sidebar-title {
-    display: block;
     font-size: 0.95rem;
     color: var(--color-text);
 }
