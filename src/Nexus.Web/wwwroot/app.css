@@ -1279,6 +1279,16 @@ table th, table td {
     object-fit: contain;
 }
 
+@media (prefers-color-scheme: dark) {
+    .app-sidebar-home img {
+        filter: brightness(0) invert(1);
+    }
+}
+
+:root[data-theme="dark"] .app-sidebar-home img {
+    filter: brightness(0) invert(1);
+}
+
 .app-sidebar-home:hover {
     background: var(--color-hover);
     color: var(--color-primary);
