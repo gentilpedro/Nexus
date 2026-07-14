@@ -29,6 +29,11 @@
             <ValidationSummary class="validation-errors" role="alert" />
 
             <div class="form-field">
+                <label for="Input.Name">Nome</label>
+                <InputText @bind-Value="Input.Name" id="Input.Name" autocomplete="name" aria-required="true" placeholder="Seu nome" />
+                <ValidationMessage For="() => Input.Name" />
+            </div>
+            <div class="form-field">
                 <label for="Input.Email">Email</label>
                 <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
                 <ValidationMessage For="() => Input.Email" />
@@ -72,6 +77,7 @@
     public async Task RegisterUser(EditContext editContext)
     {
         var user = CreateUser();
+        user.DisplayName = Input.Name.Trim();
 
         await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
         var emailStore = GetEmailStore();
@@ -132,6 +138,11 @@
 
     private sealed class InputModel
     {
+        [Required(ErrorMessage = "Informe um nome.")]
+        [StringLength(200, ErrorMessage = "Nome muito longo.")]
+        [Display(Name = "Nome")]
+        public string Name { get; set; } = "";
+
         [Required]
         [EmailAddress]
         [Display(Name = "Email")]
