@@ -935,3 +935,120 @@ table th, table td {
     padding: 0.5rem;
     border-bottom: 1px solid var(--color-border);
 }
+
+/* Backlog / Sprints */
+.sprint-section {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+}
+
+.sprint-section-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    flex-wrap: wrap;
+}
+
+.sprint-section-dates {
+    margin-left: 0.6rem;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+}
+
+.sprint-section-goal {
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    margin-top: 0.2rem;
+}
+
+.sprint-section-body {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 3rem;
+}
+
+.sprint-section-body .task-card {
+    max-width: 100%;
+}
+
+.sprint-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-bottom: 0.5rem;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+/* Burndown chart */
+.burndown-chart {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
+
+.burndown-svg {
+    width: 100%;
+    height: auto;
+}
+
+.burndown-axis {
+    stroke: var(--color-border);
+    stroke-width: 1;
+}
+
+.burndown-axis-label {
+    font-size: 11px;
+    fill: var(--color-text-muted);
+}
+
+.burndown-line-ideal {
+    stroke: var(--color-text-muted);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+}
+
+.burndown-line-actual {
+    stroke: var(--color-primary);
+    stroke-width: 2.5;
+}
+
+.burndown-dot {
+    fill: var(--color-primary);
+}
+
+.burndown-legend {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.burndown-legend-swatch {
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.15rem;
+    margin-right: 0.4rem;
+    vertical-align: middle;
+}
+
+.burndown-legend-swatch--ideal {
+    background: var(--color-text-muted);
+}
+
+.burndown-legend-swatch--actual {
+    background: var(--color-primary);
+}

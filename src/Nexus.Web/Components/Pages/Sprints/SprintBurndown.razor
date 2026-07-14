@@ -1,0 +1,106 @@
+@page "/sprints/{SprintId:guid}/burndown"
+@attribute [Authorize]
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Components.Shared
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAuthorizationService AuthorizationService
+
+<PageTitle>@(sprint?.Name ?? "Burndown")</PageTitle>
+
+<div class="page-container">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Sprint não encontrado ou você não tem acesso a ele.</p>
+            <a class="btn" href="/workspaces">Voltar</a>
+        </div>
+    }
+    else if (sprint is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs">
+            <a href="@($"/lists/{sprint.TaskListId}/backlog")">Voltar pro backlog</a>
+        </div>
+        <div class="page-header">
+            <h1>@sprint.Name</h1>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(sprint.Goal))
+        {
+            <p class="topnav-user">@sprint.Goal</p>
+        }
+        <p class="topnav-user">
+            @sprint.StartDateUtc.ToString("dd/MM/yyyy") a @sprint.EndDateUtc.ToString("dd/MM/yyyy") · @statusLabel
+        </p>
+
+        <BurndownChart Sprint="sprint" Snapshots="snapshots ?? []" />
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid SprintId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private Sprint? sprint;
+    private List<SprintBurndownSnapshot>? snapshots;
+    private bool notFound;
+
+    private string statusLabel => sprint?.Status switch
+    {
+        SprintStatus.Planned => "Planejada",
+        SprintStatus.Active => "Ativa",
+        SprintStatus.Completed => "Concluída",
+        _ => ""
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Guid? workspaceId;
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspaceId = await db.Sprints
+                .Where(s => s.Id == SprintId)
+                .Select(s => (Guid?)s.TaskList.Space.WorkspaceId)
+                .FirstOrDefaultAsync();
+        }
+
+        if (workspaceId is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        var authState = await AuthStateTask!;
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, workspaceId.Value, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            sprint = await db.Sprints.FirstOrDefaultAsync(s => s.Id == SprintId);
+            snapshots = await db.SprintBurndownSnapshots
+                .Where(sn => sn.SprintId == SprintId)
+                .OrderBy(sn => sn.SnapshotDateUtc)
+                .ToListAsync();
+        }
+
+        if (sprint is null)
+        {
+            notFound = true;
+        }
+    }
+}

@@ -17,6 +17,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<TaskList> TaskLists => Set<TaskList>();
     public DbSet<TaskStatusDefinition> TaskStatusDefinitions => Set<TaskStatusDefinition>();
     public DbSet<WorkItem> WorkItems => Set<WorkItem>();
+    public DbSet<Sprint> Sprints => Set<Sprint>();
+    public DbSet<SprintBurndownSnapshot> SprintBurndownSnapshots => Set<SprintBurndownSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

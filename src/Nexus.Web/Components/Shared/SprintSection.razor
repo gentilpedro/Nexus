@@ -1,0 +1,112 @@
+@using Nexus.Domain.Entities
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="sprint-section" data-drop-id="@(Sprint?.Id.ToString() ?? "")">
+    <div class="sprint-section-header">
+        <div>
+            <strong>@(Sprint?.Name ?? "Backlog")</strong>
+            @if (Sprint is not null)
+            {
+                <span class="sprint-section-dates">@Sprint.StartDateUtc.ToString("dd/MM") – @Sprint.EndDateUtc.ToString("dd/MM")</span>
+                @if (!string.IsNullOrWhiteSpace(Sprint.Goal))
+                {
+                    <div class="sprint-section-goal">@Sprint.Goal</div>
+                }
+            }
+        </div>
+        <div class="form-actions">
+            <span class="board-column-count">@Items.Count</span>
+            @if (Sprint is not null && CanManage)
+            {
+                @if (Sprint.Status == SprintStatus.Planned)
+                {
+                    <button class="btn btn-secondary" disabled="@AnotherSprintActive" @onclick="() => OnStart.InvokeAsync(Sprint.Id)">Iniciar sprint</button>
+                }
+                else if (Sprint.Status == SprintStatus.Active)
+                {
+                    <a class="btn-link" href="@($"/sprints/{Sprint.Id}/burndown")">Ver burndown</a>
+                    <button class="btn btn-secondary" @onclick="() => OnComplete.InvokeAsync(Sprint.Id)">Concluir sprint</button>
+                }
+            }
+        </div>
+    </div>
+    <div class="sprint-section-body" @ref="bodyRef">
+        @foreach (var item in Items)
+        {
+            <TaskCard WorkItem="item" OnClick="OnCardClick" />
+        }
+        @if (Items.Count == 0)
+        {
+            <div class="board-column-empty">Vazio — arraste tasks pra cá</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Sprint? Sprint { get; set; }
+
+    [Parameter, EditorRequired]
+    public List<WorkItem> Items { get; set; } = [];
+
+    [Parameter]
+    public bool CanManage { get; set; }
+
+    [Parameter]
+    public bool AnotherSprintActive { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkItem> OnCardClick { get; set; }
+
+    [Parameter]
+    public EventCallback<(Guid WorkItemId, Guid? NewSprintId, int NewIndex)> OnCardMoved { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnStart { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnComplete { get; set; }
+
+    private ElementReference bodyRef;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<SprintSection>? selfRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/board-interop.js");
+            selfRef = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("initColumn", bodyRef, selfRef, "sprint");
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnCardDropped(Guid workItemId, string newSprintId, int newIndex)
+    {
+        if (OnCardMoved.HasDelegate)
+        {
+            Guid? parsed = Guid.TryParse(newSprintId, out var id) ? id : null;
+            await OnCardMoved.InvokeAsync((workItemId, parsed, newIndex));
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null)
+        {
+            try
+            {
+                await module.InvokeVoidAsync("destroyColumn", bodyRef);
+                await module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone (e.g. page navigation/tab close) — nothing to clean up client-side.
+            }
+        }
+
+        selfRef?.Dispose();
+    }
+}

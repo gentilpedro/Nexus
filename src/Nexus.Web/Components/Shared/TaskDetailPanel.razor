@@ -64,9 +64,21 @@
                         </InputSelect>
                     </div>
                 </div>
-                <div class="form-field">
-                    <label for="task-due-date">Prazo</label>
-                    <InputDate id="task-due-date" @bind-Value="model.DueDate" />
+                <div class="form-row">
+                    <div class="form-field">
+                        <label for="task-due-date">Prazo</label>
+                        <InputDate id="task-due-date" @bind-Value="model.DueDate" />
+                    </div>
+                    <div class="form-field">
+                        <label for="task-epic">Epic</label>
+                        <InputSelect id="task-epic" @bind-Value="model.ParentEpicId">
+                            <option value="">Nenhum</option>
+                            @foreach (var epic in EpicOptions.Where(e => e.Id != editingId))
+                            {
+                                <option value="@epic.Id">@epic.Title</option>
+                            }
+                        </InputSelect>
+                    </div>
                 </div>
 
                 <div class="form-actions">
@@ -87,6 +99,9 @@
 
     [Parameter, EditorRequired]
     public List<(string UserId, string DisplayName)> AssigneeOptions { get; set; } = [];
+
+    [Parameter]
+    public List<WorkItem> EpicOptions { get; set; } = [];
 
     [Parameter]
     public EventCallback OnSaved { get; set; }
@@ -118,6 +133,7 @@
         model.StatusId = item.StatusId;
         model.AssigneeId = item.AssigneeId ?? "";
         model.DueDate = item.DueDateUtc?.Date;
+        model.ParentEpicId = item.ParentEpicId?.ToString() ?? "";
         isOpen = true;
         StateHasChanged();
     }
@@ -151,6 +167,7 @@
             workItem.StatusId = model.StatusId;
             workItem.AssigneeId = string.IsNullOrEmpty(model.AssigneeId) ? null : model.AssigneeId;
             workItem.DueDateUtc = model.DueDate.HasValue ? DateTime.SpecifyKind(model.DueDate.Value, DateTimeKind.Utc) : null;
+            workItem.ParentEpicId = Guid.TryParse(model.ParentEpicId, out var epicId) ? epicId : null;
             if (isEditing)
             {
                 workItem.UpdatedAtUtc = DateTime.UtcNow;
@@ -179,6 +196,7 @@
         public Guid StatusId { get; set; }
         public string AssigneeId { get; set; } = "";
         public DateTime? DueDate { get; set; }
+        public string ParentEpicId { get; set; } = "";
 
         public void Reset()
         {
@@ -188,6 +206,7 @@
             Priority = WorkItemPriority.Medium;
             AssigneeId = "";
             DueDate = null;
+            ParentEpicId = "";
         }
     }
 }

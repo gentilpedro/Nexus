@@ -1,0 +1,77 @@
+@using Nexus.Domain.Entities
+
+<div class="burndown-chart">
+    @if (Snapshots.Count == 0)
+    {
+        <p class="topnav-user">Ainda não há dados de progresso para este sprint.</p>
+    }
+    else
+    {
+        <svg viewBox="0 0 640 300" class="burndown-svg">
+            <line x1="50" y1="10" x2="50" y2="260" class="burndown-axis" />
+            <line x1="50" y1="260" x2="620" y2="260" class="burndown-axis" />
+
+            <text x="42" y="16" text-anchor="end" class="burndown-axis-label">@maxCount</text>
+            <text x="42" y="264" text-anchor="end" class="burndown-axis-label">0</text>
+
+            <polyline points="@idealPoints" fill="none" class="burndown-line-ideal" />
+            <polyline points="@actualPoints" fill="none" class="burndown-line-actual" />
+
+            @foreach (var (x, y) in actualDots)
+            {
+                <circle cx="@x.ToString("F1")" cy="@y.ToString("F1")" r="3.5" class="burndown-dot" />
+            }
+        </svg>
+        <div class="burndown-legend">
+            <span><span class="burndown-legend-swatch burndown-legend-swatch--ideal"></span> Ideal</span>
+            <span><span class="burndown-legend-swatch burndown-legend-swatch--actual"></span> Real</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Sprint Sprint { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public List<SprintBurndownSnapshot> Snapshots { get; set; } = [];
+
+    private const double ChartLeft = 50, ChartRight = 620, ChartTop = 10, ChartBottom = 260;
+
+    private string idealPoints = "";
+    private string actualPoints = "";
+    private List<(double X, double Y)> actualDots = [];
+    private int maxCount = 1;
+
+    protected override void OnParametersSet()
+    {
+        if (Snapshots.Count == 0)
+        {
+            return;
+        }
+
+        var ordered = Snapshots.OrderBy(s => s.SnapshotDateUtc).ToList();
+        maxCount = Math.Max(ordered.Max(s => s.TotalCount), 1);
+
+        var totalDays = Math.Max((Sprint.EndDateUtc - Sprint.StartDateUtc).TotalDays, 1);
+
+        double XFor(DateTime date)
+        {
+            var offset = (date - Sprint.StartDateUtc).TotalDays;
+            var ratio = Math.Clamp(offset / totalDays, 0, 1);
+            return ChartLeft + ratio * (ChartRight - ChartLeft);
+        }
+
+        double YFor(int count)
+        {
+            var ratio = (double)count / maxCount;
+            return ChartBottom - ratio * (ChartBottom - ChartTop);
+        }
+
+        idealPoints = $"{XFor(Sprint.StartDateUtc).ToString("F1")},{YFor(ordered[0].TotalCount).ToString("F1")} " +
+                      $"{XFor(Sprint.EndDateUtc).ToString("F1")},{YFor(0).ToString("F1")}";
+
+        actualDots = ordered.Select(s => (XFor(s.SnapshotDateUtc), YFor(s.RemainingCount))).ToList();
+        actualPoints = string.Join(" ", actualDots.Select(p => $"{p.X.ToString("F1")},{p.Y.ToString("F1")}"));
+    }
+}
