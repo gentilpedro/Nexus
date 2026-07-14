@@ -12,6 +12,19 @@
             if (saved === 'dark' || saved === 'light') {
                 document.documentElement.setAttribute('data-theme', saved);
             }
+
+            // Plain JS, no Blazor circuit involved — the theme toggle needs to work
+            // identically on static SSR pages (Login/Register, which have no SignalR
+            // circuit for IJSRuntime to call back through) and on interactive pages.
+            window.nexusToggleTheme = function () {
+                var current = document.documentElement.getAttribute('data-theme');
+                if (current !== 'dark' && current !== 'light') {
+                    current = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                var next = current === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+            };
         })();
     </script>
     <link rel="stylesheet" href="@Assets["app.css"]" />

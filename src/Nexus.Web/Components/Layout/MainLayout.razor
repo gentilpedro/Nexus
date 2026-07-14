@@ -1,7 +1,6 @@
 @inherits LayoutComponentBase
 @using Nexus.Web.Components.Shared
 @inject NavigationManager NavigationManager
-@inject IJSRuntime JS
 @implements IDisposable
 
 <nav class="topnav">
@@ -14,7 +13,7 @@
         <a class="topnav-brand" href="/">Nexus</a>
     </div>
     <div class="topnav-links">
-        <ThemeSwitch IsDark="isDark" OnToggle="ToggleTheme" />
+        <ThemeSwitch />
         <AuthorizeView>
             <Authorized>
                 <a class="topnav-user" href="Account/Manage" data-enhance-nav="false">@context.User.Identity?.Name</a>
@@ -59,36 +58,12 @@
 
 @code {
     private string? currentUrl;
-    private bool isDark;
     private bool sidebarOpen;
-    private IJSObjectReference? module;
 
     protected override void OnInitialized()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/theme.js");
-            var current = await module.InvokeAsync<string>("getTheme");
-            isDark = current == "dark";
-            StateHasChanged();
-        }
-    }
-
-    private async Task ToggleTheme()
-    {
-        if (module is null)
-        {
-            return;
-        }
-
-        var next = await module.InvokeAsync<string>("toggleTheme");
-        isDark = next == "dark";
     }
 
     private void ToggleSidebar()
