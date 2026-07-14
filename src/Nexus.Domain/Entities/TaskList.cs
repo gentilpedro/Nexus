@@ -13,4 +13,5 @@ public class TaskList
     public ICollection<TaskStatusDefinition> Statuses { get; set; } = new List<TaskStatusDefinition>();
     public ICollection<WorkItem> WorkItems { get; set; } = new List<WorkItem>();
     public ICollection<Sprint> Sprints { get; set; } = new List<Sprint>();
+    public ICollection<CustomFieldDefinition> CustomFieldDefinitions { get; set; } = new List<CustomFieldDefinition>();
 }
