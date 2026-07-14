@@ -24,6 +24,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuth
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<IAuthorizationHandler, WorkspaceAuthorizationHandler>();
 builder.Services.AddScoped<WorkItemQueryService>();
+builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
 
 builder.Services.AddAuthentication(options =>

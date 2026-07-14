@@ -4,10 +4,12 @@
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
 @using Nexus.Web.Components.Shared
+@using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
 
 <PageTitle>@(sprint?.Name ?? "Burndown")</PageTitle>
 
@@ -91,7 +93,11 @@
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
-            sprint = await db.Sprints.FirstOrDefaultAsync(s => s.Id == SprintId);
+            sprint = await db.Sprints
+                .Include(s => s.TaskList)
+                .ThenInclude(l => l.Space)
+                .ThenInclude(sp => sp.Workspace)
+                .FirstOrDefaultAsync(s => s.Id == SprintId);
             snapshots = await db.SprintBurndownSnapshots
                 .Where(sn => sn.SprintId == SprintId)
                 .OrderBy(sn => sn.SnapshotDateUtc)
@@ -101,6 +107,10 @@
         if (sprint is null)
         {
             notFound = true;
+            return;
         }
+
+        var space = sprint.TaskList.Space;
+        NavContext.SetList(space.WorkspaceId, space.Workspace.Name, space.Id, sprint.TaskListId);
     }
 }

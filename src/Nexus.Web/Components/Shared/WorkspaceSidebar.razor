@@ -1,0 +1,84 @@
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Services
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationContextService NavContext
+@implements IDisposable
+
+<aside class="app-sidebar @(IsOpen ? "is-open" : "")">
+    <div class="app-sidebar-header">
+        <a href="/workspaces" class="app-sidebar-back">‹ Workspaces</a>
+        <strong class="app-sidebar-title">@NavContext.WorkspaceName</strong>
+    </div>
+
+    @if (spaces is null)
+    {
+        <p class="app-sidebar-loading">Carregando...</p>
+    }
+    else if (spaces.Count == 0)
+    {
+        <p class="app-sidebar-loading">Nenhum space ainda.</p>
+    }
+    else
+    {
+        <nav class="app-sidebar-tree">
+            @foreach (var space in spaces)
+            {
+                <a class="app-sidebar-space @(space.Id == NavContext.SpaceId ? "active" : "")"
+                   href="@($"/workspaces/{NavContext.WorkspaceId}/spaces/{space.Id}")">
+                    @space.Name
+                </a>
+                @foreach (var list in space.Lists.OrderBy(l => l.SortOrder))
+                {
+                    <a class="app-sidebar-list @(list.Id == NavContext.ListId ? "active" : "")"
+                       href="@($"/lists/{list.Id}/list")">
+                        @list.Name
+                    </a>
+                }
+            }
+        </nav>
+    }
+</aside>
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    private Guid? loadedForWorkspaceId;
+    private List<Space>? spaces;
+
+    protected override async Task OnInitializedAsync()
+    {
+        NavContext.Changed += OnContextChanged;
+        await LoadIfNeededAsync();
+    }
+
+    private async void OnContextChanged()
+    {
+        await LoadIfNeededAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadIfNeededAsync()
+    {
+        if (loadedForWorkspaceId == NavContext.WorkspaceId)
+        {
+            return;
+        }
+
+        loadedForWorkspaceId = NavContext.WorkspaceId;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        spaces = await db.Spaces
+            .Where(s => s.WorkspaceId == NavContext.WorkspaceId)
+            .Include(s => s.Lists)
+            .OrderBy(s => s.SortOrder)
+            .ToListAsync();
+    }
+
+    public void Dispose()
+    {
+        NavContext.Changed -= OnContextChanged;
+    }
+}

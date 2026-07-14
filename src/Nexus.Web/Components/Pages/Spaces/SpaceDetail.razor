@@ -3,11 +3,13 @@
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
+@using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager NavigationManager
 @inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
 
 <PageTitle>@(space?.Name ?? "Space")</PageTitle>
 
@@ -163,6 +165,8 @@
             notFound = true;
             return;
         }
+
+        NavContext.SetSpace(WorkspaceId, workspace.Name, SpaceId);
 
         await LoadTaskListsAsync();
     }

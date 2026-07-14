@@ -1,6 +1,7 @@
 @using Nexus.Domain.Entities
+@using Nexus.Web.Extensions
 
-<span class="type-icon type-icon-@Type.ToString().ToLowerInvariant()" title="@Type">@Symbol</span>
+<span class="type-icon type-icon-@Type.ToString().ToLowerInvariant()" title="@Type.ToDisplayLabel()">@Symbol</span>
 
 @code {
     [Parameter, EditorRequired]

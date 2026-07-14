@@ -3,9 +3,11 @@
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
+@using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationContextService NavContext
 
 <PageTitle>Workspaces</PageTitle>
 
@@ -48,6 +50,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        NavContext.Clear();
+
         var authState = await AuthStateTask!;
         var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
