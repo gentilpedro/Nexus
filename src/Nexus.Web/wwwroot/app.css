@@ -1299,7 +1299,12 @@ table th, table td {
 .app-sidebar-node {
     display: flex;
     align-items: center;
-    margin-top: 0.35rem;
+    margin-top: 0.1rem;
+    border-radius: 6px;
+}
+
+.app-sidebar-node:hover {
+    background: var(--color-hover);
 }
 
 .app-sidebar-node--indent1 {
@@ -1320,15 +1325,15 @@ table th, table td {
 .app-sidebar-workspace,
 .app-sidebar-space,
 .app-sidebar-list {
-    padding: 0.4rem 0.6rem;
+    padding: 0.35rem 0.5rem;
     font-size: 0.85rem;
     color: var(--color-text);
-    border-radius: var(--radius);
     flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    border-left: 2px solid transparent;
 }
 
 .app-sidebar-workspace {
@@ -1342,21 +1347,26 @@ table th, table td {
 .app-sidebar-list {
     margin-left: 2.15rem;
     color: var(--color-text-muted);
+    border-radius: 6px;
 }
 
 .app-sidebar-workspace:hover,
 .app-sidebar-space:hover,
 .app-sidebar-list:hover {
-    background: var(--color-hover);
     text-decoration: none;
+}
+
+.app-sidebar-list:hover {
+    background: var(--color-hover);
 }
 
 .app-sidebar-workspace.active,
 .app-sidebar-space.active,
 .app-sidebar-list.active {
-    background: var(--color-selected);
+    background: transparent;
     color: var(--color-primary);
     font-weight: 700;
+    border-left-color: var(--color-primary);
 }
 
 .app-sidebar-footer {
