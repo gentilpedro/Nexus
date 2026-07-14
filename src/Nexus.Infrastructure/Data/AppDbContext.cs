@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<CustomFieldOption> CustomFieldOptions => Set<CustomFieldOption>();
     public DbSet<CustomFieldValue> CustomFieldValues => Set<CustomFieldValue>();
     public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
