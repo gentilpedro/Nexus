@@ -687,6 +687,21 @@ table.data-table tr:last-child td {
     text-decoration: none;
 }
 
+.view-tabs button {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font: inherit;
+    cursor: pointer;
+    padding: 0.5rem 0.9rem;
+    color: var(--color-text-muted);
+}
+
+.view-tabs button.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+}
+
 .panel-overlay {
     position: fixed;
     inset: 0;
@@ -1190,6 +1205,74 @@ table th, table td {
     min-width: 0;
 }
 
+.dashboard-greeting {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.dashboard-greeting-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.dashboard-greeting-date {
+    font-size: 0.85rem;
+    opacity: 0.85;
+    margin-top: 0.2rem;
+}
+
+.dashboard-workspace-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.dashboard-workspace-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+    width: 140px;
+    padding: 0.75rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.dashboard-workspace-card:hover {
+    border-color: var(--color-primary);
+    text-decoration: none;
+}
+
+.dashboard-workspace-avatar {
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius);
+    background: var(--color-primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.dashboard-workspace-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.dashboard-workspace-role {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
 .dashboard-task-list {
     display: flex;
     flex-direction: column;
@@ -1208,6 +1291,55 @@ table th, table td {
     color: var(--color-text-muted);
     display: flex;
     gap: 0.35rem;
+}
+
+.task-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.task-row:hover {
+    border-color: var(--color-primary);
+}
+
+.task-row-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-row-due {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+
+.task-row-due.is-overdue {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.task-row-avatar {
+    width: 1.7rem;
+    height: 1.7rem;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
 }
 
 .app-sidebar-backdrop {

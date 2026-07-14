@@ -3,6 +3,7 @@
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
+@using Nexus.Web.Extensions
 @using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
@@ -35,7 +36,7 @@
             {
                 <a class="card card-link" href="@($"/workspaces/{membership.WorkspaceId}")">
                     <strong>@membership.Workspace.Name</strong>
-                    <div class="topnav-user">@membership.Role</div>
+                    <div class="topnav-user">@membership.Role.ToDisplayLabel()</div>
                 </a>
             }
         </div>

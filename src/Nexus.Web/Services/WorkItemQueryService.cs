@@ -64,6 +64,33 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             .ToListAsync(ct);
     }
 
+    public async Task<List<WorkItem>> GetRecentlyCompletedByUserAsync(string userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.WorkItems
+            .Where(w => w.AssigneeId == userId && w.Status.Category == StatusCategory.Done)
+            .Include(w => w.Status)
+            .Include(w => w.Assignee)
+            .Include(w => w.TaskList).ThenInclude(l => l.Space).ThenInclude(s => s.Workspace)
+            .OrderByDescending(w => w.UpdatedAtUtc)
+            .Take(30)
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<WorkItem>> GetDelegatedByUserAsync(string userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.WorkItems
+            .Where(w => w.CreatedByUserId == userId && w.AssigneeId != null && w.AssigneeId != userId)
+            .Include(w => w.Status)
+            .Include(w => w.Assignee)
+            .Include(w => w.TaskList).ThenInclude(l => l.Space).ThenInclude(s => s.Workspace)
+            .OrderBy(w => w.DueDateUtc == null)
+            .ThenBy(w => w.DueDateUtc)
+            .ThenBy(w => w.Title)
+            .ToListAsync(ct);
+    }
+
     public async Task<List<(string UserId, string DisplayName)>> GetWorkspaceMemberOptionsAsync(Guid workspaceId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
