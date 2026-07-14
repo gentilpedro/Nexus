@@ -55,6 +55,7 @@
     private Sprint? sprint;
     private List<SprintBurndownSnapshot>? snapshots;
     private bool notFound;
+    private Guid? loadedSprintId;
 
     private string statusLabel => sprint?.Status switch
     {
@@ -64,8 +65,15 @@
         _ => ""
     };
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        if (loadedSprintId == SprintId) return;
+        loadedSprintId = SprintId;
+
+        notFound = false;
+        sprint = null;
+        snapshots = null;
+
         Guid? workspaceId;
         await using (var db = await DbFactory.CreateDbContextAsync())
         {

@@ -50,6 +50,20 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task<List<WorkItem>> GetAssignedWorkItemsAsync(string userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.WorkItems
+            .Where(w => w.AssigneeId == userId && w.Status.Category != StatusCategory.Done)
+            .Include(w => w.Status)
+            .Include(w => w.Assignee)
+            .Include(w => w.TaskList).ThenInclude(l => l.Space).ThenInclude(s => s.Workspace)
+            .OrderBy(w => w.DueDateUtc == null)
+            .ThenBy(w => w.DueDateUtc)
+            .ThenByDescending(w => w.Priority)
+            .ToListAsync(ct);
+    }
+
     public async Task<List<(string UserId, string DisplayName)>> GetWorkspaceMemberOptionsAsync(Guid workspaceId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);

@@ -1,6 +1,8 @@
+@using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationContextService NavContext
@@ -8,73 +10,141 @@
 
 <aside class="app-sidebar @(IsOpen ? "is-open" : "")">
     <div class="app-sidebar-header">
-        <a href="/workspaces" class="app-sidebar-back">‹ Workspaces</a>
-        <strong class="app-sidebar-title">@NavContext.WorkspaceName</strong>
+        <strong class="app-sidebar-title">Nexus</strong>
     </div>
 
-    @if (spaces is null)
+    @if (workspaces is null)
     {
         <p class="app-sidebar-loading">Carregando...</p>
     }
-    else if (spaces.Count == 0)
+    else if (workspaces.Count == 0)
     {
-        <p class="app-sidebar-loading">Nenhum space ainda.</p>
+        <p class="app-sidebar-loading">Nenhum workspace ainda.</p>
     }
     else
     {
         <nav class="app-sidebar-tree">
-            @foreach (var space in spaces)
+            @foreach (var workspace in workspaces)
             {
-                <a class="app-sidebar-space @(space.Id == NavContext.SpaceId ? "active" : "")"
-                   href="@($"/workspaces/{NavContext.WorkspaceId}/spaces/{space.Id}")">
-                    @space.Name
-                </a>
-                @foreach (var list in space.Lists.OrderBy(l => l.SortOrder))
-                {
-                    <a class="app-sidebar-list @(list.Id == NavContext.ListId ? "active" : "")"
-                       href="@($"/lists/{list.Id}/list")">
-                        @list.Name
+                <div class="app-sidebar-node">
+                    <button type="button" class="app-sidebar-chevron"
+                            @onclick="() => ToggleWorkspace(workspace.Id)"
+                            aria-label="Expandir workspace">
+                        @(expandedWorkspaces.Contains(workspace.Id) ? "▾" : "▸")
+                    </button>
+                    <a class="app-sidebar-workspace @(workspace.Id == NavContext.WorkspaceId ? "active" : "")"
+                       href="@($"/workspaces/{workspace.Id}")">
+                        @workspace.Name
                     </a>
+                </div>
+
+                @if (expandedWorkspaces.Contains(workspace.Id))
+                {
+                    @foreach (var space in workspace.Spaces.OrderBy(s => s.SortOrder))
+                    {
+                        <div class="app-sidebar-node app-sidebar-node--indent1">
+                            <button type="button" class="app-sidebar-chevron"
+                                    @onclick="() => ToggleSpace(space.Id)"
+                                    aria-label="Expandir space">
+                                @(expandedSpaces.Contains(space.Id) ? "▾" : "▸")
+                            </button>
+                            <a class="app-sidebar-space @(space.Id == NavContext.SpaceId ? "active" : "")"
+                               href="@($"/workspaces/{workspace.Id}/spaces/{space.Id}")">
+                                @space.Name
+                            </a>
+                        </div>
+
+                        @if (expandedSpaces.Contains(space.Id))
+                        {
+                            @foreach (var list in space.Lists.OrderBy(l => l.SortOrder))
+                            {
+                                <a class="app-sidebar-list @(list.Id == NavContext.ListId ? "active" : "")"
+                                   href="@($"/lists/{list.Id}/list")">
+                                    @list.Name
+                                </a>
+                            }
+                        }
+                    }
                 }
             }
         </nav>
     }
+
+    <div class="app-sidebar-footer">
+        <a href="/workspaces/new">+ Novo workspace</a>
+    </div>
 </aside>
 
 @code {
     [Parameter]
     public bool IsOpen { get; set; }
 
-    private Guid? loadedForWorkspaceId;
-    private List<Space>? spaces;
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private List<Workspace>? workspaces;
+    private readonly HashSet<Guid> expandedWorkspaces = new();
+    private readonly HashSet<Guid> expandedSpaces = new();
 
     protected override async Task OnInitializedAsync()
     {
         NavContext.Changed += OnContextChanged;
-        await LoadIfNeededAsync();
+        await LoadAsync();
+        EnsureActiveExpanded();
     }
 
     private async void OnContextChanged()
     {
-        await LoadIfNeededAsync();
+        await LoadAsync();
+        EnsureActiveExpanded();
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task LoadIfNeededAsync()
+    private async Task LoadAsync()
     {
-        if (loadedForWorkspaceId == NavContext.WorkspaceId)
+        var authState = await AuthStateTask!;
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null)
         {
+            workspaces = [];
             return;
         }
 
-        loadedForWorkspaceId = NavContext.WorkspaceId;
-
         await using var db = await DbFactory.CreateDbContextAsync();
-        spaces = await db.Spaces
-            .Where(s => s.WorkspaceId == NavContext.WorkspaceId)
-            .Include(s => s.Lists)
-            .OrderBy(s => s.SortOrder)
+        workspaces = await db.Workspaces
+            .Where(w => w.Members.Any(m => m.UserId == userId))
+            .Include(w => w.Spaces).ThenInclude(s => s.Lists)
+            .OrderBy(w => w.Name)
             .ToListAsync();
+    }
+
+    private void EnsureActiveExpanded()
+    {
+        if (NavContext.WorkspaceId is Guid workspaceId)
+        {
+            expandedWorkspaces.Add(workspaceId);
+        }
+
+        if (NavContext.SpaceId is Guid spaceId)
+        {
+            expandedSpaces.Add(spaceId);
+        }
+    }
+
+    private void ToggleWorkspace(Guid workspaceId)
+    {
+        if (!expandedWorkspaces.Remove(workspaceId))
+        {
+            expandedWorkspaces.Add(workspaceId);
+        }
+    }
+
+    private void ToggleSpace(Guid spaceId)
+    {
+        if (!expandedSpaces.Remove(spaceId))
+        {
+            expandedSpaces.Add(spaceId);
+        }
     }
 
     public void Dispose()

@@ -1,19 +1,106 @@
 @page "/"
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Web.Components.Shared
+@using Nexus.Web.Services
+@inject WorkItemQueryService QueryService
+@inject NavigationManager NavigationManager
 
 <PageTitle>Nexus</PageTitle>
 
-<div class="page-container">
-    <div class="empty-state">
-        <h1>Nexus</h1>
-        <p>Gerencie seus projetos combinando o melhor do Jira e do ClickUp.</p>
-        <AuthorizeView>
-            <Authorized>
-                <a class="btn" href="/workspaces">Ir para meus workspaces</a>
-            </Authorized>
-            <NotAuthorized>
+<AuthorizeView>
+    <Authorized>
+        <div class="page-container page-container--wide">
+            <div class="page-header">
+                <h1>Minhas tarefas</h1>
+            </div>
+
+            @if (items is null)
+            {
+                <p>Carregando...</p>
+            }
+            else if (items.Count == 0)
+            {
+                <div class="empty-state">
+                    <p>Nenhuma tarefa atribuída a você.</p>
+                </div>
+            }
+            else
+            {
+                @if (overdue.Count > 0)
+                {
+                    <h2>Atrasadas</h2>
+                    <div class="dashboard-task-list">
+                        @foreach (var item in overdue)
+                        {
+                            <TaskRow Item="item" OnClick="OpenTask" />
+                        }
+                    </div>
+                }
+
+                @if (thisWeek.Count > 0)
+                {
+                    <h2>Esta semana</h2>
+                    <div class="dashboard-task-list">
+                        @foreach (var item in thisWeek)
+                        {
+                            <TaskRow Item="item" OnClick="OpenTask" />
+                        }
+                    </div>
+                }
+
+                @if (later.Count > 0)
+                {
+                    <h2>Depois / sem prazo</h2>
+                    <div class="dashboard-task-list">
+                        @foreach (var item in later)
+                        {
+                            <TaskRow Item="item" OnClick="OpenTask" />
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <div class="page-container">
+            <div class="empty-state">
+                <h1>Nexus</h1>
+                <p>Gerencie seus projetos combinando o melhor do Jira e do ClickUp.</p>
                 <a class="btn" href="Account/Register">Criar conta</a>
                 <a class="btn btn-secondary" href="Account/Login">Entrar</a>
-            </NotAuthorized>
-        </AuthorizeView>
-    </div>
-</div>
+            </div>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private List<WorkItem>? items;
+    private List<WorkItem> overdue = [];
+    private List<WorkItem> thisWeek = [];
+    private List<WorkItem> later = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask!;
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null)
+        {
+            return;
+        }
+
+        items = await QueryService.GetAssignedWorkItemsAsync(userId);
+
+        var today = DateTime.UtcNow.Date;
+        var weekAhead = today.AddDays(7);
+
+        overdue = items.Where(i => i.DueDateUtc is not null && i.DueDateUtc.Value.Date < today).ToList();
+        thisWeek = items.Where(i => i.DueDateUtc is not null && i.DueDateUtc.Value.Date >= today && i.DueDateUtc.Value.Date <= weekAhead).ToList();
+        later = items.Except(overdue).Except(thisWeek).ToList();
+    }
+
+    private void OpenTask(WorkItem item) => NavigationManager.NavigateTo($"/lists/{item.TaskListId}/list");
+}

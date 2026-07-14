@@ -44,6 +44,13 @@ public class NavigationContextService
         Changed?.Invoke();
     }
 
+    /// <summary>
+    /// Re-fires Changed without altering state, for callers that mutate the tree
+    /// (create/rename a Space or List) without navigating away — the sidebar needs
+    /// a nudge to reload even though WorkspaceId/SpaceId/ListId didn't change.
+    /// </summary>
+    public void Refresh() => Changed?.Invoke();
+
     public void Clear()
     {
         if (WorkspaceId is null)
