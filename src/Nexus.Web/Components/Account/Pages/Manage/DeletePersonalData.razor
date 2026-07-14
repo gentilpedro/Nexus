@@ -1,4 +1,4 @@
-﻿@page "/Account/Manage/DeletePersonalData"
+@page "/Account/Manage/DeletePersonalData"
 
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
@@ -9,33 +9,28 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<DeletePersonalData> Logger
 
-<PageTitle>Delete Personal Data</PageTitle>
+<PageTitle>Excluir dados pessoais</PageTitle>
 
+<h2>Excluir dados pessoais</h2>
 <StatusMessage Message="@message" />
 
-<h3>Delete Personal Data</h3>
-
 <div class="alert alert-warning" role="alert">
-    <p>
-        <strong>Deleting this data will permanently remove your account, and this cannot be recovered.</strong>
-    </p>
+    <strong>Excluir esses dados removerá permanentemente sua conta, e isso não pode ser desfeito.</strong>
 </div>
 
-<div>
-    <EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post">
-        <DataAnnotationsValidator />
-        <ValidationSummary class="text-danger" role="alert" />
-        @if (requirePassword)
-        {
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="Please enter your password." />
-                <label for="Input.Password" class="form-label">Password</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
-            </div>
-        }
-        <button class="w-100 btn btn-lg btn-danger" type="submit">Delete data and close my account</button>
-    </EditForm>
-</div>
+<EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post" class="card">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="validation-errors" role="alert" />
+    @if (requirePassword)
+    {
+        <div class="form-field">
+            <label for="Input.Password">Senha</label>
+            <InputText type="password" @bind-Value="Input.Password" id="Input.Password" autocomplete="current-password" aria-required="true" />
+            <ValidationMessage For="() => Input.Password" />
+        </div>
+    }
+    <button class="btn btn-danger" type="submit">Excluir dados e encerrar minha conta</button>
+</EditForm>
 
 @code {
     private string? message;

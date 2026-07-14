@@ -9,7 +9,7 @@
         <ThemeSwitch IsDark="isDark" OnToggle="ToggleTheme" />
         <AuthorizeView>
             <Authorized>
-                <span class="topnav-user">@context.User.Identity?.Name</span>
+                <a class="topnav-user" href="Account/Manage">@context.User.Identity?.Name</a>
                 <form action="Account/Logout" method="post">
                     <AntiforgeryToken />
                     <input type="hidden" name="ReturnUrl" value="@currentUrl" />

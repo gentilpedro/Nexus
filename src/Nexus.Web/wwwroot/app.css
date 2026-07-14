@@ -536,6 +536,71 @@ a:hover {
     border-radius: var(--radius);
 }
 
+.settings-layout {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+}
+
+.settings-nav {
+    width: 200px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.settings-nav-link {
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+.settings-nav-link:hover {
+    background: var(--color-bg);
+    text-decoration: none;
+}
+
+.settings-nav-link.active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+.settings-content {
+    flex: 1;
+    min-width: 0;
+    max-width: 480px;
+}
+
+.settings-content .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.field-hint-action {
+    margin-top: 0.35rem;
+}
+
+@media (max-width: 720px) {
+    .settings-layout {
+        flex-direction: column;
+    }
+
+    .settings-nav {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .settings-content {
+        max-width: 100%;
+    }
+}
+
 table.data-table {
     width: 100%;
     min-width: 560px;
@@ -793,4 +858,80 @@ h1:focus {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+/* Compatibility layer for the handful of scaffolded Identity pages we don't
+   otherwise restyle (2FA, passkeys, external logins, recovery codes) — these
+   cover features this app doesn't support day-to-day, so they get a
+   "not broken" pass rather than a full redesign like the main auth flow. */
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    max-width: 480px;
+    margin: 1.5rem auto 0;
+}
+
+.row > [class*="col-"] {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.form-floating {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.form-floating .form-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    order: -1;
+}
+
+.form-floating .form-control,
+.form-floating input {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    font-family: inherit;
+}
+
+.nav-pills {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.nav-pills .nav-link {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius);
+    color: var(--color-text-muted);
+}
+
+.nav-pills .nav-link:hover {
+    background: var(--color-bg);
+    text-decoration: none;
+}
+
+.nav-pills .nav-link.active {
+    background: var(--color-primary);
+    color: #fff;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table th, table td {
+    text-align: left;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
 }
