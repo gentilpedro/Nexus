@@ -47,7 +47,7 @@
     {
         if (firstRender)
         {
-            module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/theme.js");
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/theme.js");
             var current = await module.InvokeAsync<string>("getTheme");
             isDark = current == "dark";
             StateHasChanged();
