@@ -19,6 +19,7 @@ public class WorkItem
     public string? AssigneeId { get; set; }
     public ApplicationUser? Assignee { get; set; }
 
+    public DateTime? StartDateUtc { get; set; }
     public DateTime? DueDateUtc { get; set; }
     public int SortOrder { get; set; }
     public DateTime CreatedAtUtc { get; set; }

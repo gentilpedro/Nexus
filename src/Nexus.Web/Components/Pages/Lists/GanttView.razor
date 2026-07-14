@@ -1,0 +1,240 @@
+@page "/lists/{ListId:guid}/gantt"
+@attribute [Authorize]
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Components.Shared
+@using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject WorkItemQueryService QueryService
+@inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
+
+<PageTitle>@(taskList?.Name ?? "Gantt")</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Lista não encontrada ou você não tem acesso a ela.</p>
+            <a class="btn" href="/workspaces">Voltar</a>
+        </div>
+    }
+    else if (taskList is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs">
+            <a href="/workspaces">Workspaces</a> /
+            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
+            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
+            @taskList.Name
+        </div>
+
+        <div class="page-header">
+            <h1>@taskList.Name</h1>
+            <div class="form-actions">
+                @if (canManageFields)
+                {
+                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
+                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
+                }
+                <button class="btn" @onclick="OpenCreate">+ Nova task</button>
+            </div>
+        </div>
+
+        <ViewSwitcher ListId="ListId" ActiveView="gantt" />
+
+        @if (workItems is null)
+        {
+            <p>Carregando...</p>
+        }
+        else
+        {
+            var items = GanttItems;
+            @if (items.Count == 0)
+            {
+                <div class="empty-state">
+                    <p>Nenhuma task com prazo definido ainda.</p>
+                </div>
+            }
+            else
+            {
+                <p class="topnav-user">Período: @rangeStart.ToString("dd/MM/yyyy") a @rangeEnd.ToString("dd/MM/yyyy")</p>
+                <div class="gantt-chart">
+                    @foreach (var item in items)
+                    {
+                        <div class="gantt-row">
+                            <div class="gantt-row-label" @onclick="() => OpenEdit(item.WorkItem)">@item.WorkItem.Title</div>
+                            <div class="gantt-row-track">
+                                <div class="gantt-bar badge-status-@item.WorkItem.Status.Category.ToString().ToLowerInvariant()"
+                                     style="left: @(item.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%; width: @(item.WidthPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"
+                                     title="@item.WorkItem.Title"
+                                     @onclick="() => OpenEdit(item.WorkItem)"></div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+
+        <TaskDetailPanel @ref="panel"
+                          TaskListId="ListId"
+                          Statuses="statuses ?? []"
+                          AssigneeOptions="assigneeOptions ?? []"
+                          EpicOptions="epics ?? []"
+                          CustomFieldDefinitions="customFieldDefinitions ?? []"
+                          StatusTransitions="statusTransitions ?? []"
+                          OnSaved="ReloadWorkItemsAsync" />
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid ListId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private TaskList? taskList;
+    private string workspaceName = "";
+    private string spaceName = "";
+    private Guid workspaceId;
+    private List<WorkItem>? workItems;
+    private List<TaskStatusDefinition>? statuses;
+    private List<(string UserId, string DisplayName)>? assigneeOptions;
+    private List<WorkItem>? epics;
+    private List<CustomFieldDefinition>? customFieldDefinitions;
+    private List<StatusTransition>? statusTransitions;
+    private bool notFound;
+    private bool canManageFields;
+    private TaskDetailPanel? panel;
+    private Guid? loadedListId;
+    private DateTime rangeStart;
+    private DateTime rangeEnd;
+
+    private class GanttItem
+    {
+        public WorkItem WorkItem { get; set; } = null!;
+        public double LeftPct { get; set; }
+        public double WidthPct { get; set; }
+    }
+
+    private List<GanttItem> GanttItems
+    {
+        get
+        {
+            if (workItems is null)
+            {
+                return [];
+            }
+
+            var withDue = workItems.Where(w => w.DueDateUtc.HasValue).ToList();
+            if (withDue.Count == 0)
+            {
+                rangeStart = DateTime.UtcNow.Date;
+                rangeEnd = DateTime.UtcNow.Date;
+                return [];
+            }
+
+            rangeStart = withDue.Min(w => (w.StartDateUtc ?? w.DueDateUtc)!.Value.Date).AddDays(-1);
+            rangeEnd = withDue.Max(w => w.DueDateUtc!.Value.Date).AddDays(1);
+            var totalDays = Math.Max((rangeEnd - rangeStart).Days, 1);
+
+            return withDue
+                .OrderBy(w => w.StartDateUtc ?? w.DueDateUtc)
+                .Select(w =>
+                {
+                    var barStart = (w.StartDateUtc ?? w.DueDateUtc)!.Value.Date;
+                    var barEnd = w.DueDateUtc!.Value.Date;
+                    var left = (barStart - rangeStart).Days / (double)totalDays * 100;
+                    var width = Math.Max((barEnd - barStart).Days / (double)totalDays * 100, 1.5);
+                    return new GanttItem { WorkItem = w, LeftPct = left, WidthPct = width };
+                })
+                .ToList();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedListId == ListId) return;
+        loadedListId = ListId;
+
+        notFound = false;
+        taskList = null;
+        workItems = null;
+        statuses = null;
+        assigneeOptions = null;
+        epics = null;
+        customFieldDefinitions = null;
+        statusTransitions = null;
+
+        var resolvedWorkspaceId = await QueryService.GetWorkspaceIdForListAsync(ListId);
+        if (resolvedWorkspaceId is null)
+        {
+            notFound = true;
+            return;
+        }
+        workspaceId = resolvedWorkspaceId.Value;
+
+        var authState = await AuthStateTask!;
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        var adminResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+        canManageFields = adminResult.Succeeded;
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            taskList = await db.TaskLists
+                .Include(l => l.Space)
+                .ThenInclude(s => s.Workspace)
+                .FirstOrDefaultAsync(l => l.Id == ListId);
+        }
+
+        if (taskList is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        workspaceName = taskList.Space.Workspace.Name;
+        spaceName = taskList.Space.Name;
+
+        NavContext.SetList(workspaceId, workspaceName, taskList.SpaceId, ListId);
+
+        statuses = await QueryService.GetStatusesForListAsync(ListId);
+        assigneeOptions = await QueryService.GetWorkspaceMemberOptionsAsync(workspaceId);
+        epics = await QueryService.GetEpicsForListAsync(ListId);
+        customFieldDefinitions = await QueryService.GetCustomFieldDefinitionsForListAsync(ListId);
+        statusTransitions = await QueryService.GetStatusTransitionsForListAsync(ListId);
+        await ReloadWorkItemsAsync();
+    }
+
+    private async Task ReloadWorkItemsAsync()
+    {
+        workItems = await QueryService.GetWorkItemsForListAsync(ListId);
+        epics = await QueryService.GetEpicsForListAsync(ListId);
+    }
+
+    private void OpenCreate() => panel?.OpenForCreate();
+
+    private async Task OpenEdit(WorkItem item)
+    {
+        if (panel is not null)
+        {
+            await panel.OpenForEdit(item);
+        }
+    }
+}

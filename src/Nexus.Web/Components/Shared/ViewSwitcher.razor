@@ -4,6 +4,8 @@
     <a class="@(ActiveView == "list" ? "active" : "")" href="@($"/lists/{ListId}/list")">Lista</a>
     <a class="@(ActiveView == "board" ? "active" : "")" href="@($"/lists/{ListId}/board")">Board</a>
     <a class="@(ActiveView == "backlog" ? "active" : "")" href="@($"/lists/{ListId}/backlog")">Backlog</a>
+    <a class="@(ActiveView == "calendar" ? "active" : "")" href="@($"/lists/{ListId}/calendar")">Calendário</a>
+    <a class="@(ActiveView == "gantt" ? "active" : "")" href="@($"/lists/{ListId}/gantt")">Gantt</a>
 </div>
 
 @code {
