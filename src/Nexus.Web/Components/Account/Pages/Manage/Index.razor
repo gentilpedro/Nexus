@@ -17,6 +17,11 @@
     <DataAnnotationsValidator />
     <ValidationSummary class="validation-errors" role="alert" />
     <div class="form-field">
+        <label for="Input.Name">Nome</label>
+        <InputText @bind-Value="Input.Name" id="Input.Name" placeholder="Seu nome" />
+        <ValidationMessage For="() => Input.Name" />
+    </div>
+    <div class="form-field">
         <label for="username">Nome de usuário</label>
         <input type="text" value="@username" id="username" disabled />
     </div>
@@ -54,6 +59,7 @@
         phoneNumber = await UserManager.GetPhoneNumberAsync(user);
 
         Input.PhoneNumber ??= phoneNumber;
+        Input.Name ??= user.DisplayName;
     }
 
     private async Task OnValidSubmitAsync()
@@ -74,12 +80,28 @@
             }
         }
 
+        var newName = (Input.Name ?? "").Trim();
+        if (newName != user.DisplayName)
+        {
+            user.DisplayName = newName;
+            var updateResult = await UserManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
+            {
+                RedirectManager.RedirectToCurrentPageWithStatus("Error: Failed to set name.", HttpContext);
+                return;
+            }
+        }
+
         await SignInManager.RefreshSignInAsync(user);
         RedirectManager.RedirectToCurrentPageWithStatus("Your profile has been updated", HttpContext);
     }
 
     private sealed class InputModel
     {
+        [StringLength(200, ErrorMessage = "Nome muito longo.")]
+        [Display(Name = "Nome")]
+        public string? Name { get; set; }
+
         [Phone]
         [Display(Name = "Phone number")]
         public string? PhoneNumber { get; set; }
