@@ -337,14 +337,21 @@ a:hover {
 .theme-switch-label {
     font-size: 0.85rem;
     font-weight: 700;
-    color: var(--color-text-muted);
-    opacity: 0.55;
     transition: color 0.2s ease, opacity 0.2s ease;
 }
 
-.theme-switch-label.is-active {
+/* Light (default/base) appearance — driven purely by attribute selectors below, not by
+   Razor-rendered classes, so the toggle works on static SSR pages (Login/Register) that
+   have no SignalR circuit for IJSRuntime-based state to run through. See window.nexusToggleTheme
+   in App.razor and ThemeSwitch.razor. */
+.theme-switch-label--light {
     color: var(--color-text);
     opacity: 1;
+}
+
+.theme-switch-label--dark {
+    color: var(--color-text-muted);
+    opacity: 0.55;
 }
 
 .theme-switch-track {
@@ -352,18 +359,10 @@ a:hover {
     width: 3.6rem;
     height: 1.7rem;
     border-radius: 999px;
+    background: linear-gradient(135deg, #a9c8fb, #6f9bf5);
     transition: background 0.25s ease;
     overflow: hidden;
     flex-shrink: 0;
-}
-
-.theme-switch-track.is-light {
-    background: linear-gradient(135deg, #a9c8fb, #6f9bf5);
-}
-
-.theme-switch-track.is-dark {
-    background: linear-gradient(135deg, #20263a, #05070d);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .theme-switch-thumb {
@@ -382,15 +381,10 @@ a:hover {
     transition: left 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
 }
 
-.theme-switch-track.is-dark .theme-switch-thumb {
-    left: calc(100% - 1.5rem);
-    background: transparent;
-    box-shadow: none;
-}
-
 .theme-switch-moon {
     width: 1.15rem;
     height: 1.15rem;
+    display: none;
 }
 
 .theme-switch-dot {
@@ -401,12 +395,14 @@ a:hover {
     height: 0.4rem;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.9);
+    display: block;
 }
 
 .theme-switch-star {
     position: absolute;
     border-radius: 50%;
     background: #ffffff;
+    display: none;
 }
 
 .theme-switch-star--1 {
@@ -429,6 +425,32 @@ a:hover {
     top: 0.5rem;
     left: 1.2rem;
 }
+
+@media (prefers-color-scheme: dark) {
+    .theme-switch-label--light { color: var(--color-text-muted); opacity: 0.55; }
+    .theme-switch-label--dark { color: var(--color-text); opacity: 1; }
+    .theme-switch-track { background: linear-gradient(135deg, #20263a, #05070d); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+    .theme-switch-thumb { left: calc(100% - 1.5rem); background: transparent; box-shadow: none; }
+    .theme-switch-moon { display: block; }
+    .theme-switch-dot { display: none; }
+    .theme-switch-star { display: block; }
+}
+
+:root[data-theme="dark"] .theme-switch-label--light { color: var(--color-text-muted); opacity: 0.55; }
+:root[data-theme="dark"] .theme-switch-label--dark { color: var(--color-text); opacity: 1; }
+:root[data-theme="dark"] .theme-switch-track { background: linear-gradient(135deg, #20263a, #05070d); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+:root[data-theme="dark"] .theme-switch-thumb { left: calc(100% - 1.5rem); background: transparent; box-shadow: none; }
+:root[data-theme="dark"] .theme-switch-moon { display: block; }
+:root[data-theme="dark"] .theme-switch-dot { display: none; }
+:root[data-theme="dark"] .theme-switch-star { display: block; }
+
+:root[data-theme="light"] .theme-switch-label--light { color: var(--color-text); opacity: 1; }
+:root[data-theme="light"] .theme-switch-label--dark { color: var(--color-text-muted); opacity: 0.55; }
+:root[data-theme="light"] .theme-switch-track { background: linear-gradient(135deg, #a9c8fb, #6f9bf5); box-shadow: none; }
+:root[data-theme="light"] .theme-switch-thumb { left: 0.2rem; background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); }
+:root[data-theme="light"] .theme-switch-moon { display: none; }
+:root[data-theme="light"] .theme-switch-dot { display: block; }
+:root[data-theme="light"] .theme-switch-star { display: none; }
 
 .page-container {
     max-width: 960px;
