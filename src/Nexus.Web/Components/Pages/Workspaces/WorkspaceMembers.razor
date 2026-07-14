@@ -1,0 +1,286 @@
+@page "/workspaces/{WorkspaceId:guid}/members"
+@attribute [Authorize]
+@using System.ComponentModel.DataAnnotations
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Extensions
+@using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
+
+<PageTitle>Membros</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Workspace não encontrado ou você não tem acesso a ele.</p>
+            <a class="btn" href="/workspaces">Voltar</a>
+        </div>
+    }
+    else if (workspace is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs">
+            <a href="/workspaces">Workspaces</a> /
+            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
+            Membros
+        </div>
+
+        <div class="page-header">
+            <h1>Membros</h1>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        @if (canManage)
+        {
+            <EditForm Model="addModel" OnValidSubmit="HandleAddMember" class="card" style="margin-bottom:1.5rem;">
+                <DataAnnotationsValidator />
+                <div class="form-row">
+                    <div class="form-field">
+                        <label for="member-email">E-mail</label>
+                        <InputText id="member-email" @bind-Value="addModel.Email" placeholder="pessoa@exemplo.com" />
+                        <ValidationMessage For="() => addModel.Email" />
+                    </div>
+                    <div class="form-field">
+                        <label for="member-role">Cargo</label>
+                        <InputSelect id="member-role" @bind-Value="addModel.Role">
+                            <option value="@WorkspaceRole.Member">Membro</option>
+                            <option value="@WorkspaceRole.Admin">Admin</option>
+                        </InputSelect>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn" disabled="@isSaving">Adicionar</button>
+                </div>
+            </EditForm>
+        }
+
+        @if (members is null)
+        {
+            <p>Carregando membros...</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Cargo</th>
+                            <th>Desde</th>
+                            @if (canManage)
+                            {
+                                <th></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var member in members)
+                        {
+                            <tr>
+                                <td>@(string.IsNullOrEmpty(member.User.DisplayName) ? "—" : member.User.DisplayName)</td>
+                                <td>@(member.User.Email ?? "—")</td>
+                                <td>
+                                    @if (canManage && member.Role != WorkspaceRole.Owner)
+                                    {
+                                        <select @onchange="@(e => HandleRoleChange(member.Id, e.Value))">
+                                            <option value="@WorkspaceRole.Member" selected="@(member.Role == WorkspaceRole.Member)">Membro</option>
+                                            <option value="@WorkspaceRole.Admin" selected="@(member.Role == WorkspaceRole.Admin)">Admin</option>
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        @member.Role.ToDisplayLabel()
+                                    }
+                                </td>
+                                <td>@member.JoinedAtUtc.ToString("dd/MM/yyyy")</td>
+                                @if (canManage)
+                                {
+                                    <td>
+                                        @if (member.Role != WorkspaceRole.Owner || OwnerCount > 1)
+                                        {
+                                            <button type="button" class="btn-link" @onclick="() => HandleRemove(member.Id)">Remover</button>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid WorkspaceId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private Workspace? workspace;
+    private List<WorkspaceMember>? members;
+    private bool notFound;
+    private bool canManage;
+    private bool isSaving;
+    private string? errorMessage;
+    private Guid? loadedWorkspaceId;
+    private readonly AddMemberModel addModel = new();
+
+    private int OwnerCount => members?.Count(m => m.Role == WorkspaceRole.Owner) ?? 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedWorkspaceId == WorkspaceId)
+        {
+            return;
+        }
+
+        loadedWorkspaceId = WorkspaceId;
+        notFound = false;
+        workspace = null;
+        members = null;
+        errorMessage = null;
+
+        var authState = await AuthStateTask!;
+
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        var adminResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+        canManage = adminResult.Succeeded;
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspace = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        }
+
+        if (workspace is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        NavContext.SetWorkspace(WorkspaceId, workspace.Name);
+
+        await LoadMembersAsync();
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        members = await db.WorkspaceMembers
+            .Where(m => m.WorkspaceId == WorkspaceId)
+            .Include(m => m.User)
+            .OrderBy(m => m.Role)
+            .ThenBy(m => m.User.DisplayName)
+            .ToListAsync();
+    }
+
+    private async Task HandleAddMember()
+    {
+        isSaving = true;
+        errorMessage = null;
+
+        var normalizedEmail = addModel.Email.Trim().ToUpperInvariant();
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail);
+            if (user is null)
+            {
+                errorMessage = "Nenhuma conta encontrada com esse e-mail. A pessoa precisa criar uma conta primeiro.";
+                isSaving = false;
+                return;
+            }
+
+            var alreadyMember = await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == WorkspaceId && m.UserId == user.Id);
+            if (alreadyMember)
+            {
+                errorMessage = "Essa pessoa já é membro deste workspace.";
+                isSaving = false;
+                return;
+            }
+
+            db.WorkspaceMembers.Add(new WorkspaceMember
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = WorkspaceId,
+                UserId = user.Id,
+                Role = addModel.Role,
+                JoinedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        addModel.Email = "";
+        addModel.Role = WorkspaceRole.Member;
+        isSaving = false;
+        await LoadMembersAsync();
+    }
+
+    private async Task HandleRoleChange(Guid memberId, object? value)
+    {
+        if (!Enum.TryParse<WorkspaceRole>(value?.ToString(), out var newRole))
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.WorkspaceMembers
+            .Where(m => m.Id == memberId && m.WorkspaceId == WorkspaceId && m.Role != WorkspaceRole.Owner)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Role, newRole));
+
+        await LoadMembersAsync();
+    }
+
+    private async Task HandleRemove(Guid memberId)
+    {
+        errorMessage = null;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var member = await db.WorkspaceMembers.FirstAsync(m => m.Id == memberId);
+
+        if (member.Role == WorkspaceRole.Owner)
+        {
+            var ownerCount = await db.WorkspaceMembers.CountAsync(m => m.WorkspaceId == WorkspaceId && m.Role == WorkspaceRole.Owner);
+            if (ownerCount <= 1)
+            {
+                errorMessage = "Não é possível remover o único dono do workspace.";
+                return;
+            }
+        }
+
+        await db.WorkspaceMembers.Where(m => m.Id == memberId).ExecuteDeleteAsync();
+        await LoadMembersAsync();
+    }
+
+    private class AddMemberModel
+    {
+        [Required(ErrorMessage = "Informe um e-mail.")]
+        [EmailAddress(ErrorMessage = "E-mail inválido.")]
+        public string Email { get; set; } = "";
+        public WorkspaceRole Role { get; set; } = WorkspaceRole.Member;
+    }
+}
