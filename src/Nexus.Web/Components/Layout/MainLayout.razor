@@ -17,16 +17,20 @@
         <ThemeSwitch IsDark="isDark" OnToggle="ToggleTheme" />
         <AuthorizeView>
             <Authorized>
-                <a class="topnav-user" href="Account/Manage">@context.User.Identity?.Name</a>
-                <form action="Account/Logout" method="post">
+                <a class="topnav-user" href="Account/Manage" data-enhance-nav="false">@context.User.Identity?.Name</a>
+                <form action="Account/Logout" method="post" data-enhance="false">
                     <AntiforgeryToken />
                     <input type="hidden" name="ReturnUrl" value="@currentUrl" />
                     <button type="submit" class="btn-link">Sair</button>
                 </form>
             </Authorized>
             <NotAuthorized>
-                <a href="Account/Login">Entrar</a>
-                <a href="Account/Register">Criar conta</a>
+                <NavLink href="/Account/Login" class="btn" data-enhance-nav="false">
+                    Entrar
+                </NavLink>
+                <NavLink href="Account/Register" class="btn" data-enhance-nav="false">
+                    Criar conta
+                </NavLink>
             </NotAuthorized>
         </AuthorizeView>
     </div>
