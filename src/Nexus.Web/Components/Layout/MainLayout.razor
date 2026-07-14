@@ -20,7 +20,10 @@
         <ThemeSwitch />
         <AuthorizeView>
             <Authorized>
-                <a class="topnav-user" href="/notifications">Notificações@(unreadCount > 0 ? $" ({unreadCount})" : "")</a>
+                <a class="topnav-user topnav-notifications" href="/notifications">
+                    <img src="@Assets["notificacao.png"]" alt="" class="topnav-notifications-icon" />
+                    Notificações@(unreadCount > 0 ? $" ({unreadCount})" : "")
+                </a>
                 <a class="topnav-user" href="Account/Manage" data-enhance-nav="false">@context.User.Identity?.Name</a>
                 <form action="Account/Logout" method="post" data-enhance="false">
                     <AntiforgeryToken />
