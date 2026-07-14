@@ -1,6 +1,10 @@
 @inherits LayoutComponentBase
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using Nexus.Infrastructure.Data
 @using Nexus.Web.Components.Shared
 @inject NavigationManager NavigationManager
+@inject IDbContextFactory<AppDbContext> DbFactory
 @implements IDisposable
 
 <nav class="topnav">
@@ -16,6 +20,7 @@
         <ThemeSwitch />
         <AuthorizeView>
             <Authorized>
+                <a class="topnav-user" href="/notifications">Notificações@(unreadCount > 0 ? $" ({unreadCount})" : "")</a>
                 <a class="topnav-user" href="Account/Manage" data-enhance-nav="false">@context.User.Identity?.Name</a>
                 <form action="Account/Logout" method="post" data-enhance="false">
                     <AntiforgeryToken />
@@ -57,13 +62,37 @@
 </div>
 
 @code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
     private string? currentUrl;
     private bool sidebarOpen;
+    private int unreadCount;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
+        await RefreshUnreadCountAsync();
+    }
+
+    private async Task RefreshUnreadCountAsync()
+    {
+        if (AuthStateTask is null)
+        {
+            return;
+        }
+
+        var authState = await AuthStateTask;
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null)
+        {
+            unreadCount = 0;
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        unreadCount = await db.Notifications.CountAsync(n => n.UserId == userId && !n.IsRead);
     }
 
     private void ToggleSidebar()
@@ -76,14 +105,16 @@
         sidebarOpen = false;
     }
 
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         // Navigating (e.g. tapping a sidebar link on mobile) should close the overlay.
         if (sidebarOpen)
         {
             sidebarOpen = false;
-            InvokeAsync(StateHasChanged);
         }
+
+        await RefreshUnreadCountAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()

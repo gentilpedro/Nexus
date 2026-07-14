@@ -246,6 +246,9 @@
         isSaving = true;
         errorMessage = null;
 
+        var authState = await AuthStateTask!;
+        var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
             WorkItem workItem;
@@ -255,11 +258,11 @@
             }
             else
             {
-                var authState = await AuthStateTask!;
-                var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
-                workItem = new WorkItem { Id = Guid.NewGuid(), TaskListId = TaskListId, CreatedAtUtc = DateTime.UtcNow, CreatedByUserId = userId };
+                workItem = new WorkItem { Id = Guid.NewGuid(), TaskListId = TaskListId, CreatedAtUtc = DateTime.UtcNow, CreatedByUserId = currentUserId };
                 db.WorkItems.Add(workItem);
             }
+
+            var previousAssigneeId = workItem.AssigneeId;
 
             if (isEditing && workItem.StatusId != model.StatusId)
             {
@@ -288,6 +291,26 @@
             if (isEditing)
             {
                 workItem.UpdatedAtUtc = DateTime.UtcNow;
+            }
+
+            // Notify the new assignee — but not for a no-op re-save of the same assignee,
+            // and not when someone assigns a task to themselves.
+            if (workItem.AssigneeId is not null && workItem.AssigneeId != previousAssigneeId && workItem.AssigneeId != currentUserId)
+            {
+                var assigner = await db.Users.Where(u => u.Id == currentUserId)
+                    .Select(u => new { u.DisplayName, u.Email }).FirstOrDefaultAsync();
+                var assignerName = string.IsNullOrEmpty(assigner?.DisplayName) ? (assigner?.Email ?? "Alguém") : assigner.DisplayName;
+
+                db.Notifications.Add(new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = workItem.AssigneeId,
+                    Type = NotificationType.TaskAssigned,
+                    Message = $"{assignerName} atribuiu \"{workItem.Title.Trim()}\" a você.",
+                    WorkItemId = workItem.Id,
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
             }
 
             await db.SaveChangesAsync();

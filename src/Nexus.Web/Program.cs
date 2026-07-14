@@ -27,6 +27,7 @@ builder.Services.AddScoped<WorkItemQueryService>();
 builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddSingleton<WorkspaceChatBroadcaster>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
+builder.Services.AddHostedService<DueDateNotificationHostedService>();
 
 builder.Services.AddAuthentication(options =>
     {
