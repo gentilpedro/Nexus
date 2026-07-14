@@ -40,14 +40,43 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             .ToListAsync(ct);
     }
 
-    public async Task UpdateWorkItemStatusAsync(Guid workItemId, Guid newStatusId, int newSortOrder, CancellationToken ct = default)
+    // Returns false (without changing anything) if the list has configured StatusTransitions
+    // and the from -> to change isn't one of them. A list with zero configured transitions is
+    // unrestricted — every change is allowed, matching the app's behavior before this feature.
+    public async Task<bool> UpdateWorkItemStatusAsync(Guid workItemId, Guid newStatusId, int newSortOrder, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var workItem = await db.WorkItems.FirstAsync(w => w.Id == workItemId, ct);
+
+        if (workItem.StatusId != newStatusId)
+        {
+            var hasRules = await db.StatusTransitions.AnyAsync(t => t.FromStatus.TaskListId == workItem.TaskListId, ct);
+            if (hasRules)
+            {
+                var allowed = await db.StatusTransitions.AnyAsync(
+                    t => t.FromStatusId == workItem.StatusId && t.ToStatusId == newStatusId, ct);
+                if (!allowed)
+                {
+                    return false;
+                }
+            }
+        }
+
         workItem.StatusId = newStatusId;
         workItem.SortOrder = newSortOrder;
         workItem.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<List<StatusTransition>> GetStatusTransitionsForListAsync(Guid taskListId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.StatusTransitions
+            .Where(t => t.FromStatus.TaskListId == taskListId)
+            .Include(t => t.FromStatus)
+            .Include(t => t.ToStatus)
+            .ToListAsync(ct);
     }
 
     public async Task<List<WorkItem>> GetAssignedWorkItemsAsync(string userId, CancellationToken ct = default)

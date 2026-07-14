@@ -42,6 +42,7 @@
                 @if (canManageFields)
                 {
                     <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
+                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
                 }
                 @if (canManage)
                 {
@@ -130,6 +131,7 @@
                           AssigneeOptions="assigneeOptions ?? []"
                           EpicOptions="epics ?? []"
                           CustomFieldDefinitions="customFieldDefinitions ?? []"
+                          StatusTransitions="statusTransitions ?? []"
                           OnSaved="ReloadAsync" />
     }
 </div>
@@ -152,6 +154,7 @@
     private List<(string UserId, string DisplayName)>? assigneeOptions;
     private List<WorkItem>? epics;
     private List<CustomFieldDefinition>? customFieldDefinitions;
+    private List<StatusTransition>? statusTransitions;
     private bool notFound;
     private bool canManage;
     private bool canManageFields;
@@ -178,6 +181,7 @@
         assigneeOptions = null;
         epics = null;
         customFieldDefinitions = null;
+        statusTransitions = null;
         showCreateSprintForm = false;
         errorMessage = null;
 
@@ -227,6 +231,7 @@
         assigneeOptions = await QueryService.GetWorkspaceMemberOptionsAsync(workspaceId);
         epics = await QueryService.GetEpicsForListAsync(ListId);
         customFieldDefinitions = await QueryService.GetCustomFieldDefinitionsForListAsync(ListId);
+        statusTransitions = await QueryService.GetStatusTransitionsForListAsync(ListId);
         await ReloadAsync();
     }
 
