@@ -136,9 +136,21 @@
     private string? errorMessage;
     private readonly RenameSpaceModel renameModel = new();
     private readonly CreateListModel createListModel = new();
+    private Guid? loadedSpaceId;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        if (loadedSpaceId == SpaceId) return;
+        loadedSpaceId = SpaceId;
+
+        notFound = false;
+        workspace = null;
+        space = null;
+        taskLists = null;
+        isRenaming = false;
+        showCreateListForm = false;
+        errorMessage = null;
+
         var authState = await AuthStateTask!;
 
         var authResult = await AuthorizationService.AuthorizeAsync(
@@ -214,6 +226,7 @@
         showCreateListForm = false;
         isSavingList = false;
         await LoadTaskListsAsync();
+        NavContext.Refresh();
     }
 
     private void StartRename()
@@ -229,6 +242,7 @@
         await db.Spaces.Where(s => s.Id == SpaceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, newName));
         space!.Name = newName;
         isRenaming = false;
+        NavContext.Refresh();
     }
 
     private async Task HandleDelete()

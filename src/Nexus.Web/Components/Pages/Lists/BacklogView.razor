@@ -151,11 +151,26 @@
     private string? errorMessage;
     private TaskDetailPanel? panel;
     private readonly CreateSprintModel createSprintModel = new();
+    private Guid? loadedListId;
 
     private bool hasActiveSprint => sprints?.Any(s => s.Status == SprintStatus.Active) ?? false;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        if (loadedListId == ListId) return;
+        loadedListId = ListId;
+
+        notFound = false;
+        taskList = null;
+        sprints = null;
+        completedSprints = null;
+        backlogItems = null;
+        statuses = null;
+        assigneeOptions = null;
+        epics = null;
+        showCreateSprintForm = false;
+        errorMessage = null;
+
         var resolvedWorkspaceId = await QueryService.GetWorkspaceIdForListAsync(ListId);
         if (resolvedWorkspaceId is null)
         {

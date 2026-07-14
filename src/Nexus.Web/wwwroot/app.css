@@ -1096,13 +1096,6 @@ table th, table td {
     border-bottom: 1px solid var(--color-border);
 }
 
-.app-sidebar-back {
-    display: block;
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-    margin-bottom: 0.35rem;
-}
-
 .app-sidebar-title {
     display: block;
     font-size: 0.95rem;
@@ -1121,37 +1114,100 @@ table th, table td {
     padding: 0.5rem;
 }
 
-.app-sidebar-space {
-    padding: 0.5rem 0.75rem;
-    font-weight: 600;
+.app-sidebar-node {
+    display: flex;
+    align-items: center;
+    margin-top: 0.35rem;
+}
+
+.app-sidebar-node--indent1 {
+    margin-left: 0.75rem;
+}
+
+.app-sidebar-chevron {
+    background: none;
+    border: none;
+    width: 1.4rem;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0;
+}
+
+.app-sidebar-workspace,
+.app-sidebar-space,
+.app-sidebar-list {
+    padding: 0.4rem 0.6rem;
     font-size: 0.85rem;
     color: var(--color-text);
     border-radius: var(--radius);
-    margin-top: 0.5rem;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-sidebar-workspace {
+    font-weight: 700;
+}
+
+.app-sidebar-space {
+    font-weight: 600;
 }
 
 .app-sidebar-list {
-    padding: 0.4rem 0.75rem 0.4rem 1.5rem;
-    font-size: 0.85rem;
+    margin-left: 2.15rem;
     color: var(--color-text-muted);
-    border-radius: var(--radius);
 }
 
+.app-sidebar-workspace:hover,
 .app-sidebar-space:hover,
 .app-sidebar-list:hover {
     background: var(--color-bg);
     text-decoration: none;
 }
 
+.app-sidebar-workspace.active,
 .app-sidebar-space.active,
 .app-sidebar-list.active {
     background: var(--color-primary);
     color: #fff;
 }
 
+.app-sidebar-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.app-sidebar-footer a {
+    font-size: 0.85rem;
+}
+
 .app-main {
     flex: 1;
     min-width: 0;
+}
+
+.dashboard-task-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.dashboard-task-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.dashboard-task-path {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: flex;
+    gap: 0.35rem;
 }
 
 .app-sidebar-backdrop {

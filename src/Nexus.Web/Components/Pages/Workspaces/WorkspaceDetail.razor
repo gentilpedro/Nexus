@@ -91,9 +91,18 @@
     private bool showCreateForm;
     private bool isSaving;
     private readonly CreateSpaceModel createModel = new();
+    private Guid? loadedWorkspaceId;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        if (loadedWorkspaceId == WorkspaceId) return;
+        loadedWorkspaceId = WorkspaceId;
+
+        notFound = false;
+        workspace = null;
+        spaces = null;
+        showCreateForm = false;
+
         var authState = await AuthStateTask!;
 
         var authResult = await AuthorizationService.AuthorizeAsync(
@@ -161,6 +170,7 @@
         showCreateForm = false;
         isSaving = false;
         await LoadSpacesAsync();
+        NavContext.Refresh();
     }
 
     private class CreateSpaceModel

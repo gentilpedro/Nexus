@@ -1,0 +1,20 @@
+@using Nexus.Domain.Entities
+
+<div class="dashboard-task-row">
+    <div class="dashboard-task-path">
+        <a href="@($"/workspaces/{Item.TaskList.Space.WorkspaceId}")">@Item.TaskList.Space.Workspace.Name</a>
+        <span>/</span>
+        <a href="@($"/workspaces/{Item.TaskList.Space.WorkspaceId}/spaces/{Item.TaskList.SpaceId}")">@Item.TaskList.Space.Name</a>
+        <span>/</span>
+        <a href="@($"/lists/{Item.TaskListId}/list")">@Item.TaskList.Name</a>
+    </div>
+    <TaskCard WorkItem="Item" OnClick="() => OnClick.InvokeAsync(Item)" />
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public WorkItem Item { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<WorkItem> OnClick { get; set; }
+}

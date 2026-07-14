@@ -1,18 +1,17 @@
 @inherits LayoutComponentBase
 @using Nexus.Web.Components.Shared
-@using Nexus.Web.Services
 @inject NavigationManager NavigationManager
-@inject NavigationContextService NavContext
 @inject IJSRuntime JS
 @implements IDisposable
 
 <nav class="topnav">
     <div class="topnav-left">
-        @if (NavContext.WorkspaceId is not null)
-        {
-            <button type="button" class="app-sidebar-toggle" @onclick="ToggleSidebar" aria-label="Abrir menu">☰</button>
-        }
-        <a class="topnav-brand" href="/workspaces">Nexus</a>
+        <AuthorizeView>
+            <Authorized>
+                <button type="button" class="app-sidebar-toggle" @onclick="ToggleSidebar" aria-label="Abrir menu">☰</button>
+            </Authorized>
+        </AuthorizeView>
+        <a class="topnav-brand" href="/">Nexus</a>
     </div>
     <div class="topnav-links">
         <ThemeSwitch IsDark="isDark" OnToggle="ToggleTheme" />
@@ -34,14 +33,15 @@
 </nav>
 
 <div class="app-shell">
-    @if (NavContext.WorkspaceId is not null)
-    {
-        @if (sidebarOpen)
-        {
-            <div class="app-sidebar-backdrop" @onclick="CloseSidebar"></div>
-        }
-        <WorkspaceSidebar IsOpen="sidebarOpen" />
-    }
+    <AuthorizeView>
+        <Authorized>
+            @if (sidebarOpen)
+            {
+                <div class="app-sidebar-backdrop" @onclick="CloseSidebar"></div>
+            }
+            <WorkspaceSidebar IsOpen="sidebarOpen" />
+        </Authorized>
+    </AuthorizeView>
     <div class="app-main">
         @Body
     </div>
@@ -62,7 +62,6 @@
     protected override void OnInitialized()
     {
         currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        NavContext.Changed += OnContextChanged;
         NavigationManager.LocationChanged += OnLocationChanged;
     }
 
@@ -98,8 +97,6 @@
         sidebarOpen = false;
     }
 
-    private void OnContextChanged() => InvokeAsync(StateHasChanged);
-
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         // Navigating (e.g. tapping a sidebar link on mobile) should close the overlay.
@@ -112,7 +109,6 @@
 
     public void Dispose()
     {
-        NavContext.Changed -= OnContextChanged;
         NavigationManager.LocationChanged -= OnLocationChanged;
     }
 }
