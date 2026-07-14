@@ -1,8 +1,13 @@
 @page "/"
+@using System.Globalization
 @using System.Security.Claims
 @using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
 @using Nexus.Web.Components.Shared
+@using Nexus.Web.Extensions
 @using Nexus.Web.Services
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
 @inject NavigationManager NavigationManager
 
@@ -11,49 +16,115 @@
 <AuthorizeView>
     <Authorized>
         <div class="page-container page-container--wide">
-            <div class="page-header">
-                <h1>Minhas tarefas</h1>
+            <div class="dashboard-greeting">
+                <div class="dashboard-greeting-title">@Greeting, @displayName!</div>
+                <div class="dashboard-greeting-date">@today</div>
             </div>
 
-            @if (items is null)
+            @if (workspaces is not null && workspaces.Count > 0)
             {
-                <p>Carregando...</p>
-            }
-            else if (items.Count == 0)
-            {
-                <div class="empty-state">
-                    <p>Nenhuma tarefa atribuída a você.</p>
+                <div class="dashboard-workspace-grid">
+                    @foreach (var membership in workspaces)
+                    {
+                        <a class="dashboard-workspace-card" href="@($"/workspaces/{membership.WorkspaceId}")">
+                            <span class="dashboard-workspace-avatar">@Initial(membership.Workspace.Name)</span>
+                            <span class="dashboard-workspace-name">@membership.Workspace.Name</span>
+                            <span class="dashboard-workspace-role">@membership.Role.ToDisplayLabel()</span>
+                        </a>
+                    }
                 </div>
+            }
+
+            <div class="view-tabs">
+                <button type="button" class="@(activeTab == "todo" ? "active" : "")" @onclick='() => activeTab = "todo"'>A Fazer</button>
+                <button type="button" class="@(activeTab == "done" ? "active" : "")" @onclick='() => activeTab = "done"'>Concluídas</button>
+                <button type="button" class="@(activeTab == "delegated" ? "active" : "")" @onclick='() => activeTab = "delegated"'>Delegadas</button>
+            </div>
+
+            @if (activeTab == "todo")
+            {
+                @if (todoItems is null)
+                {
+                    <p>Carregando...</p>
+                }
+                else if (todoItems.Count == 0)
+                {
+                    <div class="empty-state">
+                        <p>Nenhuma tarefa atribuída a você.</p>
+                    </div>
+                }
+                else
+                {
+                    @if (overdue.Count > 0)
+                    {
+                        <h2>Atrasadas</h2>
+                        <div class="dashboard-task-list">
+                            @foreach (var item in overdue)
+                            {
+                                <TaskRow Item="item" OnClick="OpenTask" />
+                            }
+                        </div>
+                    }
+                    @if (thisWeek.Count > 0)
+                    {
+                        <h2>Esta semana</h2>
+                        <div class="dashboard-task-list">
+                            @foreach (var item in thisWeek)
+                            {
+                                <TaskRow Item="item" OnClick="OpenTask" />
+                            }
+                        </div>
+                    }
+                    @if (later.Count > 0)
+                    {
+                        <h2>Depois / sem prazo</h2>
+                        <div class="dashboard-task-list">
+                            @foreach (var item in later)
+                            {
+                                <TaskRow Item="item" OnClick="OpenTask" />
+                            }
+                        </div>
+                    }
+                }
+            }
+            else if (activeTab == "done")
+            {
+                @if (doneItems is null)
+                {
+                    <p>Carregando...</p>
+                }
+                else if (doneItems.Count == 0)
+                {
+                    <div class="empty-state">
+                        <p>Nenhuma tarefa concluída recentemente.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="dashboard-task-list">
+                        @foreach (var item in doneItems)
+                        {
+                            <TaskRow Item="item" OnClick="OpenTask" />
+                        }
+                    </div>
+                }
             }
             else
             {
-                @if (overdue.Count > 0)
+                @if (delegatedItems is null)
                 {
-                    <h2>Atrasadas</h2>
-                    <div class="dashboard-task-list">
-                        @foreach (var item in overdue)
-                        {
-                            <TaskRow Item="item" OnClick="OpenTask" />
-                        }
+                    <p>Carregando...</p>
+                }
+                else if (delegatedItems.Count == 0)
+                {
+                    <div class="empty-state">
+                        <p>Nenhuma tarefa delegada.</p>
                     </div>
                 }
-
-                @if (thisWeek.Count > 0)
+                else
                 {
-                    <h2>Esta semana</h2>
                     <div class="dashboard-task-list">
-                        @foreach (var item in thisWeek)
-                        {
-                            <TaskRow Item="item" OnClick="OpenTask" />
-                        }
-                    </div>
-                }
-
-                @if (later.Count > 0)
-                {
-                    <h2>Depois / sem prazo</h2>
-                    <div class="dashboard-task-list">
-                        @foreach (var item in later)
+                        @foreach (var item in delegatedItems)
                         {
                             <TaskRow Item="item" OnClick="OpenTask" />
                         }
@@ -78,10 +149,26 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private List<WorkItem>? items;
+    private string displayName = "";
+    private string today = "";
+    private List<WorkspaceMember>? workspaces;
+
+    private string activeTab = "todo";
+
+    private List<WorkItem>? todoItems;
     private List<WorkItem> overdue = [];
     private List<WorkItem> thisWeek = [];
     private List<WorkItem> later = [];
+
+    private List<WorkItem>? doneItems;
+    private List<WorkItem>? delegatedItems;
+
+    private string Greeting => DateTime.Now.Hour switch
+    {
+        < 12 => "Bom dia",
+        < 18 => "Boa tarde",
+        _ => "Boa noite"
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -92,15 +179,37 @@
             return;
         }
 
-        items = await QueryService.GetAssignedWorkItemsAsync(userId);
+        var culture = new CultureInfo("pt-BR");
+        var rawDate = DateTime.Now.ToString("dddd, d 'de' MMMM", culture);
+        today = char.ToUpper(rawDate[0], culture) + rawDate[1..];
 
-        var today = DateTime.UtcNow.Date;
-        var weekAhead = today.AddDays(7);
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var user = await db.Users
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.DisplayName, u.Email })
+                .FirstOrDefaultAsync();
+            displayName = string.IsNullOrEmpty(user?.DisplayName) ? (user?.Email?.Split('@')[0] ?? "") : user.DisplayName;
 
-        overdue = items.Where(i => i.DueDateUtc is not null && i.DueDateUtc.Value.Date < today).ToList();
-        thisWeek = items.Where(i => i.DueDateUtc is not null && i.DueDateUtc.Value.Date >= today && i.DueDateUtc.Value.Date <= weekAhead).ToList();
-        later = items.Except(overdue).Except(thisWeek).ToList();
+            workspaces = await db.WorkspaceMembers
+                .Include(m => m.Workspace)
+                .Where(m => m.UserId == userId)
+                .OrderBy(m => m.Workspace.Name)
+                .ToListAsync();
+        }
+
+        todoItems = await QueryService.GetAssignedWorkItemsAsync(userId);
+        var todayDate = DateTime.UtcNow.Date;
+        var weekAhead = todayDate.AddDays(7);
+        overdue = todoItems.Where(i => i.DueDateUtc is not null && i.DueDateUtc.Value.Date < todayDate).ToList();
+        thisWeek = todoItems.Where(i => i.DueDateUtc is not null && i.DueDateUtc.Value.Date >= todayDate && i.DueDateUtc.Value.Date <= weekAhead).ToList();
+        later = todoItems.Except(overdue).Except(thisWeek).ToList();
+
+        doneItems = await QueryService.GetRecentlyCompletedByUserAsync(userId);
+        delegatedItems = await QueryService.GetDelegatedByUserAsync(userId);
     }
+
+    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
 
     private void OpenTask(WorkItem item) => NavigationManager.NavigateTo($"/lists/{item.TaskListId}/list");
 }

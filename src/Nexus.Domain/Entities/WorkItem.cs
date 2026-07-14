@@ -31,4 +31,8 @@ public class WorkItem
     // Sprint assignment: null means the item sits in the list's backlog.
     public Guid? SprintId { get; set; }
     public Sprint? Sprint { get; set; }
+
+    // Who created this item — set once at creation, never overwritten on edit.
+    public string? CreatedByUserId { get; set; }
+    public ApplicationUser? CreatedByUser { get; set; }
 }
