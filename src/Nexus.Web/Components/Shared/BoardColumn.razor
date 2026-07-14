@@ -40,7 +40,7 @@
     {
         if (firstRender)
         {
-            module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/board-interop.js");
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/board-interop.js");
             selfRef = DotNetObjectReference.Create(this);
             await module.InvokeVoidAsync("initColumn", bodyRef, selfRef);
         }

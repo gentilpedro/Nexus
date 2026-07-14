@@ -1,5 +1,6 @@
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,11 @@ public static class InfrastructureServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
+
+        // Persists the Data Protection key ring in the database rather than the container's
+        // ephemeral filesystem, so auth cookies / antiforgery tokens survive a container restart.
+        services.AddDataProtection()
+            .PersistKeysToDbContext<AppDbContext>();
 
         services.AddIdentityCore<ApplicationUser>(options =>
             {
