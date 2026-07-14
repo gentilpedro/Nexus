@@ -72,19 +72,23 @@
                 </div>
                 <div class="form-row">
                     <div class="form-field">
+                        <label for="task-start-date">Data de início</label>
+                        <InputDate id="task-start-date" @bind-Value="model.StartDate" />
+                    </div>
+                    <div class="form-field">
                         <label for="task-due-date">Prazo</label>
                         <InputDate id="task-due-date" @bind-Value="model.DueDate" />
                     </div>
-                    <div class="form-field">
-                        <label for="task-epic">Epic</label>
-                        <InputSelect id="task-epic" @bind-Value="model.ParentEpicId">
-                            <option value="">Nenhum</option>
-                            @foreach (var epic in EpicOptions.Where(e => e.Id != editingId))
-                            {
-                                <option value="@epic.Id">@epic.Title</option>
-                            }
-                        </InputSelect>
-                    </div>
+                </div>
+                <div class="form-field">
+                    <label for="task-epic">Epic</label>
+                    <InputSelect id="task-epic" @bind-Value="model.ParentEpicId">
+                        <option value="">Nenhum</option>
+                        @foreach (var epic in EpicOptions.Where(e => e.Id != editingId))
+                        {
+                            <option value="@epic.Id">@epic.Title</option>
+                        }
+                    </InputSelect>
                 </div>
 
                 @if (CustomFieldDefinitions.Count > 0)
@@ -208,6 +212,7 @@
         model.Priority = item.Priority;
         model.StatusId = item.StatusId;
         model.AssigneeId = item.AssigneeId ?? "";
+        model.StartDate = item.StartDateUtc?.Date;
         model.DueDate = item.DueDateUtc?.Date;
         model.ParentEpicId = item.ParentEpicId?.ToString() ?? "";
 
@@ -245,6 +250,13 @@
     {
         isSaving = true;
         errorMessage = null;
+
+        if (model.StartDate.HasValue && model.DueDate.HasValue && model.StartDate.Value > model.DueDate.Value)
+        {
+            errorMessage = "A data de início precisa ser antes do prazo.";
+            isSaving = false;
+            return;
+        }
 
         var authState = await AuthStateTask!;
         var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -286,6 +298,7 @@
             workItem.Priority = model.Priority;
             workItem.StatusId = model.StatusId;
             workItem.AssigneeId = string.IsNullOrEmpty(model.AssigneeId) ? null : model.AssigneeId;
+            workItem.StartDateUtc = model.StartDate.HasValue ? DateTime.SpecifyKind(model.StartDate.Value, DateTimeKind.Utc) : null;
             workItem.DueDateUtc = model.DueDate.HasValue ? DateTime.SpecifyKind(model.DueDate.Value, DateTimeKind.Utc) : null;
             workItem.ParentEpicId = Guid.TryParse(model.ParentEpicId, out var epicId) ? epicId : null;
             if (isEditing)
@@ -361,6 +374,7 @@
         public WorkItemPriority Priority { get; set; } = WorkItemPriority.Medium;
         public Guid StatusId { get; set; }
         public string AssigneeId { get; set; } = "";
+        public DateTime? StartDate { get; set; }
         public DateTime? DueDate { get; set; }
         public string ParentEpicId { get; set; } = "";
 
@@ -371,6 +385,7 @@
             Type = WorkItemType.Task;
             Priority = WorkItemPriority.Medium;
             AssigneeId = "";
+            StartDate = null;
             DueDate = null;
             ParentEpicId = "";
         }

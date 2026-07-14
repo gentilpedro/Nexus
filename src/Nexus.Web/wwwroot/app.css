@@ -1785,3 +1785,112 @@ table th, table td {
     color: var(--color-text-muted);
     white-space: nowrap;
 }
+
+/* Calendar */
+.calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.calendar-header h2 {
+    margin: 0;
+    min-width: 200px;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: var(--color-border);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.calendar-day-name {
+    background: var(--color-table-header);
+    padding: 0.5rem;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.calendar-day {
+    background: var(--color-surface);
+    min-height: 90px;
+    padding: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.calendar-day.is-outside {
+    background: var(--color-bg);
+    color: var(--color-text-disabled);
+}
+
+.calendar-day-number {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-bottom: 0.15rem;
+}
+
+.calendar-task-pill {
+    font-size: 0.72rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Gantt */
+.gantt-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    background: var(--color-surface);
+    overflow-x: auto;
+}
+
+.gantt-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 500px;
+}
+
+.gantt-row-label {
+    font-size: 0.85rem;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.gantt-row-track {
+    position: relative;
+    height: 1.5rem;
+    background: var(--color-bg);
+    border-radius: var(--radius);
+}
+
+.gantt-bar {
+    position: absolute;
+    top: 0.2rem;
+    height: 1.1rem;
+    border-radius: var(--radius);
+    cursor: pointer;
+    min-width: 6px;
+}
