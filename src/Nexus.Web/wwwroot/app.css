@@ -1273,6 +1273,12 @@ table th, table td {
     flex-shrink: 0;
 }
 
+.app-sidebar-home img {
+    width: 1.1rem;
+    height: 1.1rem;
+    object-fit: contain;
+}
+
 .app-sidebar-home:hover {
     background: var(--color-hover);
     color: var(--color-primary);
