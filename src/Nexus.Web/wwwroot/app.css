@@ -1672,3 +1672,57 @@ table th, table td {
     background: var(--color-surface);
     color: var(--color-text);
 }
+
+/* Chat overview (/chats) */
+.chat-overview-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.chat-overview-item {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    color: inherit;
+}
+
+.chat-overview-item:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    text-decoration: none;
+}
+
+.chat-overview-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.chat-overview-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.chat-overview-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.chat-overview-preview {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 0.15rem;
+}
+
+.chat-overview-preview--empty {
+    font-style: italic;
+}

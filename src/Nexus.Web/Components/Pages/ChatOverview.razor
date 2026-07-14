@@ -1,0 +1,120 @@
+@page "/chats"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+
+<PageTitle>Chats</PageTitle>
+
+<div class="page-container">
+    <div class="page-header">
+        <h1>Chats</h1>
+    </div>
+
+    @if (items is null)
+    {
+        <p>Carregando...</p>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="empty-state">
+            <p>Você ainda não participa de nenhum workspace.</p>
+        </div>
+    }
+    else
+    {
+        <div class="chat-overview-list">
+            @foreach (var item in items)
+            {
+                <a class="chat-overview-item" href="@($"/workspaces/{item.WorkspaceId}/chat")">
+                    <span class="chat-message-avatar">@Initial(item.WorkspaceName)</span>
+                    <div class="chat-overview-body">
+                        <div class="chat-overview-top">
+                            <span class="chat-overview-name">@item.WorkspaceName</span>
+                            @if (item.LastMessageAtUtc is not null)
+                            {
+                                <span class="chat-message-time">@item.LastMessageAtUtc.Value.ToLocalTime().ToString("dd/MM HH:mm")</span>
+                            }
+                        </div>
+                        @if (item.LastMessageContent is not null)
+                        {
+                            <div class="chat-overview-preview"><strong>@item.LastMessageAuthor:</strong> @Truncate(item.LastMessageContent)</div>
+                        }
+                        else
+                        {
+                            <div class="chat-overview-preview chat-overview-preview--empty">Nenhuma mensagem ainda.</div>
+                        }
+                    </div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private List<ChatOverviewItem>? items;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask!;
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null)
+        {
+            items = [];
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var raw = await db.WorkspaceMembers
+            .Where(m => m.UserId == userId)
+            .Select(m => new
+            {
+                m.WorkspaceId,
+                WorkspaceName = m.Workspace.Name,
+                Last = db.ChatMessages
+                    .Where(cm => cm.WorkspaceId == m.WorkspaceId)
+                    .OrderByDescending(cm => cm.CreatedAtUtc)
+                    .Select(cm => new
+                    {
+                        cm.Content,
+                        cm.CreatedAtUtc,
+                        AuthorName = cm.User == null ? "Usuário removido" : (cm.User.DisplayName != "" ? cm.User.DisplayName : cm.User.Email)
+                    })
+                    .FirstOrDefault()
+            })
+            .ToListAsync();
+
+        items = raw
+            .Select(x => new ChatOverviewItem
+            {
+                WorkspaceId = x.WorkspaceId,
+                WorkspaceName = x.WorkspaceName,
+                LastMessageContent = x.Last?.Content,
+                LastMessageAuthor = x.Last?.AuthorName,
+                LastMessageAtUtc = x.Last?.CreatedAtUtc
+            })
+            .OrderByDescending(x => x.LastMessageAtUtc ?? DateTime.MinValue)
+            .ThenBy(x => x.WorkspaceName)
+            .ToList();
+    }
+
+    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+
+    private static string Truncate(string text) => text.Length <= 80 ? text : text[..80] + "…";
+
+    private class ChatOverviewItem
+    {
+        public Guid WorkspaceId { get; set; }
+        public string WorkspaceName { get; set; } = "";
+        public string? LastMessageContent { get; set; }
+        public string? LastMessageAuthor { get; set; }
+        public DateTime? LastMessageAtUtc { get; set; }
+    }
+}
