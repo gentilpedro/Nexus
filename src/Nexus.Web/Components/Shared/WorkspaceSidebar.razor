@@ -6,6 +6,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationContextService NavContext
+@inject NavigationManager NavigationManager
 @implements IDisposable
 
 <aside class="app-sidebar @(IsOpen ? "is-open" : "")">
@@ -73,6 +74,14 @@
 
     <div class="app-sidebar-footer">
         <a href="/workspaces/new">+ Novo workspace</a>
+        <form action="Account/Logout" method="post" data-enhance="false" class="app-sidebar-logout-form">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="@NavigationManager.ToBaseRelativePath(NavigationManager.Uri)" />
+            <button type="submit" class="app-sidebar-logout" title="Sair">
+                <img src="@Assets["sair.png"]" alt="" class="app-sidebar-logout-icon" />
+                Sair
+            </button>
+        </form>
     </div>
 </aside>
 

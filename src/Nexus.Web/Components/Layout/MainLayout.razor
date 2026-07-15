@@ -16,20 +16,19 @@
         </AuthorizeView>
         <a class="topnav-brand" href="/">Nexus</a>
     </div>
+    <div class="topnav-center">
+        <AuthorizeView>
+            <Authorized>
+                <a class="topnav-user" href="Account/Manage" data-enhance-nav="false">@context.User.Identity?.Name</a>
+            </Authorized>
+        </AuthorizeView>
+    </div>
     <div class="topnav-links">
         <ThemeSwitch />
         <AuthorizeView>
             <Authorized>
                 <a class="topnav-user topnav-search" href="/search"><img src="@Assets["lupa.png"]" alt="" class="topnav-search-icon" /></a>
                 <a class="topnav-user topnav-notifications" href="/notifications"> <img src="@Assets["notificacao.png"]" alt="" class="topnav-notifications-icon" /> @(unreadCount > 0 ? $" ({unreadCount})" : "")</a>
-                <a class="topnav-user" href="Account/Manage" data-enhance-nav="false">@context.User.Identity?.Name</a>
-                <form action="Account/Logout" method="post" data-enhance="false">
-                    <AntiforgeryToken />
-                    <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                    <button type="submit" class="btn-link topnav-logout" title="Sair">
-                        <img src="@Assets["sair.png"]" alt="Sair" class="topnav-logout-icon" />
-                    </button>
-                </form>
             </Authorized>
             <NotAuthorized>
                 <NavLink href="/Account/Login" class="btn" data-enhance-nav="false">
@@ -68,13 +67,11 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private string? currentUrl;
     private bool sidebarOpen;
     private int unreadCount;
 
     protected override async Task OnInitializedAsync()
     {
-        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
         NavigationManager.LocationChanged += OnLocationChanged;
         await RefreshUnreadCountAsync();
     }
