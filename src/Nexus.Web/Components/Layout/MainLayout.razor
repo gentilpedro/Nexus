@@ -20,6 +20,7 @@
         <ThemeSwitch />
         <AuthorizeView>
             <Authorized>
+                <a class="topnav-user" href="/search">Buscar</a>
                 <a class="topnav-user topnav-notifications" href="/notifications">
                     <img src="@Assets["notificacao.png"]" alt="" class="topnav-notifications-icon" />
                     Notificações@(unreadCount > 0 ? $" ({unreadCount})" : "")

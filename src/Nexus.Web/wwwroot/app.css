@@ -1894,3 +1894,15 @@ table th, table td {
     cursor: pointer;
     min-width: 6px;
 }
+
+.search-filters {
+    margin-bottom: 1.5rem;
+}
+
+.search-submit-field {
+    justify-content: flex-end;
+}
+
+.search-submit-field .btn {
+    width: 100%;
+}

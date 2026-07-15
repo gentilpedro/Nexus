@@ -251,4 +251,89 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             existing.RemainingCount = remainingCount;
         }
     }
+
+    // Cross-workspace search. The membership check inline in the query (rather than a
+    // separate authorization call) is what guarantees a task from a workspace the user
+    // doesn't belong to can never leak into results, regardless of which filters are set.
+    public async Task<List<WorkItem>> SearchWorkItemsAsync(string userId, WorkItemSearchFilters filters, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        var query = db.WorkItems
+            .Where(w => w.TaskList.Space.Workspace.Members.Any(m => m.UserId == userId));
+
+        if (filters.WorkspaceId is not null)
+        {
+            query = query.Where(w => w.TaskList.Space.WorkspaceId == filters.WorkspaceId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filters.Text))
+        {
+            query = query.Where(w => w.Title.Contains(filters.Text));
+        }
+
+        if (filters.StatusCategory is not null)
+        {
+            query = query.Where(w => w.Status.Category == filters.StatusCategory);
+        }
+
+        if (filters.Priority is not null)
+        {
+            query = query.Where(w => w.Priority == filters.Priority);
+        }
+
+        if (filters.Type is not null)
+        {
+            query = query.Where(w => w.Type == filters.Type);
+        }
+
+        if (filters.AssigneeMode == AssigneeFilterMode.Me)
+        {
+            query = query.Where(w => w.AssigneeId == userId);
+        }
+        else if (filters.AssigneeMode == AssigneeFilterMode.Unassigned)
+        {
+            query = query.Where(w => w.AssigneeId == null);
+        }
+
+        var today = DateTime.UtcNow.Date;
+        if (filters.DueMode == DueFilterMode.Overdue)
+        {
+            query = query.Where(w => w.DueDateUtc != null && w.DueDateUtc.Value.Date < today);
+        }
+        else if (filters.DueMode == DueFilterMode.ThisWeek)
+        {
+            var weekAhead = today.AddDays(7);
+            query = query.Where(w => w.DueDateUtc != null && w.DueDateUtc.Value.Date >= today && w.DueDateUtc.Value.Date <= weekAhead);
+        }
+        else if (filters.DueMode == DueFilterMode.NoDueDate)
+        {
+            query = query.Where(w => w.DueDateUtc == null);
+        }
+
+        return await query
+            .Include(w => w.Status)
+            .Include(w => w.Assignee)
+            .Include(w => w.TaskList).ThenInclude(l => l.Space).ThenInclude(s => s.Workspace)
+            .OrderBy(w => w.DueDateUtc == null)
+            .ThenBy(w => w.DueDateUtc)
+            .ThenBy(w => w.Title)
+            .Take(200)
+            .ToListAsync(ct);
+    }
 }
+
+public class WorkItemSearchFilters
+{
+    public Guid? WorkspaceId { get; set; }
+    public string? Text { get; set; }
+    public StatusCategory? StatusCategory { get; set; }
+    public WorkItemPriority? Priority { get; set; }
+    public WorkItemType? Type { get; set; }
+    public AssigneeFilterMode AssigneeMode { get; set; } = AssigneeFilterMode.Any;
+    public DueFilterMode DueMode { get; set; } = DueFilterMode.Any;
+}
+
+public enum AssigneeFilterMode { Any, Me, Unassigned }
+
+public enum DueFilterMode { Any, Overdue, ThisWeek, NoDueDate }
