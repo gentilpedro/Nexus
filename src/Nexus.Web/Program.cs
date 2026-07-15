@@ -17,6 +17,13 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Default SignalR hub message size (~32KB) is too small for file attachment uploads —
+// raised to comfortably fit AttachmentStorageService.MaxSizeBytes plus framing overhead.
+builder.Services.Configure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
+{
+    options.MaximumReceiveMessageSize = 11 * 1024 * 1024;
+});
+
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
@@ -26,6 +33,7 @@ builder.Services.AddScoped<IAuthorizationHandler, WorkspaceAuthorizationHandler>
 builder.Services.AddScoped<WorkItemQueryService>();
 builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddSingleton<WorkspaceChatBroadcaster>();
+builder.Services.AddSingleton<AttachmentStorageService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
 builder.Services.AddHostedService<DueDateNotificationHostedService>();
 
@@ -81,5 +89,42 @@ app.MapRazorComponents<App>()
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+app.MapGet("/attachments/{id:guid}/download", async (
+    Guid id,
+    HttpContext http,
+    IDbContextFactory<Nexus.Infrastructure.Data.AppDbContext> dbFactory,
+    IAuthorizationService authorizationService,
+    AttachmentStorageService storage) =>
+{
+    await using var db = await dbFactory.CreateDbContextAsync();
+    var attachment = await db.WorkItemAttachments
+        .Include(a => a.WorkItem).ThenInclude(w => w.TaskList).ThenInclude(l => l.Space)
+        .FirstOrDefaultAsync(a => a.Id == id);
+
+    if (attachment is null)
+    {
+        return Results.NotFound();
+    }
+
+    var workspaceId = attachment.WorkItem.TaskList.Space.WorkspaceId;
+    var authResult = await authorizationService.AuthorizeAsync(
+        http.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+    if (!authResult.Succeeded)
+    {
+        // Not Results.Forbid() — that redirects to the login page under cookie auth,
+        // which would download an HTML page instead of a 403 for this raw API route.
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var fullPath = storage.GetFullPath(attachment.StoragePath);
+    if (!File.Exists(fullPath))
+    {
+        return Results.NotFound();
+    }
+
+    return Results.File(fullPath, attachment.ContentType, attachment.FileName);
+}).RequireAuthorization();
 
 app.Run();

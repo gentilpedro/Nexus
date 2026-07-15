@@ -2,8 +2,10 @@
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Extensions
+@using Nexus.Web.Services
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject AttachmentStorageService Storage
 
 @if (isOpen)
 {
@@ -128,6 +130,35 @@
                     <button type="button" class="btn btn-secondary" @onclick="Close">Cancelar</button>
                 </div>
             </EditForm>
+
+            @if (isEditing)
+            {
+                <div class="panel-attachments">
+                    <h3>Anexos</h3>
+                    <InputFile OnChange="HandleFileUpload" multiple />
+                    @if (!string.IsNullOrEmpty(uploadError))
+                    {
+                        <div class="alert alert-danger">@uploadError</div>
+                    }
+                    @if (attachments.Count > 0)
+                    {
+                        <div class="attachment-list">
+                            @foreach (var attachment in attachments)
+                            {
+                                <div class="attachment-item">
+                                    <a href="@($"/attachments/{attachment.Id}/download")" target="_blank">@attachment.FileName</a>
+                                    <span class="attachment-meta">@FormatSize(attachment.SizeBytes)</span>
+                                    <button type="button" class="btn-link" @onclick="() => HandleDeleteAttachment(attachment.Id)">Excluir</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="attachment-hint">Anexos ficam disponíveis depois de salvar a task pela primeira vez.</p>
+            }
         </div>
     </div>
 }
@@ -165,6 +196,8 @@
     private Guid? originalStatusId;
     private readonly WorkItemFormModel model = new();
     private readonly Dictionary<Guid, string> customFieldValues = new();
+    private List<WorkItemAttachment> attachments = [];
+    private string? uploadError;
 
     // Unrestricted (all Statuses) when creating, or when the list has no configured
     // transitions at all — only narrows down once editing AND rules exist for this list.
@@ -197,6 +230,8 @@
         model.StatusId = Statuses.FirstOrDefault(s => s.IsDefault)?.Id ?? Statuses.FirstOrDefault()?.Id ?? Guid.Empty;
         model.StartDate = DateTime.Today;
         ResetCustomFieldValues();
+        attachments = [];
+        uploadError = null;
         isOpen = true;
         StateHasChanged();
     }
@@ -229,8 +264,104 @@
             }
         }
 
+        uploadError = null;
+        await LoadAttachmentsAsync();
+
         isOpen = true;
         StateHasChanged();
+    }
+
+    private async Task LoadAttachmentsAsync()
+    {
+        if (editingId is null)
+        {
+            attachments = [];
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        attachments = await db.WorkItemAttachments
+            .Where(a => a.WorkItemId == editingId.Value)
+            .OrderByDescending(a => a.UploadedAtUtc)
+            .ToListAsync();
+    }
+
+    private async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        if (editingId is null)
+        {
+            return;
+        }
+
+        uploadError = null;
+
+        var authState = await AuthStateTask!;
+        var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        foreach (var file in e.GetMultipleFiles(10))
+        {
+            if (file.Size > AttachmentStorageService.MaxSizeBytes)
+            {
+                uploadError = $"\"{file.Name}\" excede o limite de 10 MB e não foi anexado.";
+                continue;
+            }
+
+            var attachmentId = Guid.NewGuid();
+            string storagePath;
+            await using (var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes))
+            {
+                storagePath = await Storage.SaveAsync(editingId.Value, attachmentId, file.Name, stream);
+            }
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.WorkItemAttachments.Add(new WorkItemAttachment
+            {
+                Id = attachmentId,
+                WorkItemId = editingId.Value,
+                FileName = file.Name,
+                ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                SizeBytes = file.Size,
+                StoragePath = storagePath,
+                UploadedByUserId = currentUserId,
+                UploadedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await LoadAttachmentsAsync();
+    }
+
+    private async Task HandleDeleteAttachment(Guid attachmentId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var storagePath = await db.WorkItemAttachments
+            .Where(a => a.Id == attachmentId)
+            .Select(a => a.StoragePath)
+            .FirstOrDefaultAsync();
+
+        if (storagePath is null)
+        {
+            return;
+        }
+
+        await db.WorkItemAttachments.Where(a => a.Id == attachmentId).ExecuteDeleteAsync();
+        Storage.Delete(storagePath);
+        await LoadAttachmentsAsync();
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024.0:0.#} KB";
+        }
+
+        return $"{bytes / (1024.0 * 1024.0):0.#} MB";
     }
 
     private void ResetCustomFieldValues()
