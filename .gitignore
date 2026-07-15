@@ -23,3 +23,6 @@ appsettings.*.local.json
 /*.png
 /*.jpg
 /*.jpeg
+
+# Locally uploaded task attachments (dev storage, not committed)
+src/Nexus.Web/App_Data/uploads/
