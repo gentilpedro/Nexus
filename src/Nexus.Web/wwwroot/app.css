@@ -1664,6 +1664,16 @@ table th, table td {
     display: flex;
     gap: 0.6rem;
     align-items: flex-start;
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius);
+}
+
+.chat-message:hover {
+    background: var(--color-hover);
+}
+
+.chat-message-grouped {
+    margin-top: -0.35rem;
 }
 
 .chat-message-avatar {
@@ -1678,6 +1688,11 @@ table th, table td {
     justify-content: center;
     font-size: 0.8rem;
     font-weight: 700;
+}
+
+.chat-message-avatar-spacer {
+    width: 2rem;
+    flex-shrink: 0;
 }
 
 .chat-message-body {
@@ -1727,14 +1742,46 @@ table th, table td {
     color: var(--color-text);
 }
 
+.chat-compose-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chat-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: var(--radius);
+    background: var(--color-hover);
+    cursor: pointer;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.chat-toolbar-btn:hover {
+    background: var(--color-selected);
+}
+
+.chat-file-input-hidden {
+    display: none;
+}
+
+.chat-docref-select {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+}
+
 .chat-compose-actions {
     display: flex;
     gap: 0.5rem;
     align-items: center;
-}
-
-.chat-compose-actions select {
-    flex-shrink: 0;
 }
 
 .chat-compose-actions .btn {
@@ -1748,6 +1795,9 @@ table th, table td {
 }
 
 .chat-compose-pending-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     font-size: 0.75rem;
     color: var(--color-text-muted);
     background: var(--color-hover);
@@ -1755,13 +1805,76 @@ table th, table td {
     padding: 0.2rem 0.6rem;
 }
 
-.chat-message-docref {
+.chat-compose-pending-remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    padding: 0;
+    line-height: 1;
+}
+
+.chat-compose-pending-remove:hover {
+    color: var(--color-danger);
+}
+
+.chat-docref-card,
+.chat-attachment-item {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.5rem;
+    padding: 0.45rem 0.7rem;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    margin-top: 0.35rem;
+    max-width: 320px;
+}
+
+.chat-docref-card:hover,
+.chat-attachment-item:hover {
+    border-color: var(--color-primary);
+}
+
+.chat-docref-icon,
+.chat-attachment-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.chat-docref-title {
     font-size: 0.85rem;
     color: var(--color-primary);
-    margin-top: 0.35rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-attachment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.chat-attachment-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    overflow: hidden;
+}
+
+.chat-attachment-name {
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-attachment-size {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
 }
 
 /* Chat overview (/chats) */
@@ -1925,6 +2038,31 @@ table th, table td {
 }
 
 /* Gantt */
+.gantt-legend {
+    display: flex;
+    gap: 1.25rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.gantt-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.gantt-legend-dot {
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.gantt-legend-dot-todo { background: var(--badge-status-todo-fg); }
+.gantt-legend-dot-inprogress { background: var(--badge-status-inprogress-fg); }
+.gantt-legend-dot-done { background: var(--badge-status-done-fg); }
+
 .gantt-chart {
     display: flex;
     flex-direction: column;
@@ -1936,36 +2074,109 @@ table th, table td {
     overflow-x: auto;
 }
 
+.gantt-header-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0.75rem;
+    min-width: 500px;
+}
+
+.gantt-header-track {
+    position: relative;
+    height: 1.2rem;
+}
+
+.gantt-tick-label {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.gantt-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.gantt-gridline {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--color-border);
+    pointer-events: none;
+}
+
+.gantt-today-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--color-primary);
+    pointer-events: none;
+    z-index: 2;
+}
+
 .gantt-row {
     display: grid;
     grid-template-columns: 200px 1fr;
     align-items: center;
     gap: 0.75rem;
     min-width: 500px;
+    padding: 0.35rem 0;
+    border-radius: var(--radius);
+}
+
+.gantt-row:hover {
+    background: var(--color-hover);
 }
 
 .gantt-row-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     font-size: 0.85rem;
     cursor: pointer;
     overflow: hidden;
+}
+
+.gantt-row-title {
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
 }
 
 .gantt-row-track {
     position: relative;
-    height: 1.5rem;
+    height: 1.75rem;
     background: var(--color-bg);
     border-radius: var(--radius);
 }
 
 .gantt-bar {
     position: absolute;
-    top: 0.2rem;
-    height: 1.1rem;
+    top: 0.15rem;
+    height: 1.45rem;
     border-radius: var(--radius);
     cursor: pointer;
     min-width: 6px;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    padding: 0 0.5rem;
+}
+
+.gantt-bar-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .search-filters {
