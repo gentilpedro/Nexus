@@ -195,6 +195,7 @@
         errorMessage = null;
         model.Reset();
         model.StatusId = Statuses.FirstOrDefault(s => s.IsDefault)?.Id ?? Statuses.FirstOrDefault()?.Id ?? Guid.Empty;
+        model.StartDate = DateTime.Today;
         ResetCustomFieldValues();
         isOpen = true;
         StateHasChanged();
