@@ -20,16 +20,15 @@
         <ThemeSwitch />
         <AuthorizeView>
             <Authorized>
-                <a class="topnav-user" href="/search">Buscar</a>
-                <a class="topnav-user topnav-notifications" href="/notifications">
-                    <img src="@Assets["notificacao.png"]" alt="" class="topnav-notifications-icon" />
-                    Notificações@(unreadCount > 0 ? $" ({unreadCount})" : "")
-                </a>
+                <a class="topnav-user topnav-search" href="/search"><img src="@Assets["lupa.png"]" alt="" class="topnav-search-icon" /></a>
+                <a class="topnav-user topnav-notifications" href="/notifications"> <img src="@Assets["notificacao.png"]" alt="" class="topnav-notifications-icon" /> @(unreadCount > 0 ? $" ({unreadCount})" : "")</a>
                 <a class="topnav-user" href="Account/Manage" data-enhance-nav="false">@context.User.Identity?.Name</a>
                 <form action="Account/Logout" method="post" data-enhance="false">
                     <AntiforgeryToken />
                     <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                    <button type="submit" class="btn-link">Sair</button>
+                    <button type="submit" class="btn-link topnav-logout" title="Sair">
+                        <img src="@Assets["sair.png"]" alt="Sair" class="topnav-logout-icon" />
+                    </button>
                 </form>
             </Authorized>
             <NotAuthorized>
