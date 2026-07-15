@@ -55,34 +55,54 @@
             }
             else
             {
-                @foreach (var message in messages)
+                @for (var i = 0; i < messages.Count; i++)
                 {
-                    <div class="chat-message">
-                        <span class="chat-message-avatar">@Initial(message)</span>
+                    var message = messages[i];
+                    var previous = i > 0 ? messages[i - 1] : null;
+                    var isGrouped = previous is not null
+                        && previous.UserId == message.UserId
+                        && (message.CreatedAtUtc - previous.CreatedAtUtc) < TimeSpan.FromMinutes(5);
+
+                    <div class="chat-message @(isGrouped ? "chat-message-grouped" : "")">
+                        @if (isGrouped)
+                        {
+                            <span class="chat-message-avatar-spacer"></span>
+                        }
+                        else
+                        {
+                            <span class="chat-message-avatar">@Initial(message)</span>
+                        }
                         <div class="chat-message-body">
-                            <div class="chat-message-meta">
-                                <span class="chat-message-author">@AuthorLabel(message)</span>
-                                <span class="chat-message-time">@message.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</span>
-                            </div>
+                            @if (!isGrouped)
+                            {
+                                <div class="chat-message-meta">
+                                    <span class="chat-message-author">@AuthorLabel(message)</span>
+                                    <span class="chat-message-time">@message.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</span>
+                                </div>
+                            }
                             @if (!string.IsNullOrEmpty(message.Content))
                             {
                                 <div class="chat-message-content">@message.Content</div>
                             }
                             @if (message.ReferencedDocPage is not null)
                             {
-                                <a class="chat-message-docref" href="@($"/workspaces/{WorkspaceId}/docs/{message.ReferencedDocPage.Id}")">
-                                    📄 @message.ReferencedDocPage.Title
+                                <a class="chat-docref-card" href="@($"/workspaces/{WorkspaceId}/docs/{message.ReferencedDocPage.Id}")">
+                                    <span class="chat-docref-icon">📄</span>
+                                    <span class="chat-docref-title">@message.ReferencedDocPage.Title</span>
                                 </a>
                             }
                             @if (message.Attachments.Count > 0)
                             {
-                                <div class="attachment-list">
+                                <div class="chat-attachment-list">
                                     @foreach (var attachment in message.Attachments)
                                     {
-                                        <div class="attachment-item">
-                                            <a href="@($"/chat-attachments/{attachment.Id}/download")" target="_blank">@attachment.FileName</a>
-                                            <span class="attachment-meta">@FormatSize(attachment.SizeBytes)</span>
-                                        </div>
+                                        <a class="chat-attachment-item" href="@($"/chat-attachments/{attachment.Id}/download")" target="_blank">
+                                            <span class="chat-attachment-icon">📎</span>
+                                            <span class="chat-attachment-info">
+                                                <span class="chat-attachment-name">@attachment.FileName</span>
+                                                <span class="chat-attachment-size">@FormatSize(attachment.SizeBytes)</span>
+                                            </span>
+                                        </a>
                                     }
                                 </div>
                             }
@@ -93,24 +113,29 @@
         </div>
 
         <EditForm Model="sendModel" OnValidSubmit="HandleSend" class="chat-compose">
-            <InputTextArea @bind-Value="sendModel.Content" rows="2" placeholder="Escreva uma mensagem..." />
-            <div class="chat-compose-actions">
-                <select @bind="selectedDocId">
+            <div class="chat-compose-toolbar">
+                <label for="chat-file-input" class="chat-toolbar-btn" title="Anexar arquivo">📎</label>
+                <InputFile id="chat-file-input" OnChange="HandleFilesSelected" multiple class="chat-file-input-hidden" />
+                <select @bind="selectedDocId" class="chat-docref-select">
                     <option value="">Referenciar doc...</option>
                     @foreach (var doc in docPages)
                     {
                         <option value="@doc.Id">@doc.Title</option>
                     }
                 </select>
-                <InputFile OnChange="HandleFilesSelected" multiple />
-                <button type="submit" class="btn" disabled="@isSending">Enviar</button>
             </div>
+            <InputTextArea @bind-Value="sendModel.Content" rows="2" placeholder="Escreva uma mensagem..." />
             @if (pendingFiles.Count > 0)
             {
                 <div class="chat-compose-pending">
-                    @foreach (var file in pendingFiles)
+                    @for (var i = 0; i < pendingFiles.Count; i++)
                     {
-                        <span class="chat-compose-pending-file">@file.Name (@FormatSize(file.Size))</span>
+                        var index = i;
+                        var file = pendingFiles[i];
+                        <span class="chat-compose-pending-file">
+                            @file.Name (@FormatSize(file.Size))
+                            <button type="button" class="chat-compose-pending-remove" @onclick="() => RemovePendingFile(index)">✕</button>
+                        </span>
                     }
                 </div>
             }
@@ -118,6 +143,9 @@
             {
                 <div class="alert alert-danger">@sendError</div>
             }
+            <div class="chat-compose-actions">
+                <button type="submit" class="btn" disabled="@isSending">Enviar</button>
+            </div>
         </EditForm>
     }
 </div>
@@ -231,6 +259,14 @@
         }
 
         pendingFiles = accepted;
+    }
+
+    private void RemovePendingFile(int index)
+    {
+        if (index >= 0 && index < pendingFiles.Count)
+        {
+            pendingFiles.RemoveAt(index);
+        }
     }
 
     private async void OnMessagePosted(ChatMessage message)

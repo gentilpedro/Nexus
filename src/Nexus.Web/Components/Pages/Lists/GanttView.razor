@@ -64,20 +64,53 @@
             }
             else
             {
+                var ticks = GetTicks();
+                var todayPct = TodayLeftPct;
+
                 <p class="topnav-user">Período: @rangeStart.ToString("dd/MM/yyyy") a @rangeEnd.ToString("dd/MM/yyyy")</p>
+                <div class="gantt-legend">
+                    <span class="gantt-legend-item"><span class="gantt-legend-dot gantt-legend-dot-todo"></span> A Fazer</span>
+                    <span class="gantt-legend-item"><span class="gantt-legend-dot gantt-legend-dot-inprogress"></span> Em Andamento</span>
+                    <span class="gantt-legend-item"><span class="gantt-legend-dot gantt-legend-dot-done"></span> Concluído</span>
+                </div>
                 <div class="gantt-chart">
-                    @foreach (var item in items)
-                    {
-                        <div class="gantt-row">
-                            <div class="gantt-row-label" @onclick="() => OpenEdit(item.WorkItem)">@item.WorkItem.Title</div>
-                            <div class="gantt-row-track">
-                                <div class="gantt-bar badge-status-@item.WorkItem.Status.Category.ToString().ToLowerInvariant()"
-                                     style="left: @(item.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%; width: @(item.WidthPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"
-                                     title="@item.WorkItem.Title"
-                                     @onclick="() => OpenEdit(item.WorkItem)"></div>
-                            </div>
+                    <div class="gantt-header-row">
+                        <div class="gantt-header-label"></div>
+                        <div class="gantt-header-track">
+                            @foreach (var tick in ticks)
+                            {
+                                <span class="gantt-tick-label" style="left: @(tick.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%">@tick.Date.ToString("dd/MM")</span>
+                            }
                         </div>
-                    }
+                    </div>
+                    <div class="gantt-body">
+                        @foreach (var tick in ticks)
+                        {
+                            <div class="gantt-gridline" style="left: calc(200px + (100% - 200px) * @(tick.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture)) / 100)"></div>
+                        }
+                        @if (todayPct is { } pct)
+                        {
+                            <div class="gantt-today-line" style="left: calc(200px + (100% - 200px) * @(pct.ToString(System.Globalization.CultureInfo.InvariantCulture)) / 100)" title="Hoje"></div>
+                        }
+                        @foreach (var item in items)
+                        {
+                            <div class="gantt-row">
+                                <div class="gantt-row-label" @onclick="() => OpenEdit(item.WorkItem)">
+                                    <WorkItemTypeIcon Type="item.WorkItem.Type" />
+                                    <span class="gantt-row-title">@item.WorkItem.Title</span>
+                                    <span class="task-row-avatar" title="@AssigneeLabel(item.WorkItem)">@AssigneeInitial(item.WorkItem)</span>
+                                </div>
+                                <div class="gantt-row-track">
+                                    <div class="gantt-bar badge-status-@item.WorkItem.Status.Category.ToString().ToLowerInvariant()"
+                                         style="left: @(item.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%; width: @(item.WidthPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"
+                                         title="@item.WorkItem.Title"
+                                         @onclick="() => OpenEdit(item.WorkItem)">
+                                        <span class="gantt-bar-label">@item.WorkItem.Title</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
                 </div>
             }
         }
@@ -116,6 +149,7 @@
     private Guid? loadedListId;
     private DateTime rangeStart;
     private DateTime rangeEnd;
+    private int totalDays;
 
     private class GanttItem
     {
@@ -138,12 +172,13 @@
             {
                 rangeStart = DateTime.UtcNow.Date;
                 rangeEnd = DateTime.UtcNow.Date;
+                totalDays = 1;
                 return [];
             }
 
             rangeStart = withDue.Min(w => (w.StartDateUtc ?? w.DueDateUtc)!.Value.Date).AddDays(-1);
             rangeEnd = withDue.Max(w => w.DueDateUtc!.Value.Date).AddDays(1);
-            var totalDays = Math.Max((rangeEnd - rangeStart).Days, 1);
+            totalDays = Math.Max((rangeEnd - rangeStart).Days, 1);
 
             return withDue
                 .OrderBy(w => w.StartDateUtc ?? w.DueDateUtc)
@@ -157,6 +192,60 @@
                 })
                 .ToList();
         }
+    }
+
+    // Adaptive tick interval so the header/gridlines don't get crowded on long periods.
+    private List<(DateTime Date, double LeftPct)> GetTicks()
+    {
+        if (totalDays <= 0)
+        {
+            return [];
+        }
+
+        var stepDays = totalDays switch
+        {
+            <= 14 => 1,
+            <= 60 => 7,
+            <= 180 => 14,
+            _ => 30
+        };
+
+        var ticks = new List<(DateTime, double)>();
+        for (var d = rangeStart; d <= rangeEnd; d = d.AddDays(stepDays))
+        {
+            var pct = (d - rangeStart).Days / (double)totalDays * 100;
+            ticks.Add((d, pct));
+        }
+        return ticks;
+    }
+
+    private double? TodayLeftPct
+    {
+        get
+        {
+            var today = DateTime.UtcNow.Date;
+            if (today < rangeStart || today > rangeEnd || totalDays <= 0)
+            {
+                return null;
+            }
+            return (today - rangeStart).Days / (double)totalDays * 100;
+        }
+    }
+
+    private static string AssigneeLabel(WorkItem item) =>
+        item.Assignee is null
+            ? "Sem responsável"
+            : (string.IsNullOrEmpty(item.Assignee.DisplayName) ? item.Assignee.Email ?? "" : item.Assignee.DisplayName);
+
+    private static string AssigneeInitial(WorkItem item)
+    {
+        if (item.Assignee is null)
+        {
+            return "?";
+        }
+
+        var name = string.IsNullOrEmpty(item.Assignee.DisplayName) ? item.Assignee.Email : item.Assignee.DisplayName;
+        return string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
     }
 
     protected override async Task OnParametersSetAsync()
