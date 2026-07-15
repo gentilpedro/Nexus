@@ -25,6 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<StatusTransition> StatusTransitions => Set<StatusTransition>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<DocPage> DocPages => Set<DocPage>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
