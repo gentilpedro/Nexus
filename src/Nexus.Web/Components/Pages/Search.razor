@@ -1,0 +1,177 @@
+@page "/search"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Components.Shared
+@using Nexus.Web.Extensions
+@using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject WorkItemQueryService QueryService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Buscar</PageTitle>
+
+<div class="page-container page-container--wide">
+    <div class="page-header">
+        <h1>Buscar</h1>
+    </div>
+
+    <form @onsubmit="ReloadAsync" @onsubmit:preventDefault="true" class="card search-filters">
+        <div class="form-row">
+            <div class="form-field">
+                <label for="search-text">Texto</label>
+                <input id="search-text" type="text" @bind="textFilter" placeholder="Buscar por título..." />
+            </div>
+            <div class="form-field">
+                <label for="search-workspace">Workspace</label>
+                <select id="search-workspace" @bind="workspaceIdText" @bind:after="ReloadAsync">
+                    <option value="">Qualquer um dos meus</option>
+                    @foreach (var ws in workspaces ?? [])
+                    {
+                        <option value="@ws.Id">@ws.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-field">
+                <label for="search-status">Status</label>
+                <select id="search-status" @bind="statusCategoryText" @bind:after="ReloadAsync">
+                    <option value="">Qualquer</option>
+                    <option value="ToDo">A Fazer</option>
+                    <option value="InProgress">Em Andamento</option>
+                    <option value="Done">Concluído</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="search-priority">Prioridade</label>
+                <select id="search-priority" @bind="priorityText" @bind:after="ReloadAsync">
+                    <option value="">Qualquer</option>
+                    @foreach (var p in Enum.GetValues<WorkItemPriority>())
+                    {
+                        <option value="@p">@p.ToDisplayLabel()</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-field">
+                <label for="search-type">Tipo</label>
+                <select id="search-type" @bind="typeText" @bind:after="ReloadAsync">
+                    <option value="">Qualquer</option>
+                    @foreach (var t in Enum.GetValues<WorkItemType>())
+                    {
+                        <option value="@t">@t.ToDisplayLabel()</option>
+                    }
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="search-assignee">Responsável</label>
+                <select id="search-assignee" @bind="assigneeModeText" @bind:after="ReloadAsync">
+                    <option value="Any">Qualquer</option>
+                    <option value="Me">Atribuído a mim</option>
+                    <option value="Unassigned">Sem responsável</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-field">
+                <label for="search-due">Prazo</label>
+                <select id="search-due" @bind="dueModeText" @bind:after="ReloadAsync">
+                    <option value="Any">Qualquer</option>
+                    <option value="Overdue">Atrasado</option>
+                    <option value="ThisWeek">Esta semana</option>
+                    <option value="NoDueDate">Sem prazo</option>
+                </select>
+            </div>
+            <div class="form-field search-submit-field">
+                <button type="submit" class="btn">Buscar</button>
+            </div>
+        </div>
+    </form>
+
+    @if (results is null)
+    {
+        <p>Carregando...</p>
+    }
+    else if (results.Count == 0)
+    {
+        <div class="empty-state">
+            <p>Nenhuma task encontrada com esses filtros.</p>
+        </div>
+    }
+    else
+    {
+        <div class="dashboard-task-list">
+            @foreach (var item in results)
+            {
+                <TaskRow Item="item" OnClick="OpenTask" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private string? userId;
+    private List<Workspace>? workspaces;
+    private List<WorkItem>? results;
+
+    private string textFilter = "";
+    private string workspaceIdText = "";
+    private string statusCategoryText = "";
+    private string priorityText = "";
+    private string typeText = "";
+    private string assigneeModeText = "Any";
+    private string dueModeText = "Any";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask!;
+        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null)
+        {
+            results = [];
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspaces = await db.WorkspaceMembers
+                .Where(m => m.UserId == userId)
+                .Select(m => m.Workspace)
+                .OrderBy(w => w.Name)
+                .ToListAsync();
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        if (userId is null)
+        {
+            return;
+        }
+
+        var filters = new WorkItemSearchFilters
+        {
+            WorkspaceId = Guid.TryParse(workspaceIdText, out var wsId) ? wsId : null,
+            Text = textFilter,
+            StatusCategory = Enum.TryParse<StatusCategory>(statusCategoryText, out var cat) ? cat : null,
+            Priority = Enum.TryParse<WorkItemPriority>(priorityText, out var pri) ? pri : null,
+            Type = Enum.TryParse<WorkItemType>(typeText, out var typ) ? typ : null,
+            AssigneeMode = Enum.TryParse<AssigneeFilterMode>(assigneeModeText, out var am) ? am : AssigneeFilterMode.Any,
+            DueMode = Enum.TryParse<DueFilterMode>(dueModeText, out var dm) ? dm : DueFilterMode.Any
+        };
+
+        results = await QueryService.SearchWorkItemsAsync(userId, filters);
+    }
+
+    private void OpenTask(WorkItem item) => NavigationManager.NavigateTo($"/lists/{item.TaskListId}/list");
+}
