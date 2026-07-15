@@ -1,17 +1,19 @@
 namespace Nexus.Web.Services;
 
-// Centralizes attachment path resolution so upload (TaskDetailPanel.razor) and the
-// download endpoint (Program.cs) never drift apart on where a file physically lives.
+// Centralizes attachment path resolution so every uploader (TaskDetailPanel.razor,
+// WorkspaceChat.razor) and every download endpoint (Program.cs) never drift apart on
+// where a file physically lives. ownerId is just a folder name — it can be a WorkItemId,
+// a ChatMessageId, or any other server-generated Guid; this service doesn't care which.
 public class AttachmentStorageService(IWebHostEnvironment env, IConfiguration configuration)
 {
     public const long MaxSizeBytes = 10 * 1024 * 1024;
 
     private string RootPath => Path.Combine(env.ContentRootPath, configuration["UPLOADS_PATH"] ?? "App_Data/uploads");
 
-    public async Task<string> SaveAsync(Guid workItemId, Guid attachmentId, string originalFileName, Stream content, CancellationToken ct = default)
+    public async Task<string> SaveAsync(Guid ownerId, Guid attachmentId, string originalFileName, Stream content, CancellationToken ct = default)
     {
         var ext = SanitizeExtension(Path.GetExtension(originalFileName));
-        var relativePath = Path.Combine(workItemId.ToString(), attachmentId + ext);
+        var relativePath = Path.Combine(ownerId.ToString(), attachmentId + ext);
         var fullPath = Path.Combine(RootPath, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
 

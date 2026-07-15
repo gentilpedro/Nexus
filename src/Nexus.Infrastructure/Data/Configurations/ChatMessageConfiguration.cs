@@ -23,5 +23,15 @@ public class ChatMessageConfiguration : IEntityTypeConfiguration<ChatMessage>
             .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasIndex(m => new { m.WorkspaceId, m.CreatedAtUtc });
+
+        // Restrict, not SetNull: ChatMessages already has one cascading path from Workspace
+        // (Cascade). SQL Server treats SetNull as a cascading action too, so a second path
+        // (Workspace -> DocPage -[SetNull]-> ChatMessage) hits "multiple cascade paths" —
+        // same reasoning as WorkItem.CreatedByUserId. Doc.razor's delete handler clears
+        // ReferencedDocPageId on any referencing messages before deleting the DocPage itself.
+        builder.HasOne(m => m.ReferencedDocPage)
+            .WithMany()
+            .HasForeignKey(m => m.ReferencedDocPageId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

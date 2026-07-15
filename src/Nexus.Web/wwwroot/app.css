@@ -1710,12 +1710,13 @@ table th, table td {
 
 .chat-compose {
     display: flex;
+    flex-direction: column;
     gap: 0.5rem;
-    align-items: flex-end;
 }
 
 .chat-compose textarea {
     flex: 1;
+    width: 100%;
     padding: 0.5rem 0.65rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
@@ -1724,6 +1725,43 @@ table th, table td {
     resize: vertical;
     background: var(--color-surface);
     color: var(--color-text);
+}
+
+.chat-compose-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.chat-compose-actions select {
+    flex-shrink: 0;
+}
+
+.chat-compose-actions .btn {
+    margin-left: auto;
+}
+
+.chat-compose-pending {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.chat-compose-pending-file {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    background: var(--color-hover);
+    border-radius: var(--radius-pill);
+    padding: 0.2rem 0.6rem;
+}
+
+.chat-message-docref {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    margin-top: 0.35rem;
 }
 
 /* Chat overview (/chats) */

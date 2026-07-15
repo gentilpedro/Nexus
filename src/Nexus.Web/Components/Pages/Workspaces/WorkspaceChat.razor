@@ -13,6 +13,7 @@
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
 @inject WorkspaceChatBroadcaster Broadcaster
+@inject AttachmentStorageService Storage
 @inject IJSRuntime JS
 
 <PageTitle>Chat</PageTitle>
@@ -63,7 +64,28 @@
                                 <span class="chat-message-author">@AuthorLabel(message)</span>
                                 <span class="chat-message-time">@message.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</span>
                             </div>
-                            <div class="chat-message-content">@message.Content</div>
+                            @if (!string.IsNullOrEmpty(message.Content))
+                            {
+                                <div class="chat-message-content">@message.Content</div>
+                            }
+                            @if (message.ReferencedDocPage is not null)
+                            {
+                                <a class="chat-message-docref" href="@($"/workspaces/{WorkspaceId}/docs/{message.ReferencedDocPage.Id}")">
+                                    📄 @message.ReferencedDocPage.Title
+                                </a>
+                            }
+                            @if (message.Attachments.Count > 0)
+                            {
+                                <div class="attachment-list">
+                                    @foreach (var attachment in message.Attachments)
+                                    {
+                                        <div class="attachment-item">
+                                            <a href="@($"/chat-attachments/{attachment.Id}/download")" target="_blank">@attachment.FileName</a>
+                                            <span class="attachment-meta">@FormatSize(attachment.SizeBytes)</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         </div>
                     </div>
                 }
@@ -72,7 +94,30 @@
 
         <EditForm Model="sendModel" OnValidSubmit="HandleSend" class="chat-compose">
             <InputTextArea @bind-Value="sendModel.Content" rows="2" placeholder="Escreva uma mensagem..." />
-            <button type="submit" class="btn" disabled="@isSending">Enviar</button>
+            <div class="chat-compose-actions">
+                <select @bind="selectedDocId">
+                    <option value="">Referenciar doc...</option>
+                    @foreach (var doc in docPages)
+                    {
+                        <option value="@doc.Id">@doc.Title</option>
+                    }
+                </select>
+                <InputFile OnChange="HandleFilesSelected" multiple />
+                <button type="submit" class="btn" disabled="@isSending">Enviar</button>
+            </div>
+            @if (pendingFiles.Count > 0)
+            {
+                <div class="chat-compose-pending">
+                    @foreach (var file in pendingFiles)
+                    {
+                        <span class="chat-compose-pending-file">@file.Name (@FormatSize(file.Size))</span>
+                    }
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(sendError))
+            {
+                <div class="alert alert-danger">@sendError</div>
+            }
         </EditForm>
     }
 </div>
@@ -86,6 +131,10 @@
 
     private Workspace? workspace;
     private List<ChatMessage>? messages;
+    private List<DocPage> docPages = [];
+    private List<IBrowserFile> pendingFiles = [];
+    private string selectedDocId = "";
+    private string? sendError;
     private bool notFound;
     private bool isSending;
     private string? currentUserId;
@@ -132,6 +181,7 @@
         NavContext.SetWorkspace(WorkspaceId, workspace.Name);
 
         await LoadMessagesAsync();
+        await LoadDocPagesAsync();
 
         // Unsubscribe first: if this same component instance switches to a different
         // workspace's chat (OnParametersSetAsync reruns without a full page reload — same
@@ -147,11 +197,40 @@
         var recent = await db.ChatMessages
             .Where(m => m.WorkspaceId == WorkspaceId)
             .Include(m => m.User)
+            .Include(m => m.ReferencedDocPage)
+            .Include(m => m.Attachments)
             .OrderByDescending(m => m.CreatedAtUtc)
             .Take(100)
             .ToListAsync();
         recent.Reverse();
         messages = recent;
+    }
+
+    private async Task LoadDocPagesAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        docPages = await db.DocPages
+            .Where(d => d.WorkspaceId == WorkspaceId)
+            .OrderBy(d => d.Title)
+            .ToListAsync();
+    }
+
+    private void HandleFilesSelected(InputFileChangeEventArgs e)
+    {
+        sendError = null;
+        var accepted = new List<IBrowserFile>();
+
+        foreach (var file in e.GetMultipleFiles(10))
+        {
+            if (file.Size > AttachmentStorageService.MaxSizeBytes)
+            {
+                sendError = $"\"{file.Name}\" excede o limite de 10 MB e não foi selecionado.";
+                continue;
+            }
+            accepted.Add(file);
+        }
+
+        pendingFiles = accepted;
     }
 
     private async void OnMessagePosted(ChatMessage message)
@@ -186,12 +265,16 @@
 
     private async Task HandleSend()
     {
-        if (string.IsNullOrWhiteSpace(sendModel.Content))
+        var hasDocRef = Guid.TryParse(selectedDocId, out var referencedDocPageId);
+
+        if (string.IsNullOrWhiteSpace(sendModel.Content) && pendingFiles.Count == 0 && !hasDocRef)
         {
+            sendError = "Escreva algo, anexe um arquivo ou referencie um doc.";
             return;
         }
 
         isSending = true;
+        sendError = null;
 
         ChatMessage message;
         await using (var db = await DbFactory.CreateDbContextAsync())
@@ -201,19 +284,62 @@
                 Id = Guid.NewGuid(),
                 WorkspaceId = WorkspaceId,
                 UserId = currentUserId,
-                Content = sendModel.Content.Trim(),
+                Content = sendModel.Content?.Trim() ?? "",
+                ReferencedDocPageId = hasDocRef ? referencedDocPageId : null,
                 CreatedAtUtc = DateTime.UtcNow
             };
             db.ChatMessages.Add(message);
             await db.SaveChangesAsync();
 
-            // Reload with User included so the broadcast carries a display-ready name.
-            message = await db.ChatMessages.Include(m => m.User).FirstAsync(m => m.Id == message.Id);
+            foreach (var file in pendingFiles)
+            {
+                var attachmentId = Guid.NewGuid();
+                string storagePath;
+                await using (var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes))
+                {
+                    storagePath = await Storage.SaveAsync(message.Id, attachmentId, file.Name, stream);
+                }
+
+                db.ChatMessageAttachments.Add(new ChatMessageAttachment
+                {
+                    Id = attachmentId,
+                    ChatMessageId = message.Id,
+                    FileName = file.Name,
+                    ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                    SizeBytes = file.Size,
+                    StoragePath = storagePath
+                });
+            }
+            await db.SaveChangesAsync();
+
+            // Reload with everything included so the broadcast carries a display-ready message.
+            message = await db.ChatMessages
+                .Include(m => m.User)
+                .Include(m => m.ReferencedDocPage)
+                .Include(m => m.Attachments)
+                .FirstAsync(m => m.Id == message.Id);
         }
 
         sendModel.Content = "";
+        selectedDocId = "";
+        pendingFiles = [];
         isSending = false;
         Broadcaster.Broadcast(message);
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024.0:0.#} KB";
+        }
+
+        return $"{bytes / (1024.0 * 1024.0):0.#} MB";
     }
 
     private static string AuthorLabel(ChatMessage message) =>
@@ -234,7 +360,8 @@
 
     private class SendMessageModel
     {
-        [Required(ErrorMessage = "Escreva algo.")]
+        // Not [Required] — a message can be just a file and/or a doc reference, with no
+        // text. HandleSend does the "must have at least one of text/file/doc" check itself.
         [StringLength(2000, ErrorMessage = "Mensagem muito longa.")]
         public string Content { get; set; } = "";
     }
