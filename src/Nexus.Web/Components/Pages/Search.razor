@@ -19,7 +19,7 @@
         <h1>Buscar</h1>
     </div>
 
-    <form @onsubmit="ReloadAsync" @onsubmit:preventDefault="true" class="card search-filters">
+    <form @onsubmit="OnFilterChanged" @onsubmit:preventDefault="true" class="card search-filters">
         <div class="form-row">
             <div class="form-field">
                 <label for="search-text">Texto</label>
@@ -27,7 +27,7 @@
             </div>
             <div class="form-field">
                 <label for="search-workspace">Workspace</label>
-                <select id="search-workspace" @bind="workspaceIdText" @bind:after="ReloadAsync">
+                <select id="search-workspace" @bind="workspaceIdText" @bind:after="OnFilterChanged">
                     <option value="">Qualquer um dos meus</option>
                     @foreach (var ws in workspaces ?? [])
                     {
@@ -39,7 +39,7 @@
         <div class="form-row">
             <div class="form-field">
                 <label for="search-status">Status</label>
-                <select id="search-status" @bind="statusCategoryText" @bind:after="ReloadAsync">
+                <select id="search-status" @bind="statusCategoryText" @bind:after="OnFilterChanged">
                     <option value="">Qualquer</option>
                     <option value="ToDo">A Fazer</option>
                     <option value="InProgress">Em Andamento</option>
@@ -48,7 +48,7 @@
             </div>
             <div class="form-field">
                 <label for="search-priority">Prioridade</label>
-                <select id="search-priority" @bind="priorityText" @bind:after="ReloadAsync">
+                <select id="search-priority" @bind="priorityText" @bind:after="OnFilterChanged">
                     <option value="">Qualquer</option>
                     @foreach (var p in Enum.GetValues<WorkItemPriority>())
                     {
@@ -60,7 +60,7 @@
         <div class="form-row">
             <div class="form-field">
                 <label for="search-type">Tipo</label>
-                <select id="search-type" @bind="typeText" @bind:after="ReloadAsync">
+                <select id="search-type" @bind="typeText" @bind:after="OnFilterChanged">
                     <option value="">Qualquer</option>
                     @foreach (var t in Enum.GetValues<WorkItemType>())
                     {
@@ -70,7 +70,7 @@
             </div>
             <div class="form-field">
                 <label for="search-assignee">Responsável</label>
-                <select id="search-assignee" @bind="assigneeModeText" @bind:after="ReloadAsync">
+                <select id="search-assignee" @bind="assigneeModeText" @bind:after="OnFilterChanged">
                     <option value="Any">Qualquer</option>
                     <option value="Me">Atribuído a mim</option>
                     <option value="Unassigned">Sem responsável</option>
@@ -80,7 +80,7 @@
         <div class="form-row">
             <div class="form-field">
                 <label for="search-due">Prazo</label>
-                <select id="search-due" @bind="dueModeText" @bind:after="ReloadAsync">
+                <select id="search-due" @bind="dueModeText" @bind:after="OnFilterChanged">
                     <option value="Any">Qualquer</option>
                     <option value="Overdue">Atrasado</option>
                     <option value="ThisWeek">Esta semana</option>
@@ -118,6 +118,34 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
+    [SupplyParameterFromQuery(Name = "q")]
+    [Parameter]
+    public string? QText { get; set; }
+
+    [SupplyParameterFromQuery(Name = "ws")]
+    [Parameter]
+    public string? QWorkspace { get; set; }
+
+    [SupplyParameterFromQuery(Name = "status")]
+    [Parameter]
+    public string? QStatus { get; set; }
+
+    [SupplyParameterFromQuery(Name = "priority")]
+    [Parameter]
+    public string? QPriority { get; set; }
+
+    [SupplyParameterFromQuery(Name = "type")]
+    [Parameter]
+    public string? QType { get; set; }
+
+    [SupplyParameterFromQuery(Name = "assignee")]
+    [Parameter]
+    public string? QAssignee { get; set; }
+
+    [SupplyParameterFromQuery(Name = "due")]
+    [Parameter]
+    public string? QDue { get; set; }
+
     private string? userId;
     private List<Workspace>? workspaces;
     private List<WorkItem>? results;
@@ -130,18 +158,19 @@
     private string assigneeModeText = "Any";
     private string dueModeText = "Any";
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        var authState = await AuthStateTask!;
-        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null)
         {
-            results = [];
-            return;
-        }
+            var authState = await AuthStateTask!;
+            userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId is null)
+            {
+                results = [];
+                return;
+            }
 
-        await using (var db = await DbFactory.CreateDbContextAsync())
-        {
+            await using var db = await DbFactory.CreateDbContextAsync();
             workspaces = await db.WorkspaceMembers
                 .Where(m => m.UserId == userId)
                 .Select(m => m.Workspace)
@@ -149,7 +178,32 @@
                 .ToListAsync();
         }
 
+        textFilter = QText ?? "";
+        workspaceIdText = QWorkspace ?? "";
+        statusCategoryText = QStatus ?? "";
+        priorityText = QPriority ?? "";
+        typeText = QType ?? "";
+        assigneeModeText = QAssignee ?? "Any";
+        dueModeText = QDue ?? "Any";
+
         await ReloadAsync();
+    }
+
+    private void OnFilterChanged()
+    {
+        var query = new Dictionary<string, object?>
+        {
+            ["q"] = string.IsNullOrWhiteSpace(textFilter) ? null : textFilter,
+            ["ws"] = string.IsNullOrWhiteSpace(workspaceIdText) ? null : workspaceIdText,
+            ["status"] = string.IsNullOrWhiteSpace(statusCategoryText) ? null : statusCategoryText,
+            ["priority"] = string.IsNullOrWhiteSpace(priorityText) ? null : priorityText,
+            ["type"] = string.IsNullOrWhiteSpace(typeText) ? null : typeText,
+            ["assignee"] = assigneeModeText == "Any" ? null : assigneeModeText,
+            ["due"] = dueModeText == "Any" ? null : dueModeText,
+        };
+
+        var uri = NavigationManager.GetUriWithQueryParameters("/search", query);
+        NavigationManager.NavigateTo(uri, replace: true);
     }
 
     private async Task ReloadAsync()
