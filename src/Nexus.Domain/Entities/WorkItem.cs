@@ -38,4 +38,5 @@ public class WorkItem
     public ApplicationUser? CreatedByUser { get; set; }
 
     public ICollection<CustomFieldValue> CustomFieldValues { get; set; } = new List<CustomFieldValue>();
+    public ICollection<WorkItemAttachment> Attachments { get; set; } = new List<WorkItemAttachment>();
 }
