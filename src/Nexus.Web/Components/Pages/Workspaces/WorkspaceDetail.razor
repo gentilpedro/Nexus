@@ -34,6 +34,7 @@
             <div class="form-actions">
                 <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/members")">Membros</a>
                 <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/chat")">Chat</a>
+                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/docs")">Docs</a>
                 @if (canManageSpaces)
                 {
                     <button class="btn" @onclick="ToggleCreateForm">+ Novo space</button>

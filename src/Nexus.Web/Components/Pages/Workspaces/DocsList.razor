@@ -1,0 +1,151 @@
+@page "/workspaces/{WorkspaceId:guid}/docs"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
+
+<PageTitle>Docs</PageTitle>
+
+<div class="page-container">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Workspace não encontrado ou você não tem acesso a ele.</p>
+            <a class="btn" href="/workspaces">Voltar</a>
+        </div>
+    }
+    else if (workspace is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs">
+            <a href="/workspaces">Workspaces</a> /
+            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
+            Docs
+        </div>
+
+        <div class="page-header">
+            <h1>Docs</h1>
+            <a class="btn" href="@($"/workspaces/{WorkspaceId}/docs/novo")">+ Nova página</a>
+        </div>
+
+        @if (docs is null)
+        {
+            <p>Carregando páginas...</p>
+        }
+        else if (docs.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Nenhuma página ainda. Crie a primeira.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Título</th>
+                            <th>Atualizado em</th>
+                            <th>Por quem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var doc in docs)
+                        {
+                            <tr class="data-table-row" @onclick="() => OpenDoc(doc.Id)">
+                                <td>@doc.Title</td>
+                                <td>@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToString("dd/MM/yyyy HH:mm"))</td>
+                                <td>@AuthorLabel(doc)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid WorkspaceId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = null!;
+
+    private Workspace? workspace;
+    private List<DocPage>? docs;
+    private bool notFound;
+    private Guid? loadedWorkspaceId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedWorkspaceId == WorkspaceId) return;
+        loadedWorkspaceId = WorkspaceId;
+
+        notFound = false;
+        workspace = null;
+        docs = null;
+
+        var authState = await AuthStateTask!;
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspace = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        }
+
+        if (workspace is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        NavContext.SetWorkspace(WorkspaceId, workspace.Name);
+
+        await LoadDocsAsync();
+    }
+
+    private async Task LoadDocsAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        docs = await db.DocPages
+            .Where(d => d.WorkspaceId == WorkspaceId)
+            .Include(d => d.CreatedByUser)
+            .Include(d => d.UpdatedByUser)
+            .OrderBy(d => d.Title)
+            .ToListAsync();
+    }
+
+    private static string AuthorLabel(DocPage doc)
+    {
+        var user = doc.UpdatedByUser ?? doc.CreatedByUser;
+        if (user is null)
+        {
+            return "—";
+        }
+
+        return string.IsNullOrEmpty(user.DisplayName) ? user.Email ?? "—" : user.DisplayName;
+    }
+
+    private void OpenDoc(Guid docId) => NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs/{docId}");
+}

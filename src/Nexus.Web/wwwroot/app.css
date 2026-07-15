@@ -1941,3 +1941,83 @@ table th, table td {
 .search-submit-field .btn {
     width: 100%;
 }
+
+.data-table-row {
+    cursor: pointer;
+}
+
+.doc-content {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem 1.5rem;
+    line-height: 1.6;
+}
+
+.doc-content h1, .doc-content h2, .doc-content h3 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.doc-content p {
+    margin-bottom: 0.75rem;
+}
+
+.doc-content ul, .doc-content ol {
+    margin-bottom: 0.75rem;
+    padding-left: 1.5rem;
+}
+
+.doc-content a {
+    color: var(--color-primary);
+}
+
+.doc-editor {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    margin-bottom: 1rem;
+    min-height: 280px;
+}
+
+.doc-editor .ql-toolbar.ql-snow {
+    border-color: var(--color-border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: var(--color-table-header);
+}
+
+.doc-editor .ql-container.ql-snow {
+    border-color: var(--color-border);
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    min-height: 240px;
+    font-size: 0.95rem;
+}
+
+.doc-editor .ql-editor {
+    color: var(--color-text);
+    min-height: 240px;
+}
+
+.doc-editor .ql-snow .ql-stroke {
+    stroke: var(--color-text-muted);
+}
+
+.doc-editor .ql-snow .ql-fill,
+.doc-editor .ql-snow .ql-stroke.ql-fill {
+    fill: var(--color-text-muted);
+}
+
+.doc-editor .ql-snow .ql-picker {
+    color: var(--color-text-muted);
+}
+
+.doc-editor .ql-snow .ql-picker-options {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+}
+
+@media (prefers-color-scheme: dark) {
+    .doc-editor .ql-snow .ql-picker-options { background: var(--color-surface); }
+}
+
+:root[data-theme="dark"] .doc-editor .ql-snow .ql-picker-options { background: var(--color-surface); }
+:root[data-theme="light"] .doc-editor .ql-snow .ql-picker-options { background: var(--color-surface); }

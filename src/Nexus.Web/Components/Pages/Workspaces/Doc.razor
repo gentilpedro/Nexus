@@ -1,0 +1,264 @@
+@page "/workspaces/{WorkspaceId:guid}/docs/novo"
+@page "/workspaces/{WorkspaceId:guid}/docs/{DocId:guid}"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<PageTitle>@(doc?.Title ?? "Nova página")</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notFound)
+    {
+        <div class="empty-state">
+            <p>Página não encontrada ou você não tem acesso a ela.</p>
+            <a class="btn" href="@($"/workspaces/{WorkspaceId}/docs")">Voltar</a>
+        </div>
+    }
+    else if (workspace is null)
+    {
+        <p>Carregando...</p>
+    }
+    else
+    {
+        <div class="breadcrumbs">
+            <a href="/workspaces">Workspaces</a> /
+            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
+            <a href="@($"/workspaces/{WorkspaceId}/docs")">Docs</a> /
+            @(isCreating ? "Nova página" : doc?.Title)
+        </div>
+
+        @if (isEditing)
+        {
+            <div class="form-field">
+                <label for="doc-title">Título</label>
+                <input id="doc-title" type="text" @bind="titleInput" placeholder="Título da página" />
+            </div>
+            <div id="@editorElementId" class="doc-editor"></div>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+            <div class="form-actions">
+                <button type="button" class="btn" disabled="@isSaving" @onclick="HandleSave">Salvar</button>
+                <button type="button" class="btn btn-secondary" @onclick="HandleCancel">Cancelar</button>
+            </div>
+        }
+        else if (doc is not null)
+        {
+            <div class="page-header">
+                <h1>@doc.Title</h1>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" @onclick="EnterEditMode">Editar</button>
+                    @if (canDelete)
+                    {
+                        <button type="button" class="btn-link" @onclick="HandleDelete">Excluir</button>
+                    }
+                </div>
+            </div>
+            <div class="doc-content">
+                @((MarkupString)(doc.ContentHtml ?? ""))
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid WorkspaceId { get; set; }
+
+    [Parameter]
+    public Guid? DocId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private Workspace? workspace;
+    private DocPage? doc;
+    private bool notFound;
+    private bool isEditing;
+    private bool isSaving;
+    private bool editorMounted;
+    private bool canDelete;
+    private string? errorMessage;
+    private string titleInput = "";
+    private string? userId;
+    private (Guid WorkspaceId, Guid? DocId)? loaded;
+    private readonly string editorElementId = "doc-editor-" + Guid.NewGuid().ToString("N");
+    private IJSObjectReference? module;
+
+    private bool isCreating => DocId is null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loaded == (WorkspaceId, DocId)) return;
+        loaded = (WorkspaceId, DocId);
+
+        notFound = false;
+        workspace = null;
+        doc = null;
+        isEditing = false;
+        isSaving = false;
+        editorMounted = false;
+        canDelete = false;
+        errorMessage = null;
+
+        var authState = await AuthStateTask!;
+        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        var adminResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+        var isAdmin = adminResult.Succeeded;
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspace = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        }
+        if (workspace is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        NavContext.SetWorkspace(WorkspaceId, workspace.Name);
+
+        if (DocId is null)
+        {
+            titleInput = "";
+            isEditing = true;
+            return;
+        }
+
+        await using (var db2 = await DbFactory.CreateDbContextAsync())
+        {
+            doc = await db2.DocPages.FirstOrDefaultAsync(d => d.Id == DocId && d.WorkspaceId == WorkspaceId);
+        }
+
+        if (doc is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        canDelete = isAdmin || doc.CreatedByUserId == userId;
+        titleInput = doc.Title;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (isEditing && !editorMounted)
+        {
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/doc-editor-interop.js");
+            await module.InvokeVoidAsync("initEditor", editorElementId, doc?.ContentHtml);
+            editorMounted = true;
+        }
+    }
+
+    private void EnterEditMode()
+    {
+        titleInput = doc!.Title;
+        isEditing = true;
+    }
+
+    private async Task DestroyEditorIfMountedAsync()
+    {
+        if (module is not null && editorMounted)
+        {
+            await module.InvokeVoidAsync("destroyEditor", editorElementId);
+        }
+        editorMounted = false;
+    }
+
+    private async Task HandleCancel()
+    {
+        await DestroyEditorIfMountedAsync();
+
+        if (isCreating)
+        {
+            NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
+            return;
+        }
+
+        isEditing = false;
+        errorMessage = null;
+    }
+
+    private async Task HandleSave()
+    {
+        if (string.IsNullOrWhiteSpace(titleInput))
+        {
+            errorMessage = "Informe um título.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = null;
+
+        var rawHtml = module is null ? "" : await module.InvokeAsync<string>("getContent", editorElementId);
+        var sanitized = HtmlContentSanitizer.Sanitize(rawHtml);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (isCreating)
+        {
+            var newDoc = new DocPage
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = WorkspaceId,
+                Title = titleInput.Trim(),
+                ContentHtml = sanitized,
+                CreatedByUserId = userId,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.DocPages.Add(newDoc);
+            await db.SaveChangesAsync();
+
+            await DestroyEditorIfMountedAsync();
+            NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs/{newDoc.Id}");
+            return;
+        }
+
+        await db.DocPages
+            .Where(d => d.Id == doc!.Id)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.Title, titleInput.Trim())
+                .SetProperty(d => d.ContentHtml, sanitized)
+                .SetProperty(d => d.UpdatedByUserId, userId)
+                .SetProperty(d => d.UpdatedAtUtc, DateTime.UtcNow));
+
+        await DestroyEditorIfMountedAsync();
+        isSaving = false;
+        isEditing = false;
+
+        doc = await db.DocPages.FirstOrDefaultAsync(d => d.Id == doc!.Id);
+    }
+
+    private async Task HandleDelete()
+    {
+        if (!canDelete || doc is null)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.DocPages.Where(d => d.Id == doc.Id).ExecuteDeleteAsync();
+        NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
+    }
+}
