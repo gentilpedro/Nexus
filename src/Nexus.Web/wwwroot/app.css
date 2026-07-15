@@ -288,13 +288,12 @@ a:hover {
 }
 
 .topnav {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     padding: 0.75rem 1.5rem;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
-    flex-wrap: wrap;
     gap: 0.5rem;
 }
 
@@ -311,9 +310,23 @@ a:hover {
     text-decoration: none;
 }
 
+.topnav-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 0;
+}
+
+.topnav-center .topnav-user {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .topnav-links {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 1rem;
     flex-wrap: wrap;
 }
@@ -358,23 +371,6 @@ a:hover {
 }
 
 :root[data-theme="dark"] .topnav-notifications-icon { filter: brightness(0) invert(1); }
-
-.topnav-logout {
-    display: inline-flex;
-    align-items: center;
-}
-
-.topnav-logout-icon {
-    width: 1.1rem;
-    height: 1.1rem;
-    object-fit: contain;
-}
-
-@media (prefers-color-scheme: dark) {
-    .topnav-logout-icon { filter: brightness(0) invert(1); }
-}
-
-:root[data-theme="dark"] .topnav-logout-icon { filter: brightness(0) invert(1); }
 
 .theme-switch {
     display: inline-flex;
@@ -1461,6 +1457,9 @@ table th, table td {
 }
 
 .app-sidebar-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
     padding: 0.75rem 1rem;
     border-top: 1px solid var(--color-border);
 }
@@ -1468,6 +1467,39 @@ table th, table td {
 .app-sidebar-footer a {
     font-size: 0.85rem;
 }
+
+.app-sidebar-logout-form {
+    display: flex;
+}
+
+.app-sidebar-logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.app-sidebar-logout:hover {
+    color: var(--color-danger);
+}
+
+.app-sidebar-logout-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    object-fit: contain;
+}
+
+@media (prefers-color-scheme: dark) {
+    .app-sidebar-logout-icon { filter: brightness(0) invert(1); }
+}
+
+:root[data-theme="dark"] .app-sidebar-logout-icon { filter: brightness(0) invert(1); }
 
 .app-main {
     flex: 1;
