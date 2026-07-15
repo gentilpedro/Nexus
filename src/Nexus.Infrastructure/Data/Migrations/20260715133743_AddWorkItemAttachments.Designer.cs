@@ -375,6 +375,46 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.ToTable("CustomFieldValues");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.DocPage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentHtml")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByUserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("DocPages");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -915,6 +955,31 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("CustomFieldDefinition");
 
                     b.Navigation("WorkItem");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.DocPage", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("UpdatedByUser");
+
+                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.Notification", b =>

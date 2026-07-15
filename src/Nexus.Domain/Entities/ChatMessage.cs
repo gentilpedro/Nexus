@@ -12,4 +12,9 @@ public class ChatMessage
 
     public string Content { get; set; } = "";
     public DateTime CreatedAtUtc { get; set; }
+
+    public Guid? ReferencedDocPageId { get; set; }
+    public DocPage? ReferencedDocPage { get; set; }
+
+    public ICollection<ChatMessageAttachment> Attachments { get; set; } = new List<ChatMessageAttachment>();
 }

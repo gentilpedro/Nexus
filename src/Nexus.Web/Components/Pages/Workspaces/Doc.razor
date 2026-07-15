@@ -258,6 +258,13 @@
         }
 
         await using var db = await DbFactory.CreateDbContextAsync();
+
+        // ReferencedDocPageId is Restrict (not SetNull, to avoid a second cascade path from
+        // Workspace) — clear any chat messages pointing here first, or the delete below fails.
+        await db.ChatMessages
+            .Where(m => m.ReferencedDocPageId == doc.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.ReferencedDocPageId, (Guid?)null));
+
         await db.DocPages.Where(d => d.Id == doc.Id).ExecuteDeleteAsync();
         NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
     }
