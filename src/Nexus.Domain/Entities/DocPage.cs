@@ -8,7 +8,12 @@ public class DocPage
     public Workspace Workspace { get; set; } = null!;
 
     public string Title { get; set; } = "";
+    public DocPageType Type { get; set; }
+
+    // Text pages use ContentHtml; Spreadsheet pages use GridDataJson — only one is
+    // populated depending on Type, same idea as WorkItem.Type discriminating one entity.
     public string? ContentHtml { get; set; }
+    public string? GridDataJson { get; set; }
 
     // Who created this page — set once at creation, never overwritten on edit.
     public string? CreatedByUserId { get; set; }
