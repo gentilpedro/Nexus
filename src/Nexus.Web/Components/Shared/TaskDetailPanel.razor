@@ -93,6 +93,24 @@
                     </InputSelect>
                 </div>
 
+                @if (Labels.Count > 0)
+                {
+                    <div class="form-field">
+                        <label>Labels</label>
+                        <div class="label-toggle-row">
+                            @foreach (var label in Labels)
+                            {
+                                <button type="button"
+                                        class="label-chip label-chip-toggle"
+                                        style="@LabelToggleStyle(label)"
+                                        @onclick="() => ToggleLabel(label.Id)">
+                                    @label.Name
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+
                 @if (CustomFieldDefinitions.Count > 0)
                 {
                     <hr />
@@ -186,6 +204,9 @@
     public List<StatusTransition> StatusTransitions { get; set; } = [];
 
     [Parameter]
+    public List<Label> Labels { get; set; } = [];
+
+    [Parameter]
     public EventCallback OnSaved { get; set; }
 
     private bool isOpen;
@@ -196,6 +217,7 @@
     private Guid? originalStatusId;
     private readonly WorkItemFormModel model = new();
     private readonly Dictionary<Guid, string> customFieldValues = new();
+    private readonly HashSet<Guid> selectedLabelIds = new();
     private List<WorkItemAttachment> attachments = [];
     private string? uploadError;
 
@@ -230,6 +252,7 @@
         model.StatusId = Statuses.FirstOrDefault(s => s.IsDefault)?.Id ?? Statuses.FirstOrDefault()?.Id ?? Guid.Empty;
         model.StartDate = DateTime.Today;
         ResetCustomFieldValues();
+        selectedLabelIds.Clear();
         attachments = [];
         uploadError = null;
         isOpen = true;
@@ -253,6 +276,7 @@
         model.ParentEpicId = item.ParentEpicId?.ToString() ?? "";
 
         ResetCustomFieldValues();
+        selectedLabelIds.Clear();
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
             var existingValues = await db.CustomFieldValues
@@ -261,6 +285,15 @@
             foreach (var value in existingValues)
             {
                 customFieldValues[value.CustomFieldDefinitionId] = value.Value;
+            }
+
+            var existingLabelIds = await db.WorkItemLabels
+                .Where(l => l.WorkItemId == item.Id)
+                .Select(l => l.LabelId)
+                .ToListAsync();
+            foreach (var labelId in existingLabelIds)
+            {
+                selectedLabelIds.Add(labelId);
             }
         }
 
@@ -362,6 +395,24 @@
         }
 
         return $"{bytes / (1024.0 * 1024.0):0.#} MB";
+    }
+
+    private void ToggleLabel(Guid labelId)
+    {
+        if (!selectedLabelIds.Remove(labelId))
+        {
+            selectedLabelIds.Add(labelId);
+        }
+    }
+
+    private string LabelToggleStyle(Label label)
+    {
+        if (selectedLabelIds.Contains(label.Id))
+        {
+            return $"background-color: {label.Color}; color: {LabelColor.TextColorFor(label.Color)}; border-color: {label.Color};";
+        }
+
+        return $"background-color: transparent; color: {label.Color}; border-color: {label.Color};";
     }
 
     private void ResetCustomFieldValues()
@@ -481,6 +532,27 @@
                 else
                 {
                     db.CustomFieldValues.Add(new CustomFieldValue { Id = Guid.NewGuid(), WorkItemId = workItem.Id, CustomFieldDefinitionId = definitionId, Value = value });
+                }
+            }
+
+            var existingLabelLinks = await db.WorkItemLabels
+                .Where(l => l.WorkItemId == workItem.Id)
+                .ToListAsync();
+
+            foreach (var link in existingLabelLinks)
+            {
+                if (!selectedLabelIds.Contains(link.LabelId))
+                {
+                    db.WorkItemLabels.Remove(link);
+                }
+            }
+
+            var existingLabelIdSet = existingLabelLinks.Select(l => l.LabelId).ToHashSet();
+            foreach (var labelId in selectedLabelIds)
+            {
+                if (!existingLabelIdSet.Contains(labelId))
+                {
+                    db.WorkItemLabels.Add(new WorkItemLabel { Id = Guid.NewGuid(), WorkItemId = workItem.Id, LabelId = labelId });
                 }
             }
 

@@ -42,6 +42,7 @@
                 {
                     <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
                     <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
+                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/labels")">Labels</a>
                 }
                 <button class="btn" @onclick="OpenCreate">+ Nova task</button>
             </div>
@@ -97,6 +98,7 @@
                           EpicOptions="epics ?? []"
                           CustomFieldDefinitions="customFieldDefinitions ?? []"
                           StatusTransitions="statusTransitions ?? []"
+                          Labels="labels ?? []"
                           OnSaved="ReloadWorkItemsAsync" />
     }
 </div>
@@ -118,6 +120,7 @@
     private List<WorkItem>? epics;
     private List<CustomFieldDefinition>? customFieldDefinitions;
     private List<StatusTransition>? statusTransitions;
+    private List<Label>? labels;
     private bool notFound;
     private bool canManageFields;
     private TaskDetailPanel? panel;
@@ -183,6 +186,7 @@
         epics = await QueryService.GetEpicsForListAsync(ListId);
         customFieldDefinitions = await QueryService.GetCustomFieldDefinitionsForListAsync(ListId);
         statusTransitions = await QueryService.GetStatusTransitionsForListAsync(ListId);
+        labels = await QueryService.GetLabelsForListAsync(ListId);
         await ReloadWorkItemsAsync();
     }
 
