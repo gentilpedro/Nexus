@@ -1,6 +1,7 @@
 @page "/workspaces/{WorkspaceId:guid}/docs/novo"
 @page "/workspaces/{WorkspaceId:guid}/docs/{DocId:guid}"
 @attribute [Authorize]
+@implements IAsyncDisposable
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
@@ -177,9 +178,12 @@
     {
         if (isEditing && !editorMounted)
         {
+            // Set before awaiting: if another render triggers OnAfterRenderAsync again while
+            // the JS calls below are still in flight, this closes the window where the guard
+            // above would still see editorMounted == false and mount a second Quill toolbar.
+            editorMounted = true;
             module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/doc-editor-interop.js");
             await module.InvokeVoidAsync("initEditor", editorElementId, doc?.ContentHtml);
-            editorMounted = true;
         }
     }
 
@@ -196,6 +200,23 @@
             await module.InvokeVoidAsync("destroyEditor", editorElementId);
         }
         editorMounted = false;
+    }
+
+    // Covers the case OnParametersSetAsync's own cleanup call can't: navigating away to a
+    // completely different route (not just a different DocId on this same route) tears
+    // down the component directly, without OnParametersSetAsync ever running again — this
+    // is the other half of the orphaned-Quill-toolbar fix, mirroring BoardColumn.razor's
+    // DisposeAsync pattern for the same "JS-owned DOM outside Blazor's own render tree" issue.
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await DestroyEditorIfMountedAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit already gone (e.g. tab close) — nothing to clean up client-side.
+        }
     }
 
     private async Task HandleCancel()
