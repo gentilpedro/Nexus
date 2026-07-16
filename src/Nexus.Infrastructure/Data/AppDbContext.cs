@@ -28,6 +28,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<DocPage> DocPages => Set<DocPage>();
     public DbSet<WorkItemAttachment> WorkItemAttachments => Set<WorkItemAttachment>();
     public DbSet<ChatMessageAttachment> ChatMessageAttachments => Set<ChatMessageAttachment>();
+    public DbSet<Label> Labels => Set<Label>();
+    public DbSet<WorkItemLabel> WorkItemLabels => Set<WorkItemLabel>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

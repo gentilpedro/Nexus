@@ -27,7 +27,17 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             .Where(w => w.TaskListId == taskListId)
             .Include(w => w.Status)
             .Include(w => w.Assignee)
+            .Include(w => w.WorkItemLabels).ThenInclude(l => l.Label)
             .OrderBy(w => w.SortOrder)
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<Label>> GetLabelsForListAsync(Guid taskListId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.Labels
+            .Where(l => l.TaskListId == taskListId)
+            .OrderBy(l => l.SortOrder)
             .ToListAsync(ct);
     }
 
