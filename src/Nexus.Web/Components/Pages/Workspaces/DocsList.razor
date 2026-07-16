@@ -35,7 +35,10 @@
 
         <div class="page-header">
             <h1>Docs</h1>
-            <a class="btn" href="@($"/workspaces/{WorkspaceId}/docs/novo")">+ Nova página</a>
+            <div class="form-actions">
+                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/docs/novo")">+ Novo documento</a>
+                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/spreadsheets/nova")">+ Nova planilha</a>
+            </div>
         </div>
 
         @if (docs is null)
@@ -54,6 +57,7 @@
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th></th>
                             <th>Título</th>
                             <th>Atualizado em</th>
                             <th>Por quem</th>
@@ -62,7 +66,8 @@
                     <tbody>
                         @foreach (var doc in docs)
                         {
-                            <tr class="data-table-row" @onclick="() => OpenDoc(doc.Id)">
+                            <tr class="data-table-row" @onclick="() => OpenDoc(doc)">
+                                <td>@(doc.Type == DocPageType.Spreadsheet ? "📊" : "📄")</td>
                                 <td>@doc.Title</td>
                                 <td>@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToString("dd/MM/yyyy HH:mm"))</td>
                                 <td>@AuthorLabel(doc)</td>
@@ -147,5 +152,9 @@
         return string.IsNullOrEmpty(user.DisplayName) ? user.Email ?? "—" : user.DisplayName;
     }
 
-    private void OpenDoc(Guid docId) => NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs/{docId}");
+    private void OpenDoc(DocPage doc)
+    {
+        var segment = doc.Type == DocPageType.Spreadsheet ? "spreadsheets" : "docs";
+        NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/{segment}/{doc.Id}");
+    }
 }

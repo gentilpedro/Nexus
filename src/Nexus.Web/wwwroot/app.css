@@ -2411,3 +2411,49 @@ table th, table td {
     cursor: pointer;
     background: none;
 }
+
+.spreadsheet-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.spreadsheet-grid {
+    border-collapse: collapse;
+    background: var(--color-surface);
+    table-layout: fixed;
+}
+
+.spreadsheet-grid td {
+    border: 1px solid var(--color-border);
+    padding: 0;
+    width: 8rem;
+    max-width: 8rem;
+    overflow: hidden;
+}
+
+.spreadsheet-grid input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.4rem 0.5rem;
+    border: none;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 0.85rem;
+}
+
+.spreadsheet-grid input:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+}
+
+.spreadsheet-grid--readonly td {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.85rem;
+    width: 8rem;
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
