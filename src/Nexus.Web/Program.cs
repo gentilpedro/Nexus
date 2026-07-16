@@ -161,4 +161,32 @@ app.MapGet("/chat-attachments/{id:guid}/download", async (
     return Results.File(fullPath, attachment.ContentType, attachment.FileName);
 }).RequireAuthorization();
 
+app.MapGet("/spreadsheets/{id:guid}/download.xlsx", async (
+    Guid id,
+    HttpContext http,
+    IDbContextFactory<Nexus.Infrastructure.Data.AppDbContext> dbFactory,
+    IAuthorizationService authorizationService) =>
+{
+    await using var db = await dbFactory.CreateDbContextAsync();
+    var doc = await db.DocPages.FirstOrDefaultAsync(d => d.Id == id && d.Type == DocPageType.Spreadsheet);
+
+    if (doc is null)
+    {
+        return Results.NotFound();
+    }
+
+    var authResult = await authorizationService.AuthorizeAsync(
+        http.User, doc.WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+    if (!authResult.Succeeded)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var grid = System.Text.Json.JsonSerializer.Deserialize<List<List<string>>>(doc.GridDataJson ?? "[]") ?? [];
+    var bytes = SpreadsheetExportService.BuildXlsx(doc.Title, grid);
+
+    return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{doc.Title}.xlsx");
+}).RequireAuthorization();
+
 app.Run();
