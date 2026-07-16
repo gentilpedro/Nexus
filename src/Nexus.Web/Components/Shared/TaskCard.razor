@@ -1,6 +1,16 @@
 @using Nexus.Domain.Entities
+@using Nexus.Web.Extensions
 
 <div class="task-card" data-workitem-id="@WorkItem.Id" @onclick="() => OnClick.InvokeAsync(WorkItem)">
+    @if (WorkItem.WorkItemLabels.Count > 0)
+    {
+        <div class="task-card-labels">
+            @foreach (var label in WorkItem.WorkItemLabels.Select(l => l.Label))
+            {
+                <span class="label-chip label-chip--sm" style="background-color: @label.Color; color: @LabelColor.TextColorFor(label.Color);">@label.Name</span>
+            }
+        </div>
+    }
     <div class="task-card-header">
         <WorkItemTypeIcon Type="WorkItem.Type" />
         <PriorityBadge Priority="WorkItem.Priority" />

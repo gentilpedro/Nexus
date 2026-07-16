@@ -2354,3 +2354,60 @@ table th, table td {
     margin-right: auto;
     margin-left: 0.75rem;
 }
+
+.label-chip {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.label-chip--sm {
+    padding: 0.1rem 0.5rem;
+    font-size: 0.65rem;
+}
+
+.task-card-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.4rem;
+}
+
+.label-swatch-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.label-swatch {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+}
+
+.label-swatch.is-selected {
+    border-color: var(--color-text);
+    box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.label-toggle-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.label-chip-toggle {
+    border: 1.5px solid;
+    border-radius: var(--radius-pill);
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: none;
+}
