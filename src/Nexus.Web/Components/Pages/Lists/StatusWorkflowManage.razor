@@ -6,12 +6,13 @@
 @using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
+@using System.Data.Common
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
 
-<PageTitle>Workflow</PageTitle>
+<PageTitle>Colunas e Workflow</PageTitle>
 
 <div class="page-container">
     @if (notFound)
@@ -32,13 +33,85 @@
             <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
             <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
             <a href="@($"/lists/{ListId}/list")">@taskList.Name</a> /
-            Workflow
+            Colunas e Workflow
         </div>
 
         <div class="page-header">
-            <h1>Workflow</h1>
+            <h1>Colunas e Workflow</h1>
         </div>
 
+        <h2>Colunas</h2>
+
+        <EditForm Model="createStatusModel" OnValidSubmit="HandleCreateStatus" class="card" style="margin: 1rem 0 1.5rem;">
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="status-name">Nome</label>
+                    <InputText id="status-name" @bind-Value="createStatusModel.Name" placeholder="Ex: Em Revisão" />
+                </div>
+                <div class="form-field">
+                    <label for="status-category">Categoria</label>
+                    <InputSelect id="status-category" @bind-Value="createStatusModel.Category">
+                        @foreach (var c in Enum.GetValues<StatusCategory>())
+                        {
+                            <option value="@c">@CategoryLabel(c)</option>
+                        }
+                    </InputSelect>
+                </div>
+            </div>
+            <p class="topnav-user">A categoria decide a cor da coluna no board e se ela conta como "concluída" nos relatórios (ex: burndown).</p>
+            @if (!string.IsNullOrEmpty(statusErrorMessage))
+            {
+                <div class="alert alert-danger">@statusErrorMessage</div>
+            }
+            <div class="form-actions">
+                <button type="submit" class="btn" disabled="@isSavingStatus">Adicionar coluna</button>
+            </div>
+        </EditForm>
+
+        @if (statuses is null || statuses.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Nenhuma coluna ainda.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Categoria</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in statuses)
+                        {
+                            <tr>
+                                <td>@s.Name @(s.IsDefault ? "(padrão)" : "")</td>
+                                <td>@CategoryLabel(s.Category)</td>
+                                <td>
+                                    <button type="button" class="btn-link" disabled="@(s == statuses.First())" @onclick="() => HandleMoveStatus(s, -1)">‹</button>
+                                    <button type="button" class="btn-link" disabled="@(s == statuses.Last())" @onclick="() => HandleMoveStatus(s, 1)">›</button>
+                                    @if (!s.IsDefault)
+                                    {
+                                        <button type="button" class="btn-link" @onclick="() => HandleMakeDefault(s)">Tornar padrão</button>
+                                    }
+                                    <button type="button" class="btn-link" @onclick="() => HandleDeleteStatus(s)">Excluir</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (!string.IsNullOrEmpty(deleteStatusErrorMessage))
+        {
+            <div class="alert alert-danger">@deleteStatusErrorMessage</div>
+        }
+
+        <h2 style="margin-top: 2rem;">Transições</h2>
         <p class="topnav-user">Se nenhuma transição for definida, qualquer mudança de status é permitida.</p>
 
         <EditForm Model="createModel" OnValidSubmit="HandleCreate" class="card" style="margin: 1rem 0 1.5rem;">
@@ -126,6 +199,10 @@
     private string? errorMessage;
     private Guid? loadedListId;
     private readonly CreateTransitionModel createModel = new();
+    private readonly CreateStatusModel createStatusModel = new();
+    private bool isSavingStatus;
+    private string? statusErrorMessage;
+    private string? deleteStatusErrorMessage;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -236,9 +313,130 @@
         await LoadTransitionsAsync();
     }
 
+    private async Task LoadStatusesAsync()
+    {
+        statuses = await QueryService.GetStatusesForListAsync(ListId);
+    }
+
+    private async Task HandleCreateStatus()
+    {
+        isSavingStatus = true;
+        statusErrorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(createStatusModel.Name))
+        {
+            statusErrorMessage = "Informe um nome.";
+            isSavingStatus = false;
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var maxSortOrder = await db.TaskStatusDefinitions
+                .Where(s => s.TaskListId == ListId)
+                .Select(s => (int?)s.SortOrder)
+                .MaxAsync() ?? -1;
+
+            db.TaskStatusDefinitions.Add(new TaskStatusDefinition
+            {
+                Id = Guid.NewGuid(),
+                TaskListId = ListId,
+                Name = createStatusModel.Name.Trim(),
+                Category = createStatusModel.Category,
+                SortOrder = maxSortOrder + 1,
+                IsDefault = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        createStatusModel.Name = "";
+        isSavingStatus = false;
+        await LoadStatusesAsync();
+    }
+
+    private async Task HandleMoveStatus(TaskStatusDefinition status, int direction)
+    {
+        if (statuses is null)
+        {
+            return;
+        }
+
+        var index = statuses.IndexOf(status);
+        var swapIndex = index + direction;
+        if (swapIndex < 0 || swapIndex >= statuses.Count)
+        {
+            return;
+        }
+
+        var neighbor = statuses[swapIndex];
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        (status.SortOrder, neighbor.SortOrder) = (neighbor.SortOrder, status.SortOrder);
+
+        await db.TaskStatusDefinitions.Where(s => s.Id == status.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.SortOrder, status.SortOrder));
+        await db.TaskStatusDefinitions.Where(s => s.Id == neighbor.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.SortOrder, neighbor.SortOrder));
+
+        await LoadStatusesAsync();
+    }
+
+    private async Task HandleMakeDefault(TaskStatusDefinition status)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.TaskStatusDefinitions.Where(s => s.TaskListId == ListId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDefault, false));
+        await db.TaskStatusDefinitions.Where(s => s.Id == status.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsDefault, true));
+
+        await LoadStatusesAsync();
+    }
+
+    private async Task HandleDeleteStatus(TaskStatusDefinition status)
+    {
+        deleteStatusErrorMessage = null;
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // StatusTransition.FromStatusId/ToStatusId are both Restrict (see
+        // StatusTransitionConfiguration) — clear any transitions referencing this status
+        // first, or the delete below fails.
+        await db.StatusTransitions
+            .Where(t => t.FromStatusId == status.Id || t.ToStatusId == status.Id)
+            .ExecuteDeleteAsync();
+
+        try
+        {
+            await db.TaskStatusDefinitions.Where(s => s.Id == status.Id).ExecuteDeleteAsync();
+        }
+        catch (DbException)
+        {
+            // ExecuteDeleteAsync bypasses SaveChanges, so a Restrict FK violation (a WorkItem
+            // still using this status) surfaces as the provider's own exception, not DbUpdateException.
+            deleteStatusErrorMessage = "Mova as tasks desse status pra outro antes de excluir.";
+            return;
+        }
+
+        await LoadStatusesAsync();
+        await LoadTransitionsAsync();
+    }
+
+    private static string CategoryLabel(StatusCategory category) => category switch
+    {
+        StatusCategory.ToDo => "A Fazer",
+        StatusCategory.InProgress => "Em Andamento",
+        StatusCategory.Done => "Concluído",
+        _ => category.ToString()
+    };
+
     private class CreateTransitionModel
     {
         public Guid FromStatusId { get; set; }
         public Guid ToStatusId { get; set; }
+    }
+
+    private class CreateStatusModel
+    {
+        public string Name { get; set; } = "";
+        public StatusCategory Category { get; set; } = StatusCategory.ToDo;
     }
 }
