@@ -1,0 +1,61 @@
+name: Deploy Nexus
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore src/Nexus.Web/Nexus.Web.csproj
+
+      - name: Build
+        run: dotnet build src/Nexus.Web/Nexus.Web.csproj --configuration Release --no-restore
+
+      - name: Publish
+        run: dotnet publish src/Nexus.Web/Nexus.Web.csproj -c Release -o publish
+
+      # Nexus applies EF Core migrations on startup (see APPLY_MIGRATIONS_ON_STARTUP in
+      # Program.cs) — no separate "dotnet ef database update" step here, so there's only
+      # one place responsible for keeping the schema in sync.
+      - name: Inject production connection string
+        run: |
+          jq --arg cs "${{ secrets.PROD_SQL_CONNECTION_STRING }}" \
+             '.ConnectionStrings.DefaultConnection = $cs' \
+             publish/appsettings.Production.json > publish/appsettings.Production.json.tmp
+          mv publish/appsettings.Production.json.tmp publish/appsettings.Production.json
+
+      - name: Take app offline (release IIS file locks)
+        run: |
+          echo "App temporarily offline for deployment." > app_offline.htm
+          curl --ftp-pasv -T app_offline.htm --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" "ftp://${{ secrets.FTP_SERVER }}/wwwroot/app_offline.htm"
+
+      - name: FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./publish/
+          server-dir: /wwwroot/
+          # Uploaded task/chat attachments live on the server under App_Data/uploads —
+          # never part of the publish output, but excluded explicitly so a future
+          # clean-slate sync can never wipe real user data.
+          exclude: |
+            **/App_Data/uploads/**
+
+      - name: Bring app back online
+        run: |
+          curl --ftp-pasv --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" -Q "DELE /wwwroot/app_offline.htm" "ftp://${{ secrets.FTP_SERVER }}/"
