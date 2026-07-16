@@ -6,6 +6,7 @@
 @using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
+@using System.Data.Common
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager NavigationManager
 @inject IAuthorizationService AuthorizationService
@@ -266,8 +267,11 @@
             await db.Spaces.Where(s => s.Id == SpaceId).ExecuteDeleteAsync();
             NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}");
         }
-        catch (DbUpdateException)
+        catch (DbException)
         {
+            // ExecuteDeleteAsync issues raw SQL directly (bypassing SaveChanges), so a Restrict
+            // FK violation surfaces as the provider's own exception (SqlException on SQL Server),
+            // not a DbUpdateException — DbException is the provider-agnostic base type for that.
             errorMessage = "Não foi possível excluir o space.";
         }
     }
