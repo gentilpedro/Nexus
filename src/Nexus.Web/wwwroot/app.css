@@ -1374,14 +1374,12 @@ table th, table td {
 }
 
 .app-sidebar-loading {
-    flex: 1;
     padding: 1rem;
     color: var(--color-text-muted);
     font-size: 0.85rem;
 }
 
 .app-sidebar-tree {
-    flex: 1;
     display: flex;
     flex-direction: column;
     padding: 0.5rem;
@@ -1462,6 +1460,7 @@ table th, table td {
 
 .app-sidebar-footer {
     flex-shrink: 0;
+    margin-top: auto;
     position: sticky;
     bottom: 0;
     display: flex;

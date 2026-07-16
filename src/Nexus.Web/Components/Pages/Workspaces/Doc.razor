@@ -103,12 +103,16 @@
         if (loaded == (WorkspaceId, DocId)) return;
         loaded = (WorkspaceId, DocId);
 
+        // Navigating away mid-edit (e.g. clicking a sidebar link instead of Cancelar/Salvar)
+        // must still tear down any live Quill instance — otherwise its toolbar is orphaned
+        // in the DOM (Blazor never rendered it, so its own diff never removes it either).
+        await DestroyEditorIfMountedAsync();
+
         notFound = false;
         workspace = null;
         doc = null;
         isEditing = false;
         isSaving = false;
-        editorMounted = false;
         canDelete = false;
         errorMessage = null;
 
