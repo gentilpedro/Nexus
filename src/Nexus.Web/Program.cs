@@ -70,10 +70,10 @@ else
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 
-    // The container serves plain HTTP (see Dockerfile) — TLS termination happens at whatever
-    // reverse proxy/load balancer sits in front once a host is chosen. ForwardedHeaders lets the
-    // app see the original scheme from that proxy; UseHttpsRedirection is intentionally omitted
-    // here since forcing a redirect inside the container (no cert bound) would break direct access.
+    // TLS termination happens in front of the app (IIS on the MonsterASP.net host, or a
+    // reverse proxy/load balancer on any other host) — the app itself never binds a cert.
+    // ForwardedHeaders lets it see the original scheme from that front door; UseHttpsRedirection
+    // is intentionally omitted since the front door already owns the HTTP->HTTPS decision.
     app.UseForwardedHeaders(new ForwardedHeadersOptions
     {
         ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
