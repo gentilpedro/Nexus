@@ -1,4 +1,6 @@
-@page "/Account/Register"
+﻿@page "/Account/Register"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth")]
 @layout AuthLayout
 
 @using System.ComponentModel.DataAnnotations
