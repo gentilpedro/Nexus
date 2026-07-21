@@ -1,5 +1,6 @@
 @page "/workspaces/{WorkspaceId:guid}"
 @attribute [Authorize]
+@implements IAsyncDisposable
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
@@ -11,6 +12,7 @@
 @inject NavigationManager NavigationManager
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
+@inject IJSRuntime JS
 
 <PageTitle>@(workspace?.Name ?? "Workspace")</PageTitle>
 
@@ -30,19 +32,41 @@
     {
         <div class="breadcrumbs"><a href="/workspaces">Workspaces</a> / @workspace.Name</div>
         <div class="page-header">
-            <h1>@workspace.Name</h1>
+            <div>
+                <h1 style="margin-bottom:0.15rem;">@workspace.Name</h1>
+                <span class="topnav-user">Gerencie os spaces, tarefas e progresso deste workspace.</span>
+            </div>
             <div class="form-actions">
                 <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/members")">Membros</a>
                 <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/chat")">Chat</a>
                 <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/docs")">Docs</a>
                 @if (canManageSpaces)
                 {
+                    <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/settings")">Configurações</a>
                     <button class="btn" @onclick="ToggleCreateForm">+ Novo space</button>
                 }
             </div>
         </div>
 
         <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Tarefas concluídas</span>
+                    <span class="stat-card-value">@overallCompletedCount</span>
+                </div>
+                <span class="stat-card-icon is-success">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                </span>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Progresso geral</span>
+                    <span class="stat-card-value">@overallProgressPercent%</span>
+                </div>
+                <span class="stat-card-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+                </span>
+            </div>
             <div class="stat-card">
                 <div class="stat-card-body">
                     <span class="stat-card-label">Spaces</span>
@@ -54,21 +78,45 @@
             </div>
             <div class="stat-card">
                 <div class="stat-card-body">
-                    <span class="stat-card-label">Listas</span>
-                    <span class="stat-card-value">@(listCounts?.Values.Sum() ?? 0)</span>
-                </div>
-                <span class="stat-card-icon">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-                </span>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-body">
                     <span class="stat-card-label">Membros</span>
                     <span class="stat-card-value">@memberCount</span>
                 </div>
-                <span class="stat-card-icon is-success">
+                <span class="stat-card-icon is-warning">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
                 </span>
+            </div>
+        </div>
+
+        <div class="dashboard-layout">
+            <div class="side-card">
+                <h2>Desempenho semanal</h2>
+                <p class="topnav-user" style="margin-top:-0.5rem;margin-bottom:0.75rem;">Tarefas concluídas nos últimos 7 dias</p>
+                <div style="height:200px;">
+                    <canvas id="workspace-productivity-chart"></canvas>
+                </div>
+            </div>
+            <div class="side-card">
+                <h2>Atividade recente</h2>
+                @if (recentActivity is null)
+                {
+                    <p class="topnav-user">Carregando...</p>
+                }
+                else if (recentActivity.Count == 0)
+                {
+                    <p class="topnav-user">Nenhuma atividade recente.</p>
+                }
+                else
+                {
+                    @foreach (var activity in recentActivity)
+                    {
+                        <div class="progress-row">
+                            <div class="progress-row-top">
+                                <span class="name">@activity.Text</span>
+                            </div>
+                            <span class="chat-message-time">@RelativeTime(activity.When)</span>
+                        </div>
+                    }
+                }
             </div>
         </div>
 
@@ -105,15 +153,41 @@
             <div class="card-list">
                 @foreach (var space in spaces)
                 {
+                    var progress = spaceProgress.TryGetValue(space.Id, out var p) ? p : (Done: 0, Total: 0);
                     <a class="card card-link" href="@($"/workspaces/{WorkspaceId}/spaces/{space.Id}")">
                         <strong>@space.Name</strong>
                         <div class="topnav-user" style="margin-top:0.35rem;">
                             @(listCounts != null && listCounts.TryGetValue(space.Id, out var c) ? c : 0) lista(s)
                         </div>
+                        @if (progress.Total > 0)
+                        {
+                            <div class="progress-track" style="margin-top:0.5rem;">
+                                <div class="progress-fill" style="width:@(progress.Done * 100 / progress.Total)%"></div>
+                            </div>
+                            <div class="topnav-user" style="margin-top:0.25rem;">@progress.Done de @progress.Total tarefas concluídas</div>
+                        }
                     </a>
                 }
             </div>
         }
+
+        <div class="landing-feature-grid" style="margin-top:1.5rem;">
+            <a class="card" href="@($"/workspaces/{WorkspaceId}/chat")" style="text-align:center;">
+                <svg class="icon" style="width:1.6rem;height:1.6rem;color:var(--color-primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                <div style="font-weight:600;margin-top:0.5rem;">Abrir Chat</div>
+                <div class="topnav-user">Comunique-se com a equipe</div>
+            </a>
+            <a class="card" href="@($"/workspaces/{WorkspaceId}/docs")" style="text-align:center;">
+                <svg class="icon" style="width:1.6rem;height:1.6rem;color:var(--color-primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><polyline points="14 2 14 8 20 8" /></svg>
+                <div style="font-weight:600;margin-top:0.5rem;">Docs do Workspace</div>
+                <div class="topnav-user">Base de conhecimento central</div>
+            </a>
+            <a class="card" href="@($"/workspaces/{WorkspaceId}/members")" style="text-align:center;">
+                <svg class="icon" style="width:1.6rem;height:1.6rem;color:var(--color-primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                <div style="font-weight:600;margin-top:0.5rem;">Membros</div>
+                <div class="topnav-user">Gerencie quem tem acesso</div>
+            </a>
+        </div>
     }
 </div>
 
@@ -127,13 +201,22 @@
     private Workspace? workspace;
     private List<Space>? spaces;
     private Dictionary<Guid, int>? listCounts;
+    private Dictionary<Guid, (int Done, int Total)> spaceProgress = new();
     private int memberCount;
+    private int overallCompletedCount;
+    private int overallProgressPercent;
+    private List<ActivityItem>? recentActivity;
+    private List<string> weeklyLabels = [];
+    private List<int> weeklyValues = [];
+    private IJSObjectReference? chartModule;
     private bool notFound;
     private bool canManageSpaces;
     private bool showCreateForm;
     private bool isSaving;
     private readonly CreateSpaceModel createModel = new();
     private Guid? loadedWorkspaceId;
+
+    private record ActivityItem(DateTime When, string Text);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -174,6 +257,8 @@
         NavContext.SetWorkspace(WorkspaceId, workspace.Name);
 
         await LoadSpacesAsync();
+        await LoadWeeklyChartDataAsync();
+        await LoadRecentActivityAsync();
     }
 
     private async Task LoadSpacesAsync()
@@ -190,6 +275,111 @@
             .GroupBy(l => l.SpaceId)
             .Select(g => new { SpaceId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.SpaceId, x => x.Count);
+
+        var workItemsRaw = await db.WorkItems
+            .Where(wi => wi.TaskList.Space.WorkspaceId == WorkspaceId)
+            .Select(wi => new { wi.TaskList.SpaceId, wi.Status.Category })
+            .ToListAsync();
+
+        spaceProgress = workItemsRaw
+            .GroupBy(x => x.SpaceId)
+            .ToDictionary(g => g.Key, g => (Done: g.Count(x => x.Category == StatusCategory.Done), Total: g.Count()));
+
+        overallCompletedCount = workItemsRaw.Count(x => x.Category == StatusCategory.Done);
+        overallProgressPercent = workItemsRaw.Count == 0 ? 0 : (int)Math.Round(overallCompletedCount * 100.0 / workItemsRaw.Count);
+    }
+
+    private async Task LoadWeeklyChartDataAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var sevenDaysAgo = DateTime.UtcNow.Date.AddDays(-6);
+        var completedDates = await db.WorkItems
+            .Where(wi => wi.TaskList.Space.WorkspaceId == WorkspaceId
+                && wi.Status.Category == StatusCategory.Done
+                && wi.UpdatedAtUtc != null
+                && wi.UpdatedAtUtc.Value.Date >= sevenDaysAgo)
+            .Select(wi => wi.UpdatedAtUtc!.Value.Date)
+            .ToListAsync();
+
+        var ptBr = new System.Globalization.CultureInfo("pt-BR");
+        weeklyLabels = Enumerable.Range(0, 7).Select(i => ptBr.TextInfo.ToTitleCase(sevenDaysAgo.AddDays(i).ToString("ddd", ptBr))).ToList();
+        weeklyValues = Enumerable.Range(0, 7).Select(i => completedDates.Count(d => d == sevenDaysAgo.AddDays(i))).ToList();
+    }
+
+    private async Task LoadRecentActivityAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var recentTasks = await db.WorkItems
+            .Where(wi => wi.TaskList.Space.WorkspaceId == WorkspaceId && wi.UpdatedAtUtc != null)
+            .OrderByDescending(wi => wi.UpdatedAtUtc)
+            .Take(5)
+            .Select(wi => new { wi.Title, When = wi.UpdatedAtUtc!.Value })
+            .ToListAsync();
+
+        var recentComments = await db.WorkItemComments
+            .Where(c => c.WorkItem.TaskList.Space.WorkspaceId == WorkspaceId)
+            .Include(c => c.User)
+            .Include(c => c.WorkItem)
+            .OrderByDescending(c => c.CreatedAtUtc)
+            .Take(5)
+            .ToListAsync();
+
+        var recentAttachments = await db.WorkItemAttachments
+            .Where(a => a.WorkItem.TaskList.Space.WorkspaceId == WorkspaceId)
+            .Include(a => a.UploadedByUser)
+            .Include(a => a.WorkItem)
+            .OrderByDescending(a => a.UploadedAtUtc)
+            .Take(5)
+            .ToListAsync();
+
+        var taskItems = recentTasks.Select(t => new ActivityItem(t.When, $"Tarefa \"{t.Title}\" foi atualizada"));
+        var commentItems = recentComments.Select(c => new ActivityItem(c.CreatedAtUtc, $"{PersonLabel(c.User)} comentou em \"{c.WorkItem.Title}\""));
+        var attachmentItems = recentAttachments.Select(a => new ActivityItem(a.UploadedAtUtc, $"{PersonLabel(a.UploadedByUser)} anexou um arquivo em \"{a.WorkItem.Title}\""));
+
+        recentActivity = taskItems
+            .Concat(commentItems)
+            .Concat(attachmentItems)
+            .OrderByDescending(a => a.When)
+            .Take(5)
+            .ToList();
+    }
+
+    private static string PersonLabel(ApplicationUser? user) =>
+        user is null ? "Alguém" : (string.IsNullOrEmpty(user.DisplayName) ? user.Email ?? "Alguém" : user.DisplayName);
+
+    private static string RelativeTime(DateTime whenUtc)
+    {
+        var delta = DateTime.UtcNow - whenUtc;
+        if (delta.TotalMinutes < 1) return "agora mesmo";
+        if (delta.TotalMinutes < 60) return $"há {(int)delta.TotalMinutes} min";
+        if (delta.TotalHours < 24) return $"há {(int)delta.TotalHours}h";
+        return $"há {(int)delta.TotalDays}d";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && weeklyLabels.Count > 0)
+        {
+            chartModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/productivity-chart-interop.js");
+            await chartModule.InvokeVoidAsync("render", "workspace-productivity-chart", weeklyLabels, weeklyValues);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (chartModule is not null)
+        {
+            try
+            {
+                await chartModule.InvokeVoidAsync("destroy", "workspace-productivity-chart");
+                await chartModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone — nothing to clean up client-side.
+            }
+        }
     }
 
     private void ToggleCreateForm()

@@ -6,6 +6,7 @@ public class Workspace
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
     public string? Color { get; set; }
+    public bool IsArchived { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 
     public ICollection<WorkspaceMember> Members { get; set; } = new List<WorkspaceMember>();
