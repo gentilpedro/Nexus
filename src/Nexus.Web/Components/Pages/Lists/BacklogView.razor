@@ -102,7 +102,9 @@
         else
         {
             <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
-                <input type="search" placeholder="Filtrar tarefas..." style="flex:1;min-width:200px;" @bind="filterText" @bind:event="oninput" />
+                <div class="form-field" style="flex:1;min-width:200px;margin-bottom:0;">
+                    <input type="search" placeholder="Filtrar tarefas..." @bind="filterText" @bind:event="oninput" />
+                </div>
                 <div class="pill-tabs">
                     <button type="button" class="@(rowFilter == "all" ? "active" : "")" @onclick='() => rowFilter = "all"'>Todas <span class="tab-count">@AllItems.Count</span></button>
                     <button type="button" class="@(rowFilter == "mine" ? "active" : "")" @onclick='() => rowFilter = "mine"'>Minhas <span class="tab-count">@AllItems.Count(w => w.AssigneeId == currentUserId)</span></button>
