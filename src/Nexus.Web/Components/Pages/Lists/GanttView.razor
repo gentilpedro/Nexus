@@ -68,7 +68,16 @@
                 var ticks = GetTicks();
                 var todayPct = TodayLeftPct;
 
-                <p class="topnav-user">Período: @rangeStart.ToString("dd/MM/yyyy") a @rangeEnd.ToString("dd/MM/yyyy")</p>
+                <div class="gantt-toolbar">
+                    <p class="topnav-user" style="margin:0;">Período: @rangeStart.ToString("dd/MM/yyyy") a @rangeEnd.ToString("dd/MM/yyyy")</p>
+                    <label class="gantt-group-select">
+                        Agrupar por:
+                        <select @bind="groupBy">
+                            <option value="none">Nenhum</option>
+                            <option value="assignee">Responsável</option>
+                        </select>
+                    </label>
+                </div>
                 <div class="gantt-legend">
                     <span class="gantt-legend-item"><span class="gantt-legend-dot gantt-legend-dot-todo"></span> A Fazer</span>
                     <span class="gantt-legend-item"><span class="gantt-legend-dot gantt-legend-dot-inprogress"></span> Em Andamento</span>
@@ -93,24 +102,61 @@
                         {
                             <div class="gantt-today-line" style="left: calc(200px + (100% - 200px) * @(pct.ToString(System.Globalization.CultureInfo.InvariantCulture)) / 100)" title="Hoje"></div>
                         }
-                        @foreach (var item in items)
+                        @foreach (var group in GroupItems(items))
                         {
-                            <div class="gantt-row">
-                                <div class="gantt-row-label" @onclick="() => OpenEdit(item.WorkItem)">
-                                    <WorkItemTypeIcon Type="item.WorkItem.Type" />
-                                    <span class="gantt-row-title">@item.WorkItem.Title</span>
-                                    <span class="task-row-avatar" title="@AssigneeLabel(item.WorkItem)">@AssigneeInitial(item.WorkItem)</span>
-                                </div>
-                                <div class="gantt-row-track">
-                                    <div class="gantt-bar badge-status-@item.WorkItem.Status.Category.ToString().ToLowerInvariant()"
-                                         style="left: @(item.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%; width: @(item.WidthPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"
-                                         title="@item.WorkItem.Title"
-                                         @onclick="() => OpenEdit(item.WorkItem)">
-                                        <span class="gantt-bar-label">@item.WorkItem.Title</span>
+                            @if (!string.IsNullOrEmpty(group.Label))
+                            {
+                                <div class="gantt-group-header">@group.Label <span class="tab-count">@group.Items.Count</span></div>
+                            }
+                            @foreach (var item in group.Items)
+                            {
+                                <div class="gantt-row">
+                                    <div class="gantt-row-label" @onclick="() => OpenEdit(item.WorkItem)">
+                                        <WorkItemTypeIcon Type="item.WorkItem.Type" />
+                                        <span class="gantt-row-title">@item.WorkItem.Title</span>
+                                        <span class="task-row-avatar" title="@AssigneeLabel(item.WorkItem)">@AssigneeInitial(item.WorkItem)</span>
+                                    </div>
+                                    <div class="gantt-row-track">
+                                        <div class="gantt-bar badge-status-@item.WorkItem.Status.Category.ToString().ToLowerInvariant()"
+                                             style="left: @(item.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%; width: @(item.WidthPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"
+                                             title="@item.WorkItem.Title"
+                                             @onclick="() => OpenEdit(item.WorkItem)">
+                                            <span class="gantt-bar-label">@item.WorkItem.Title</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            }
                         }
+                    </div>
+                </div>
+
+                <div class="stat-grid" style="margin-top:1.25rem;">
+                    <div class="stat-card">
+                        <div class="stat-card-body">
+                            <span class="stat-card-label">Tarefas com prazo</span>
+                            <span class="stat-card-value">@items.Count</span>
+                        </div>
+                        <span class="stat-card-icon">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                        </span>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-body">
+                            <span class="stat-card-label">Em dia</span>
+                            <span class="stat-card-value">@OnTrackPercent(items)%</span>
+                        </div>
+                        <span class="stat-card-icon is-success">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                        </span>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-body">
+                            <span class="stat-card-label">Prazos críticos</span>
+                            <span class="stat-card-value">@items.Count(i => i.WorkItem.Status.Category != StatusCategory.Done && i.WorkItem.DueDateUtc!.Value.Date < DateTime.UtcNow.Date)</span>
+                        </div>
+                        <span class="stat-card-icon is-danger">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                        </span>
                     </div>
                 </div>
             }
@@ -153,6 +199,7 @@
     private DateTime rangeStart;
     private DateTime rangeEnd;
     private int totalDays;
+    private string groupBy = "none";
 
     private class GanttItem
     {
@@ -233,6 +280,33 @@
             }
             return (today - rangeStart).Days / (double)totalDays * 100;
         }
+    }
+
+    private List<(string Label, List<GanttItem> Items)> GroupItems(List<GanttItem> items)
+    {
+        if (groupBy != "assignee")
+        {
+            return [("", items)];
+        }
+
+        return items
+            .GroupBy(i => AssigneeLabel(i.WorkItem))
+            .OrderBy(g => g.Key == "Sem responsável" ? 1 : 0)
+            .ThenBy(g => g.Key)
+            .Select(g => (g.Key, g.OrderBy(i => i.WorkItem.StartDateUtc ?? i.WorkItem.DueDateUtc).ToList()))
+            .ToList();
+    }
+
+    private static int OnTrackPercent(List<GanttItem> items)
+    {
+        if (items.Count == 0)
+        {
+            return 100;
+        }
+
+        var today = DateTime.UtcNow.Date;
+        var onTrack = items.Count(i => i.WorkItem.Status.Category == StatusCategory.Done || i.WorkItem.DueDateUtc!.Value.Date >= today);
+        return (int)Math.Round(onTrack * 100.0 / items.Count);
     }
 
     private static string AssigneeLabel(WorkItem item) =>
