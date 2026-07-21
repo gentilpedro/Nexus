@@ -40,4 +40,5 @@ public class WorkItem
     public ICollection<CustomFieldValue> CustomFieldValues { get; set; } = new List<CustomFieldValue>();
     public ICollection<WorkItemAttachment> Attachments { get; set; } = new List<WorkItemAttachment>();
     public ICollection<WorkItemLabel> WorkItemLabels { get; set; } = new List<WorkItemLabel>();
+    public ICollection<WorkItemComment> Comments { get; set; } = new List<WorkItemComment>();
 }

@@ -11,154 +11,244 @@
 {
     <div class="panel-overlay" @onclick="Close">
         <div class="panel" @onclick:stopPropagation="true">
-            <div class="panel-header">
-                <h2>@(isEditing ? "Editar task" : "Nova task")</h2>
-                <button class="btn-link" type="button" @onclick="Close">✕</button>
-            </div>
-
-            @if (isEditing && editingCreatedAtUtc is not null)
+            @if (viewMode && isEditing)
             {
-                <p class="topnav-user" style="margin-top:-0.5rem;margin-bottom:1rem;">
-                    Criado em @editingCreatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")
-                    @if (editingUpdatedAtUtc is not null)
-                    {
-                        <text> · Atualizado em @editingUpdatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</text>
-                    }
-                </p>
-            }
+                <div class="panel-header">
+                    <span class="task-view-id">
+                        <WorkItemTypeIcon Type="model.Type" />
+                        @TicketCode
+                    </span>
+                    <div class="task-view-header-actions">
+                        <button type="button" class="btn-link" title="Editar" @onclick="EnterEditMode">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                        </button>
+                        <button type="button" class="btn-link" title="Fechar" @onclick="Close">✕</button>
+                    </div>
+                </div>
 
-            <EditForm Model="model" OnValidSubmit="HandleSave">
-                <DataAnnotationsValidator />
-                @if (!string.IsNullOrEmpty(errorMessage))
+                <h2 class="task-view-title">@model.Title</h2>
+
+                @if (!string.IsNullOrWhiteSpace(model.Description))
                 {
-                    <div class="alert alert-danger">@errorMessage</div>
+                    <div class="task-view-section">
+                        <h3>Descrição</h3>
+                        <p class="task-view-description">@model.Description</p>
+                    </div>
                 }
-                <div class="form-field">
-                    <label for="task-title">Título</label>
-                    <InputText id="task-title" @bind-Value="model.Title" />
-                    <ValidationMessage For="() => model.Title" />
-                </div>
-                <div class="form-field">
-                    <label for="task-description">Descrição</label>
-                    <InputTextArea id="task-description" @bind-Value="model.Description" rows="4" />
-                </div>
-                <div class="form-row">
-                    <div class="form-field">
-                        <label for="task-type">Tipo</label>
-                        <InputSelect id="task-type" @bind-Value="model.Type">
-                            @foreach (var t in Enum.GetValues<WorkItemType>())
-                            {
-                                <option value="@t">@t.ToDisplayLabel()</option>
-                            }
-                        </InputSelect>
+
+                <div class="task-view-meta">
+                    <div class="task-view-meta-row">
+                        <span class="task-view-meta-label">Responsável</span>
+                        <span>@AssigneeDisplayName</span>
                     </div>
-                    <div class="form-field">
-                        <label for="task-priority">Prioridade</label>
-                        <InputSelect id="task-priority" @bind-Value="model.Priority">
-                            @foreach (var p in Enum.GetValues<WorkItemPriority>())
-                            {
-                                <option value="@p">@p.ToDisplayLabel()</option>
-                            }
-                        </InputSelect>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-field">
-                        <label for="task-status">Status</label>
-                        <InputSelect id="task-status" @bind-Value="model.StatusId">
-                            @foreach (var s in AllowedStatuses)
-                            {
-                                <option value="@s.Id">@s.Name</option>
-                            }
-                        </InputSelect>
-                    </div>
-                    <div class="form-field">
-                        <label for="task-assignee">Responsável</label>
-                        <InputSelect id="task-assignee" @bind-Value="model.AssigneeId">
-                            <option value="">Ninguém</option>
-                            @foreach (var option in AssigneeOptions)
-                            {
-                                <option value="@option.UserId">@option.DisplayName</option>
-                            }
-                        </InputSelect>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-field">
-                        <label for="task-start-date">Data de início</label>
-                        <InputDate id="task-start-date" @bind-Value="model.StartDate" />
-                    </div>
-                    <div class="form-field">
-                        <label for="task-due-date">Prazo</label>
-                        <InputDate id="task-due-date" @bind-Value="model.DueDate" />
-                    </div>
-                </div>
-                <div class="form-field">
-                    <label for="task-epic">Epic</label>
-                    <InputSelect id="task-epic" @bind-Value="model.ParentEpicId">
-                        <option value="">Nenhum</option>
-                        @foreach (var epic in EpicOptions.Where(e => e.Id != editingId))
+                    <div class="task-view-meta-row">
+                        <span class="task-view-meta-label">Status</span>
+                        @if (CurrentStatus is not null)
                         {
-                            <option value="@epic.Id">@epic.Title</option>
+                            <StatusBadge Name="@CurrentStatus.Name" Category="CurrentStatus.Category" />
                         }
-                    </InputSelect>
+                    </div>
+                    <div class="task-view-meta-row">
+                        <span class="task-view-meta-label">Prazo</span>
+                        <span>@(model.DueDate?.ToString("dd/MM/yyyy") ?? "Sem prazo")</span>
+                    </div>
+                    <div class="task-view-meta-row">
+                        <span class="task-view-meta-label">Prioridade</span>
+                        <PriorityBadge Priority="model.Priority" />
+                    </div>
+                    @if (selectedLabelIds.Count > 0)
+                    {
+                        <div class="task-view-meta-row">
+                            <span class="task-view-meta-label">Etiquetas</span>
+                            <span>
+                                @foreach (var label in Labels.Where(l => selectedLabelIds.Contains(l.Id)))
+                                {
+                                    <span class="label-chip label-chip--sm" style="background-color: @label.Color; color: @LabelColor.TextColorFor(label.Color);">@label.Name</span>
+                                }
+                            </span>
+                        </div>
+                    }
                 </div>
 
-                @if (Labels.Count > 0)
+                @if (editingCreatedAtUtc is not null)
                 {
+                    <p class="topnav-user" style="margin-top:1rem;">
+                        Criado em @editingCreatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")
+                        @if (editingUpdatedAtUtc is not null)
+                        {
+                            <text> · Atualizado em @editingUpdatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</text>
+                        }
+                    </p>
+                }
+
+                <div class="task-view-comments">
+                    <h3>Comentários (@(comments?.Count ?? 0))</h3>
+                    @if (comments is null)
+                    {
+                        <p class="topnav-user">Carregando...</p>
+                    }
+                    else
+                    {
+                        @foreach (var comment in comments)
+                        {
+                            <div class="chat-message">
+                                <span class="chat-message-avatar">@CommentAuthorInitial(comment)</span>
+                                <div class="chat-message-body">
+                                    <div class="chat-message-meta">
+                                        <span class="chat-message-author">@CommentAuthorLabel(comment)</span>
+                                        <span class="chat-message-time">@comment.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                    </div>
+                                    <div class="chat-message-content">@comment.Content</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                    <div class="task-comment-compose">
+                        <textarea rows="2" placeholder="Escreva um comentário..." @bind="newCommentText"></textarea>
+                        <button type="button" class="btn" disabled="@isSavingComment" @onclick="HandleAddComment">Comentar</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="panel-header">
+                    <h2>@(isEditing ? "Editar task" : "Nova task")</h2>
+                    <button class="btn-link" type="button" @onclick="Close">✕</button>
+                </div>
+
+                <EditForm Model="model" OnValidSubmit="HandleSave">
+                    <DataAnnotationsValidator />
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger">@errorMessage</div>
+                    }
                     <div class="form-field">
-                        <label>Labels</label>
-                        <div class="label-toggle-row">
-                            @foreach (var label in Labels)
-                            {
-                                <button type="button"
-                                        class="label-chip label-chip-toggle"
-                                        style="@LabelToggleStyle(label)"
-                                        @onclick="() => ToggleLabel(label.Id)">
-                                    @label.Name
-                                </button>
-                            }
+                        <label for="task-title">Título</label>
+                        <InputText id="task-title" @bind-Value="model.Title" />
+                        <ValidationMessage For="() => model.Title" />
+                    </div>
+                    <div class="form-field">
+                        <label for="task-description">Descrição</label>
+                        <InputTextArea id="task-description" @bind-Value="model.Description" rows="4" />
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="task-type">Tipo</label>
+                            <InputSelect id="task-type" @bind-Value="model.Type">
+                                @foreach (var t in Enum.GetValues<WorkItemType>())
+                                {
+                                    <option value="@t">@t.ToDisplayLabel()</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label for="task-priority">Prioridade</label>
+                            <InputSelect id="task-priority" @bind-Value="model.Priority">
+                                @foreach (var p in Enum.GetValues<WorkItemPriority>())
+                                {
+                                    <option value="@p">@p.ToDisplayLabel()</option>
+                                }
+                            </InputSelect>
                         </div>
                     </div>
-                }
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="task-status">Status</label>
+                            <InputSelect id="task-status" @bind-Value="model.StatusId">
+                                @foreach (var s in AllowedStatuses)
+                                {
+                                    <option value="@s.Id">@s.Name</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label for="task-assignee">Responsável</label>
+                            <InputSelect id="task-assignee" @bind-Value="model.AssigneeId">
+                                <option value="">Ninguém</option>
+                                @foreach (var option in AssigneeOptions)
+                                {
+                                    <option value="@option.UserId">@option.DisplayName</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="task-start-date">Data de início</label>
+                            <InputDate id="task-start-date" @bind-Value="model.StartDate" />
+                        </div>
+                        <div class="form-field">
+                            <label for="task-due-date">Prazo</label>
+                            <InputDate id="task-due-date" @bind-Value="model.DueDate" />
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label for="task-epic">Epic</label>
+                        <InputSelect id="task-epic" @bind-Value="model.ParentEpicId">
+                            <option value="">Nenhum</option>
+                            @foreach (var epic in EpicOptions.Where(e => e.Id != editingId))
+                            {
+                                <option value="@epic.Id">@epic.Title</option>
+                            }
+                        </InputSelect>
+                    </div>
 
-                @if (CustomFieldDefinitions.Count > 0)
-                {
-                    <hr />
-                    @foreach (var field in CustomFieldDefinitions)
+                    @if (Labels.Count > 0)
                     {
                         <div class="form-field">
-                            <label for="@($"custom-field-{field.Id}")">@field.Name@(field.Required ? " *" : "")</label>
-                            @switch (field.Type)
-                            {
-                                case CustomFieldType.Text:
-                                    <input id="@($"custom-field-{field.Id}")" type="text" value="@customFieldValues[field.Id]" @onchange="@(e => customFieldValues[field.Id] = e.Value?.ToString() ?? "")" />
-                                    break;
-                                case CustomFieldType.Number:
-                                    <input id="@($"custom-field-{field.Id}")" type="number" value="@customFieldValues[field.Id]" @onchange="@(e => customFieldValues[field.Id] = e.Value?.ToString() ?? "")" />
-                                    break;
-                                case CustomFieldType.Date:
-                                    <input id="@($"custom-field-{field.Id}")" type="date" value="@customFieldValues[field.Id]" @onchange="@(e => customFieldValues[field.Id] = e.Value?.ToString() ?? "")" />
-                                    break;
-                                case CustomFieldType.Select:
-                                    <select id="@($"custom-field-{field.Id}")" value="@customFieldValues[field.Id]" @onchange="@(e => customFieldValues[field.Id] = e.Value?.ToString() ?? "")">
-                                        <option value="">—</option>
-                                        @foreach (var option in field.Options)
-                                        {
-                                            <option value="@option.Id">@option.Label</option>
-                                        }
-                                    </select>
-                                    break;
-                            }
+                            <label>Labels</label>
+                            <div class="label-toggle-row">
+                                @foreach (var label in Labels)
+                                {
+                                    <button type="button"
+                                            class="label-chip label-chip-toggle"
+                                            style="@LabelToggleStyle(label)"
+                                            @onclick="() => ToggleLabel(label.Id)">
+                                        @label.Name
+                                    </button>
+                                }
+                            </div>
                         </div>
                     }
-                }
 
-                <div class="form-actions">
-                    <button type="submit" class="btn" disabled="@isSaving">Salvar</button>
-                    <button type="button" class="btn btn-secondary" @onclick="Close">Cancelar</button>
-                </div>
-            </EditForm>
+                    @if (CustomFieldDefinitions.Count > 0)
+                    {
+                        <hr />
+                        @foreach (var field in CustomFieldDefinitions)
+                        {
+                            <div class="form-field">
+                                <label for="@($"custom-field-{field.Id}")">@field.Name@(field.Required ? " *" : "")</label>
+                                @switch (field.Type)
+                                {
+                                    case CustomFieldType.Text:
+                                        <input id="@($"custom-field-{field.Id}")" type="text" value="@customFieldValues[field.Id]" @onchange="@(e => customFieldValues[field.Id] = e.Value?.ToString() ?? "")" />
+                                        break;
+                                    case CustomFieldType.Number:
+                                        <input id="@($"custom-field-{field.Id}")" type="number" value="@customFieldValues[field.Id]" @onchange="@(e => customFieldValues[field.Id] = e.Value?.ToString() ?? "")" />
+                                        break;
+                                    case CustomFieldType.Date:
+                                        <input id="@($"custom-field-{field.Id}")" type="date" value="@customFieldValues[field.Id]" @onchange="@(e => customFieldValues[field.Id] = e.Value?.ToString() ?? "")" />
+                                        break;
+                                    case CustomFieldType.Select:
+                                        <select id="@($"custom-field-{field.Id}")" value="@customFieldValues[field.Id]" @onchange="@(e => customFieldValues[field.Id] = e.Value?.ToString() ?? "")">
+                                            <option value="">—</option>
+                                            @foreach (var option in field.Options)
+                                            {
+                                                <option value="@option.Id">@option.Label</option>
+                                            }
+                                        </select>
+                                        break;
+                                }
+                            </div>
+                        }
+                    }
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn" disabled="@isSaving">Salvar</button>
+                        <button type="button" class="btn btn-secondary" @onclick="HandleCancelClick">Cancelar</button>
+                    </div>
+                </EditForm>
+            }
 
             @if (isEditing)
             {
@@ -222,17 +312,32 @@
 
     private bool isOpen;
     private bool isEditing;
+    private bool viewMode;
     private bool isSaving;
     private string? errorMessage;
     private Guid? editingId;
     private Guid? originalStatusId;
     private DateTime? editingCreatedAtUtc;
     private DateTime? editingUpdatedAtUtc;
+    private WorkItem? editingItem;
     private readonly WorkItemFormModel model = new();
     private readonly Dictionary<Guid, string> customFieldValues = new();
+    private readonly Dictionary<Guid, string> originalCustomFieldValues = new();
     private readonly HashSet<Guid> selectedLabelIds = new();
+    private readonly HashSet<Guid> originalLabelIds = new();
     private List<WorkItemAttachment> attachments = [];
     private string? uploadError;
+    private List<WorkItemComment>? comments;
+    private string newCommentText = "";
+    private bool isSavingComment;
+
+    private string TicketCode => editingId is null ? "" : "TASK-" + editingId.Value.ToString("N")[..6].ToUpperInvariant();
+
+    private TaskStatusDefinition? CurrentStatus => Statuses.FirstOrDefault(s => s.Id == model.StatusId);
+
+    private string AssigneeDisplayName => string.IsNullOrEmpty(model.AssigneeId)
+        ? "Sem responsável"
+        : (AssigneeOptions.FirstOrDefault(o => o.UserId == model.AssigneeId).DisplayName ?? "Sem responsável");
 
     // Unrestricted (all Statuses) when creating, or when the list has no configured
     // transitions at all — only narrows down once editing AND rules exist for this list.
@@ -258,7 +363,9 @@
     public void OpenForCreate()
     {
         isEditing = false;
+        viewMode = false;
         editingId = null;
+        editingItem = null;
         originalStatusId = null;
         errorMessage = null;
         model.Reset();
@@ -267,6 +374,7 @@
         ResetCustomFieldValues();
         selectedLabelIds.Clear();
         attachments = [];
+        comments = [];
         uploadError = null;
         isOpen = true;
         StateHasChanged();
@@ -275,20 +383,14 @@
     public async Task OpenForEdit(WorkItem item)
     {
         isEditing = true;
+        viewMode = true;
         editingId = item.Id;
+        editingItem = item;
         originalStatusId = item.StatusId;
         editingCreatedAtUtc = item.CreatedAtUtc;
         editingUpdatedAtUtc = item.UpdatedAtUtc;
         errorMessage = null;
-        model.Title = item.Title;
-        model.Description = item.Description ?? "";
-        model.Type = item.Type;
-        model.Priority = item.Priority;
-        model.StatusId = item.StatusId;
-        model.AssigneeId = item.AssigneeId ?? "";
-        model.StartDate = item.StartDateUtc?.Date;
-        model.DueDate = item.DueDateUtc?.Date;
-        model.ParentEpicId = item.ParentEpicId?.ToString() ?? "";
+        PopulateModelFrom(item);
 
         ResetCustomFieldValues();
         selectedLabelIds.Clear();
@@ -312,11 +414,125 @@
             }
         }
 
+        originalCustomFieldValues.Clear();
+        foreach (var (k, v) in customFieldValues)
+        {
+            originalCustomFieldValues[k] = v;
+        }
+        originalLabelIds.Clear();
+        foreach (var id in selectedLabelIds)
+        {
+            originalLabelIds.Add(id);
+        }
+
         uploadError = null;
         await LoadAttachmentsAsync();
+        await LoadCommentsAsync();
 
         isOpen = true;
         StateHasChanged();
+    }
+
+    private void PopulateModelFrom(WorkItem item)
+    {
+        model.Title = item.Title;
+        model.Description = item.Description ?? "";
+        model.Type = item.Type;
+        model.Priority = item.Priority;
+        model.StatusId = item.StatusId;
+        model.AssigneeId = item.AssigneeId ?? "";
+        model.StartDate = item.StartDateUtc?.Date;
+        model.DueDate = item.DueDateUtc?.Date;
+        model.ParentEpicId = item.ParentEpicId?.ToString() ?? "";
+    }
+
+    private void EnterEditMode()
+    {
+        viewMode = false;
+    }
+
+    private void HandleCancelClick()
+    {
+        if (isEditing)
+        {
+            if (editingItem is not null)
+            {
+                PopulateModelFrom(editingItem);
+            }
+            selectedLabelIds.Clear();
+            foreach (var id in originalLabelIds)
+            {
+                selectedLabelIds.Add(id);
+            }
+            customFieldValues.Clear();
+            foreach (var (k, v) in originalCustomFieldValues)
+            {
+                customFieldValues[k] = v;
+            }
+            errorMessage = null;
+            viewMode = true;
+        }
+        else
+        {
+            Close();
+        }
+    }
+
+    private async Task LoadCommentsAsync()
+    {
+        if (editingId is null)
+        {
+            comments = [];
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        comments = await db.WorkItemComments
+            .Where(c => c.WorkItemId == editingId.Value)
+            .Include(c => c.User)
+            .OrderBy(c => c.CreatedAtUtc)
+            .ToListAsync();
+    }
+
+    private async Task HandleAddComment()
+    {
+        if (string.IsNullOrWhiteSpace(newCommentText) || editingId is null)
+        {
+            return;
+        }
+
+        isSavingComment = true;
+
+        var authState = await AuthStateTask!;
+        var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            db.WorkItemComments.Add(new WorkItemComment
+            {
+                Id = Guid.NewGuid(),
+                WorkItemId = editingId.Value,
+                UserId = currentUserId,
+                Content = newCommentText.Trim(),
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        newCommentText = "";
+        isSavingComment = false;
+        await LoadCommentsAsync();
+    }
+
+    private static string CommentAuthorLabel(WorkItemComment comment) =>
+        comment.User is null
+            ? "Usuário removido"
+            : (string.IsNullOrEmpty(comment.User.DisplayName) ? comment.User.Email ?? "" : comment.User.DisplayName);
+
+    private static string CommentAuthorInitial(WorkItemComment comment)
+    {
+        var label = CommentAuthorLabel(comment);
+        return string.IsNullOrWhiteSpace(label) || label == "Usuário removido" ? "?" : label.Trim()[0].ToString().ToUpperInvariant();
     }
 
     private async Task LoadAttachmentsAsync()
