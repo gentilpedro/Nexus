@@ -10,10 +10,18 @@
 
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
-    <PackageReference Include="HtmlSanitizer" Version="9.0.892" />
-    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.8" />
+    <!-- NOT overriding AngleSharp's transitive 0.17.1 here (GHSA-pgww-w46g-26qg, moderate
+         mXSS, fixed in 1.5.0) — tried it, but `dotnet restore` throws NU1608 because
+         HtmlSanitizer pins AngleSharp = 0.17.1 exactly and ClosedXML's AngleSharp.Css pins
+         >=0.17.0 <0.18.0. Forcing 1.5.2 would risk breaking HtmlSanitizer (the actual XSS
+         defense for Doc.razor) and the .xlsx export, which is a worse outcome than this CVE
+         — AngleSharp here never parses untrusted HTML (that's HtmlSanitizer's own job); it's
+         only reachable via ClosedXML's CSS parsing for spreadsheet styling. Revisit once
+         HtmlSanitizer/ClosedXML ship AngleSharp 1.x-compatible releases. -->
+    <PackageReference Include="HtmlSanitizer" Version="9.0.967" />
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10" />
   </ItemGroup>
 
   <ItemGroup>

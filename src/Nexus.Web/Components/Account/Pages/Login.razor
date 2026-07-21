@@ -1,4 +1,6 @@
-@page "/Account/Login"
+﻿@page "/Account/Login"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth")]
 @layout AuthLayout
 
 @using System.ComponentModel.DataAnnotations
@@ -101,7 +103,11 @@
             return;
         }
 
-        var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
+        // lockoutOnFailure: true — Identity's lockout (5 tentativas, ~5min por padrão) só conta
+        // tentativas quando esse flag está ligado. Com false, um ataque de força bruta contra
+        // uma conta nunca era bloqueado; a UI de "Account/Lockout" abaixo já existia e nunca era
+        // alcançada por causa disso.
+        var result = await SignInManager.PasswordSignInAsync(Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: true);
 
         if (result.Succeeded)
         {
