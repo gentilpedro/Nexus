@@ -10,43 +10,164 @@
 
 <PageTitle>Novo workspace</PageTitle>
 
-<div class="page-container">
-    <h1>Novo workspace</h1>
+<div class="page-container page-container--wide">
+    <div class="breadcrumbs"><a href="/workspaces">Workspaces</a> / Novo workspace</div>
+    <div class="page-header">
+        <h1>Configurar novo workspace</h1>
+    </div>
+    <p style="color:var(--color-text-secondary); margin-top:-0.75rem; margin-bottom:1.5rem;">Crie um ambiente colaborativo para sua equipe e convide quem já vai trabalhar com você.</p>
 
     @if (!string.IsNullOrEmpty(errorMessage))
     {
         <div class="alert alert-danger">@errorMessage</div>
     }
 
-    <EditForm Model="model" OnValidSubmit="HandleCreate" class="card">
-        <DataAnnotationsValidator />
-        <div class="form-field">
-            <label for="name">Nome</label>
-            <InputText id="name" @bind-Value="model.Name" placeholder="Ex: Minha Empresa" />
-            <ValidationMessage For="() => model.Name" />
+    <div class="dashboard-layout">
+        <div>
+            <EditForm Model="model" OnValidSubmit="HandleCreate" class="card" style="margin-bottom:1rem;">
+                <DataAnnotationsValidator />
+                <div class="form-field">
+                    <label for="name">Nome do workspace</label>
+                    <InputText id="name" @bind-Value="model.Name" placeholder="Ex: Minha Empresa" />
+                    <ValidationMessage For="() => model.Name" />
+                    <span style="font-size:0.8rem;color:var(--color-text-muted);">Esse nome aparece na barra lateral para todos os membros.</span>
+                </div>
+
+                <div class="form-field">
+                    <label>Cor de identificação</label>
+                    <div class="color-swatch-row">
+                        @foreach (var color in AvailableColors)
+                        {
+                            <button type="button" class="color-swatch @(model.Color == color ? "is-selected" : "")"
+                                    style="background:@color;" @onclick="() => model.Color = color"
+                                    aria-label="Selecionar cor @color"></button>
+                        }
+                    </div>
+                </div>
+            </EditForm>
+
+            <div class="card">
+                <label style="font-weight:600;display:block;margin-bottom:0.5rem;">Convidar membros</label>
+                <p style="font-size:0.85rem;color:var(--color-text-muted);margin:0 0 0.75rem;">Adicione o e-mail de quem já tem conta no Nexus. Quem ainda não tem conta pode ser adicionado depois, pela página de membros.</p>
+                <div class="form-row">
+                    <input type="email" placeholder="email@exemplo.com" @bind="inviteEmail" @bind:event="oninput" style="flex:1;padding:0.5rem 0.65rem;border:1px solid var(--color-border);border-radius:var(--radius);background:var(--color-surface);color:var(--color-text);" />
+                    <button type="button" class="btn btn-secondary" @onclick="AddInvite">+ Adicionar</button>
+                </div>
+                @if (pendingInvites.Count > 0)
+                {
+                    <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;">
+                        @foreach (var email in pendingInvites)
+                        {
+                            <span class="label-chip label-chip--sm" style="background:var(--color-hover);color:var(--color-text);">
+                                @email
+                                <button type="button" class="chat-compose-pending-remove" @onclick="() => pendingInvites.Remove(email)">✕</button>
+                            </span>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state" style="padding:1rem;">Nenhum membro adicionado ainda.</div>
+                }
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn" disabled="@isSaving" @onclick="HandleCreate">Criar workspace agora</button>
+                <a class="btn btn-secondary" href="/workspaces">Cancelar</a>
+            </div>
         </div>
-        <div class="form-actions">
-            <button type="submit" class="btn" disabled="@isSaving">Criar</button>
-            <a class="btn btn-secondary" href="/workspaces">Cancelar</a>
+
+        <div>
+            @if (suggestions is { Count: > 0 })
+            {
+                <div class="side-card">
+                    <h2>Pessoas com quem você já trabalha</h2>
+                    @foreach (var person in suggestions)
+                    {
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.75rem;">
+                            <div style="display:flex;align-items:center;gap:0.5rem;min-width:0;">
+                                <span class="dashboard-workspace-avatar" style="width:1.9rem;height:1.9rem;font-size:0.75rem;">@Initial(person.DisplayName ?? person.Email)</span>
+                                <div style="min-width:0;">
+                                    <div style="font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@(person.DisplayName ?? person.Email)</div>
+                                    <div style="font-size:0.75rem;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@person.Email</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-link" @onclick="() => AddSuggestion(person.Email!)">+</button>
+                        </div>
+                    }
+                </div>
+            }
         </div>
-    </EditForm>
+    </div>
 </div>
 
 @code {
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private readonly CreateWorkspaceModel model = new();
+    private static readonly string[] AvailableColors = ["#2563EB", "#16A34A", "#7C3AED", "#DC2626", "#EA580C", "#0D9488"];
+
+    private readonly CreateWorkspaceModel model = new() { Color = AvailableColors[0] };
     private bool isSaving;
     private string? errorMessage;
+    private string inviteEmail = "";
+    private readonly List<string> pendingInvites = new();
+    private List<ApplicationUser>? suggestions;
+    private string? userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateTask!;
+        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId is null)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var myWorkspaceIds = await db.WorkspaceMembers.Where(m => m.UserId == userId).Select(m => m.WorkspaceId).ToListAsync();
+
+        suggestions = await db.WorkspaceMembers
+            .Where(m => myWorkspaceIds.Contains(m.WorkspaceId) && m.UserId != userId)
+            .Select(m => m.User)
+            .Distinct()
+            .Take(5)
+            .ToListAsync();
+    }
+
+    private void AddInvite()
+    {
+        var email = inviteEmail.Trim();
+        if (string.IsNullOrEmpty(email) || pendingInvites.Contains(email, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        pendingInvites.Add(email);
+        inviteEmail = "";
+    }
+
+    private void AddSuggestion(string email)
+    {
+        if (!pendingInvites.Contains(email, StringComparer.OrdinalIgnoreCase))
+        {
+            pendingInvites.Add(email);
+        }
+    }
 
     private async Task HandleCreate()
     {
+        if (string.IsNullOrWhiteSpace(model.Name))
+        {
+            errorMessage = "Informe um nome para o workspace.";
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
 
         var authState = await AuthStateTask!;
-        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
         await using var db = await DbFactory.CreateDbContextAsync();
         var slug = await GenerateUniqueSlugAsync(db, model.Name);
@@ -56,6 +177,7 @@
             Id = Guid.NewGuid(),
             Name = model.Name.Trim(),
             Slug = slug,
+            Color = model.Color,
             CreatedAtUtc = DateTime.UtcNow
         };
 
@@ -63,17 +185,46 @@
         {
             Id = Guid.NewGuid(),
             WorkspaceId = workspace.Id,
-            UserId = userId,
+            UserId = currentUserId,
             Role = WorkspaceRole.Owner,
             JoinedAtUtc = DateTime.UtcNow
         });
 
         db.Workspaces.Add(workspace);
 
+        var skippedInvites = new List<string>();
+        foreach (var email in pendingInvites)
+        {
+            var normalized = email.Trim().ToUpperInvariant();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalized);
+            if (user is null || user.Id == currentUserId)
+            {
+                skippedInvites.Add(email);
+                continue;
+            }
+
+            workspace.Members.Add(new WorkspaceMember
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = workspace.Id,
+                UserId = user.Id,
+                Role = WorkspaceRole.Member,
+                JoinedAtUtc = DateTime.UtcNow
+            });
+        }
+
         try
         {
             await db.SaveChangesAsync();
-            NavigationManager.NavigateTo($"/workspaces/{workspace.Id}");
+
+            if (skippedInvites.Count > 0)
+            {
+                NavigationManager.NavigateTo($"/workspaces/{workspace.Id}/members");
+            }
+            else
+            {
+                NavigationManager.NavigateTo($"/workspaces/{workspace.Id}");
+            }
         }
         catch (Exception)
         {
@@ -109,10 +260,13 @@
         return slug;
     }
 
+    private static string Initial(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+
     private class CreateWorkspaceModel
     {
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe um nome.")]
         [System.ComponentModel.DataAnnotations.StringLength(200, ErrorMessage = "Nome muito longo.")]
         public string Name { get; set; } = "";
+        public string Color { get; set; } = "#2563EB";
     }
 }

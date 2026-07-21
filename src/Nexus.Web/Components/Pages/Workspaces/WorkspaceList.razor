@@ -12,7 +12,7 @@
 
 <PageTitle>Workspaces</PageTitle>
 
-<div class="page-container">
+<div class="page-container page-container--wide">
     <div class="page-header">
         <h1>Meus Workspaces</h1>
         <a class="btn" href="/workspaces/new">+ Novo workspace</a>
@@ -31,12 +31,22 @@
     }
     else
     {
+        <div class="form-field" style="max-width:280px;">
+            <input type="search" placeholder="Buscar workspaces..." @bind="filterText" @bind:event="oninput" />
+        </div>
+
         <div class="card-list">
-            @foreach (var membership in memberships)
+            @foreach (var membership in FilteredMemberships)
             {
                 <a class="card card-link" href="@($"/workspaces/{membership.WorkspaceId}")">
-                    <strong>@membership.Workspace.Name</strong>
-                    <div class="topnav-user">@membership.Role.ToDisplayLabel()</div>
+                    <span class="dashboard-workspace-avatar" style="background:@(membership.Workspace.Color ?? "var(--color-primary)")">@Initial(membership.Workspace.Name)</span>
+                    <div style="margin-top:0.6rem;">
+                        <strong>@membership.Workspace.Name</strong>
+                        <div class="topnav-user">@membership.Role.ToDisplayLabel()</div>
+                    </div>
+                    <div class="topnav-user" style="margin-top:0.5rem;">
+                        @membership.Workspace.Members.Count membro@(membership.Workspace.Members.Count == 1 ? "" : "s") · @membership.Workspace.Spaces.Count space@(membership.Workspace.Spaces.Count == 1 ? "" : "s")
+                    </div>
                 </a>
             }
         </div>
@@ -48,6 +58,11 @@
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     private List<WorkspaceMember>? memberships;
+    private string filterText = "";
+
+    private IEnumerable<WorkspaceMember> FilteredMemberships => memberships is null
+        ? []
+        : memberships.Where(m => string.IsNullOrWhiteSpace(filterText) || m.Workspace.Name.Contains(filterText, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -58,9 +73,12 @@
 
         await using var db = await DbFactory.CreateDbContextAsync();
         memberships = await db.WorkspaceMembers
-            .Include(m => m.Workspace)
+            .Include(m => m.Workspace).ThenInclude(w => w.Members)
+            .Include(m => m.Workspace).ThenInclude(w => w.Spaces)
             .Where(m => m.UserId == userId)
             .OrderBy(m => m.Workspace.Name)
             .ToListAsync();
     }
+
+    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
 }
