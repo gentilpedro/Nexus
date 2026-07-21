@@ -32,6 +32,7 @@ builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<IAuthorizationHandler, WorkspaceAuthorizationHandler>();
 builder.Services.AddScoped<WorkItemQueryService>();
 builder.Services.AddScoped<NavigationContextService>();
+builder.Services.AddScoped<NotificationBadgeService>();
 builder.Services.AddSingleton<WorkspaceChatBroadcaster>();
 builder.Services.AddSingleton<AttachmentStorageService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
@@ -159,6 +160,26 @@ app.MapGet("/chat-attachments/{id:guid}/download", async (
     }
 
     return Results.File(fullPath, attachment.ContentType, attachment.FileName);
+}).RequireAuthorization();
+
+app.MapGet("/avatars/{userId:guid}/download", async (
+    Guid userId,
+    UserManager<ApplicationUser> userManager,
+    AttachmentStorageService storage) =>
+{
+    var user = await userManager.FindByIdAsync(userId.ToString());
+    if (user?.AvatarStoragePath is null)
+    {
+        return Results.NotFound();
+    }
+
+    var fullPath = storage.GetFullPath(user.AvatarStoragePath);
+    if (!File.Exists(fullPath))
+    {
+        return Results.NotFound();
+    }
+
+    return Results.File(fullPath, user.AvatarContentType ?? "application/octet-stream");
 }).RequireAuthorization();
 
 app.MapGet("/spreadsheets/{id:guid}/download.xlsx", async (

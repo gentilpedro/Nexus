@@ -3,8 +3,10 @@
 @using Microsoft.EntityFrameworkCore
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Components.Shared
+@using Nexus.Web.Services
 @inject NavigationManager NavigationManager
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject NotificationBadgeService Badge
 @implements IDisposable
 
 <nav class="topnav">
@@ -14,6 +16,9 @@
                 <button type="button" class="app-sidebar-toggle" @onclick="ToggleSidebar" aria-label="Abrir menu">☰</button>
             </Authorized>
         </AuthorizeView>
+        <button type="button" class="topnav-icon-btn" title="Voltar" aria-label="Voltar" onclick="history.back()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+        </button>
         <a class="topnav-brand-link" href="/">
             <img class="topnav-logo" src="@Assets["IconNexus.png"]" alt="Nexus" />
         </a>
@@ -34,14 +39,21 @@
             <Authorized>
                 <a class="topnav-icon-btn" href="/notifications" aria-label="Notificações">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
-                    @if (unreadCount > 0)
+                    @if (Badge.UnreadCount > 0)
                     {
                         <span class="topnav-icon-dot"></span>
                     }
                 </a>
                 <div class="topnav-user-menu">
                     <button type="button" class="topnav-avatar-btn" @onclick="ToggleUserMenu">
-                        <span class="topnav-avatar">@avatarInitial</span>
+                        @if (avatarUrl is not null)
+                        {
+                            <img class="topnav-avatar" src="@avatarUrl" alt="" />
+                        }
+                        else
+                        {
+                            <span class="topnav-avatar">@avatarInitial</span>
+                        }
                         <span class="topnav-avatar-name">@displayName</span>
                         <svg class="icon" style="width:.9rem;height:.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                     </button>
@@ -104,16 +116,19 @@
 
     private bool sidebarOpen;
     private bool userMenuOpen;
-    private int unreadCount;
     private string displayName = "";
     private string avatarInitial = "?";
+    private string? avatarUrl;
     private string searchText = "";
 
     protected override async Task OnInitializedAsync()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
+        Badge.Changed += OnBadgeChanged;
         await RefreshHeaderStateAsync();
     }
+
+    private void OnBadgeChanged() => InvokeAsync(StateHasChanged);
 
     private async Task RefreshHeaderStateAsync()
     {
@@ -126,16 +141,19 @@
         var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null)
         {
-            unreadCount = 0;
+            Badge.SetUnreadCount(0);
             return;
         }
 
         await using var db = await DbFactory.CreateDbContextAsync();
-        unreadCount = await db.Notifications.CountAsync(n => n.UserId == userId && !n.IsRead);
+        Badge.SetUnreadCount(await db.Notifications.CountAsync(n => n.UserId == userId && !n.IsRead));
 
-        var user = await db.Users.Where(u => u.Id == userId).Select(u => new { u.DisplayName, u.Email }).FirstOrDefaultAsync();
+        var user = await db.Users.Where(u => u.Id == userId).Select(u => new { u.DisplayName, u.Email, u.AvatarStoragePath }).FirstOrDefaultAsync();
         displayName = string.IsNullOrEmpty(user?.DisplayName) ? (user?.Email?.Split('@')[0] ?? "") : user.DisplayName;
         avatarInitial = string.IsNullOrWhiteSpace(displayName) ? "?" : displayName.Trim()[0].ToString().ToUpperInvariant();
+        avatarUrl = user?.AvatarStoragePath is null
+            ? null
+            : $"/avatars/{userId}/download?v={Uri.EscapeDataString(Path.GetFileNameWithoutExtension(user.AvatarStoragePath))}";
     }
 
     private void ToggleSidebar()
@@ -181,5 +199,6 @@
     public void Dispose()
     {
         NavigationManager.LocationChanged -= OnLocationChanged;
+        Badge.Changed -= OnBadgeChanged;
     }
 }
