@@ -7,9 +7,11 @@
 @using Nexus.Web.Extensions
 @using Nexus.Web.Services
 @using Microsoft.EntityFrameworkCore
+@implements IAsyncDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 
 <PageTitle>Nexus</PageTitle>
 
@@ -62,6 +64,14 @@
 
             <div class="dashboard-layout">
                 <div>
+                    <div class="side-card">
+                        <h2>Resumo de produtividade</h2>
+                        <p class="topnav-user" style="margin-top:-0.5rem;margin-bottom:0.75rem;">Tarefas concluídas nos últimos 7 dias</p>
+                        <div style="height:220px;">
+                            <canvas id="productivity-chart"></canvas>
+                        </div>
+                    </div>
+
                     @if (workspaces is not null)
                     {
                         <div class="dashboard-workspace-grid">
@@ -353,6 +363,9 @@
 
     private int activeSprintCount;
     private List<WorkspaceProgress>? workspaceProgress;
+    private List<string> weeklyLabels = [];
+    private List<int> weeklyValues = [];
+    private IJSObjectReference? chartModule;
 
     private record WorkspaceProgress(string Name, int Percent);
 
@@ -414,6 +427,19 @@
                     return new WorkspaceProgress(w.Workspace.Name, (int)Math.Round(p.Done * 100.0 / p.Total));
                 })
                 .ToList();
+
+            var sevenDaysAgo = DateTime.UtcNow.Date.AddDays(-6);
+            var completedDates = await db.WorkItems
+                .Where(wi => workspaceIds.Contains(wi.TaskList.Space.WorkspaceId)
+                    && wi.Status.Category == StatusCategory.Done
+                    && wi.UpdatedAtUtc != null
+                    && wi.UpdatedAtUtc.Value.Date >= sevenDaysAgo)
+                .Select(wi => wi.UpdatedAtUtc!.Value.Date)
+                .ToListAsync();
+
+            var ptBr = new CultureInfo("pt-BR");
+            weeklyLabels = Enumerable.Range(0, 7).Select(i => ptBr.TextInfo.ToTitleCase(sevenDaysAgo.AddDays(i).ToString("ddd", ptBr))).ToList();
+            weeklyValues = Enumerable.Range(0, 7).Select(i => completedDates.Count(d => d == sevenDaysAgo.AddDays(i))).ToList();
         }
 
         todoItems = await QueryService.GetAssignedWorkItemsAsync(userId);
@@ -425,6 +451,31 @@
 
         doneItems = await QueryService.GetRecentlyCompletedByUserAsync(userId);
         delegatedItems = await QueryService.GetDelegatedByUserAsync(userId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && weeklyLabels.Count > 0)
+        {
+            chartModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/productivity-chart-interop.js");
+            await chartModule.InvokeVoidAsync("render", "productivity-chart", weeklyLabels, weeklyValues);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (chartModule is not null)
+        {
+            try
+            {
+                await chartModule.InvokeVoidAsync("destroy", "productivity-chart");
+                await chartModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone — nothing to clean up client-side.
+            }
+        }
     }
 
     private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
