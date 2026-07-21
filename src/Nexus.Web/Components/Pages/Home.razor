@@ -21,130 +21,314 @@
                 <div class="dashboard-greeting-date">@today</div>
             </div>
 
-            <div class="form-actions" style="margin-bottom: 1.25rem;">
-                <a class="btn btn-secondary" href="/chats">Chats</a>
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Concluídas recentemente</span>
+                        <span class="stat-card-value">@(doneItems?.Count ?? 0)</span>
+                    </div>
+                    <span class="stat-card-icon is-success">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Tarefas atrasadas</span>
+                        <span class="stat-card-value">@overdue.Count</span>
+                    </div>
+                    <span class="stat-card-icon is-danger">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Sprints ativos</span>
+                        <span class="stat-card-value">@activeSprintCount</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Prazos nos próx. 7 dias</span>
+                        <span class="stat-card-value">@thisWeek.Count</span>
+                    </div>
+                    <span class="stat-card-icon is-warning">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                    </span>
+                </div>
             </div>
 
-            @if (workspaces is not null && workspaces.Count > 0)
-            {
-                <div class="dashboard-workspace-grid">
-                    @foreach (var membership in workspaces)
+            <div class="dashboard-layout">
+                <div>
+                    @if (workspaces is not null)
                     {
-                        <a class="dashboard-workspace-card" href="@($"/workspaces/{membership.WorkspaceId}")">
-                            <span class="dashboard-workspace-avatar">@Initial(membership.Workspace.Name)</span>
-                            <span class="dashboard-workspace-name">@membership.Workspace.Name</span>
-                            <span class="dashboard-workspace-role">@membership.Role.ToDisplayLabel()</span>
-                        </a>
+                        <div class="dashboard-workspace-grid">
+                            @foreach (var membership in workspaces)
+                            {
+                                <a class="dashboard-workspace-card" href="@($"/workspaces/{membership.WorkspaceId}")">
+                                    <span class="dashboard-workspace-avatar">@Initial(membership.Workspace.Name)</span>
+                                    <span class="dashboard-workspace-name">@membership.Workspace.Name</span>
+                                    <span class="dashboard-workspace-role">@membership.Role.ToDisplayLabel()</span>
+                                </a>
+                            }
+                            <a class="dashboard-workspace-card dashboard-workspace-card--add" href="/workspaces/new">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                Novo workspace
+                            </a>
+                        </div>
+                    }
+
+                    <div class="form-actions" style="margin-bottom: 1.25rem;">
+                        <a class="btn btn-secondary" href="/chats">Chats</a>
+                    </div>
+
+                    <div class="view-tabs">
+                        <button type="button" class="@(activeTab == "todo" ? "active" : "")" @onclick='() => activeTab = "todo"'>A Fazer</button>
+                        <button type="button" class="@(activeTab == "done" ? "active" : "")" @onclick='() => activeTab = "done"'>Concluídas</button>
+                        <button type="button" class="@(activeTab == "delegated" ? "active" : "")" @onclick='() => activeTab = "delegated"'>Delegadas</button>
+                    </div>
+
+                    @if (activeTab == "todo")
+                    {
+                        @if (todoItems is null)
+                        {
+                            <p>Carregando...</p>
+                        }
+                        else if (todoItems.Count == 0)
+                        {
+                            <div class="empty-state">
+                                <p>Nenhuma tarefa atribuída a você.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @if (overdue.Count > 0)
+                            {
+                                <h2>Atrasadas</h2>
+                                <div class="dashboard-task-list">
+                                    @foreach (var item in overdue)
+                                    {
+                                        <TaskRow Item="item" OnClick="OpenTask" />
+                                    }
+                                </div>
+                            }
+                            @if (thisWeek.Count > 0)
+                            {
+                                <h2>Esta semana</h2>
+                                <div class="dashboard-task-list">
+                                    @foreach (var item in thisWeek)
+                                    {
+                                        <TaskRow Item="item" OnClick="OpenTask" />
+                                    }
+                                </div>
+                            }
+                            @if (later.Count > 0)
+                            {
+                                <h2>Depois / sem prazo</h2>
+                                <div class="dashboard-task-list">
+                                    @foreach (var item in later)
+                                    {
+                                        <TaskRow Item="item" OnClick="OpenTask" />
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+                    else if (activeTab == "done")
+                    {
+                        @if (doneItems is null)
+                        {
+                            <p>Carregando...</p>
+                        }
+                        else if (doneItems.Count == 0)
+                        {
+                            <div class="empty-state">
+                                <p>Nenhuma tarefa concluída recentemente.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="dashboard-task-list">
+                                @foreach (var item in doneItems)
+                                {
+                                    <TaskRow Item="item" OnClick="OpenTask" />
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        @if (delegatedItems is null)
+                        {
+                            <p>Carregando...</p>
+                        }
+                        else if (delegatedItems.Count == 0)
+                        {
+                            <div class="empty-state">
+                                <p>Nenhuma tarefa delegada.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="dashboard-task-list">
+                                @foreach (var item in delegatedItems)
+                                {
+                                    <TaskRow Item="item" OnClick="OpenTask" />
+                                }
+                            </div>
+                        }
                     }
                 </div>
-            }
 
-            <div class="view-tabs">
-                <button type="button" class="@(activeTab == "todo" ? "active" : "")" @onclick='() => activeTab = "todo"'>A Fazer</button>
-                <button type="button" class="@(activeTab == "done" ? "active" : "")" @onclick='() => activeTab = "done"'>Concluídas</button>
-                <button type="button" class="@(activeTab == "delegated" ? "active" : "")" @onclick='() => activeTab = "delegated"'>Delegadas</button>
+                <div>
+                    @if (workspaceProgress is { Count: > 0 })
+                    {
+                        <div class="side-card">
+                            <h2>Progresso dos workspaces</h2>
+                            @foreach (var wp in workspaceProgress)
+                            {
+                                <div class="progress-row">
+                                    <div class="progress-row-top">
+                                        <span class="name">@wp.Name</span>
+                                        <span class="pct">@wp.Percent%</span>
+                                    </div>
+                                    <div class="progress-track">
+                                        <div class="progress-fill" style="width:@(wp.Percent)%"></div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
             </div>
-
-            @if (activeTab == "todo")
-            {
-                @if (todoItems is null)
-                {
-                    <p>Carregando...</p>
-                }
-                else if (todoItems.Count == 0)
-                {
-                    <div class="empty-state">
-                        <p>Nenhuma tarefa atribuída a você.</p>
-                    </div>
-                }
-                else
-                {
-                    @if (overdue.Count > 0)
-                    {
-                        <h2>Atrasadas</h2>
-                        <div class="dashboard-task-list">
-                            @foreach (var item in overdue)
-                            {
-                                <TaskRow Item="item" OnClick="OpenTask" />
-                            }
-                        </div>
-                    }
-                    @if (thisWeek.Count > 0)
-                    {
-                        <h2>Esta semana</h2>
-                        <div class="dashboard-task-list">
-                            @foreach (var item in thisWeek)
-                            {
-                                <TaskRow Item="item" OnClick="OpenTask" />
-                            }
-                        </div>
-                    }
-                    @if (later.Count > 0)
-                    {
-                        <h2>Depois / sem prazo</h2>
-                        <div class="dashboard-task-list">
-                            @foreach (var item in later)
-                            {
-                                <TaskRow Item="item" OnClick="OpenTask" />
-                            }
-                        </div>
-                    }
-                }
-            }
-            else if (activeTab == "done")
-            {
-                @if (doneItems is null)
-                {
-                    <p>Carregando...</p>
-                }
-                else if (doneItems.Count == 0)
-                {
-                    <div class="empty-state">
-                        <p>Nenhuma tarefa concluída recentemente.</p>
-                    </div>
-                }
-                else
-                {
-                    <div class="dashboard-task-list">
-                        @foreach (var item in doneItems)
-                        {
-                            <TaskRow Item="item" OnClick="OpenTask" />
-                        }
-                    </div>
-                }
-            }
-            else
-            {
-                @if (delegatedItems is null)
-                {
-                    <p>Carregando...</p>
-                }
-                else if (delegatedItems.Count == 0)
-                {
-                    <div class="empty-state">
-                        <p>Nenhuma tarefa delegada.</p>
-                    </div>
-                }
-                else
-                {
-                    <div class="dashboard-task-list">
-                        @foreach (var item in delegatedItems)
-                        {
-                            <TaskRow Item="item" OnClick="OpenTask" />
-                        }
-                    </div>
-                }
-            }
         </div>
     </Authorized>
     <NotAuthorized>
-        <div class="page-container">
-            <div class="empty-state">
-                <h1>Nexus</h1>
-                <p>Gerencie seus projetos combinando o melhor do Jira e do ClickUp.</p>
-                <a class="btn" href="Account/Register" data-enhance-nav="false">Criar conta</a>
-                <a class="btn btn-secondary" href="Account/Login" data-enhance-nav="false">Entrar</a>
+        <div class="landing">
+            <div class="landing-hero">
+                <div class="landing-hero-copy">
+                    <span class="landing-eyebrow">Gestão de projetos, sem complicação</span>
+                    <h1>Organize sua equipe com <span class="accent">clareza absoluta</span></h1>
+                    <p class="landing-hero-subtitle">Nexus é a plataforma de gestão de projetos feita pra equipes brasileiras: quadros Kanban, sprints, calendário e Gantt pra organizar o trabalho; docs e planilhas colaborativas pra centralizar informação; chat integrado pra não perder contexto. Sem curva de aprendizado, sem jargão em inglês, com suporte direto de quem constrói o produto.</p>
+                    <div class="landing-hero-actions">
+                        <a class="btn" href="https://wa.me/5500000000000" target="_blank" rel="noopener">Falar no WhatsApp</a>
+                        <NavLink href="Account/Register" class="btn btn-secondary" data-enhance-nav="false">Criar conta grátis</NavLink>
+                    </div>
+                </div>
+                <div class="landing-hero-visual">
+                    <img src="@Assets["foto1Landing.png"]" alt="Ilustração do Nexus organizando equipes e projetos" />
+                </div>
             </div>
+
+            <div class="landing-section">
+                <div class="landing-section-header">
+                    <h2>Tudo que sua equipe precisa</h2>
+                    <p>O jeito simples de organizar sua equipe — tarefas, documentos e comunicação em um só lugar, em português.</p>
+                </div>
+                <div class="landing-feature-split">
+                    <div class="landing-feature-media">
+                        <img src="@Assets["foto2Landing.png"]" alt="Quadro Kanban do Nexus aberto em um notebook" />
+                    </div>
+                    <div class="landing-feature-list">
+                        <div class="landing-feature-row">
+                            <span class="landing-feature-icon">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1" /><rect x="14" y="3" width="7" height="10" rx="1" /></svg>
+                            </span>
+                            <div>
+                                <h3>Quadros Kanban visuais</h3>
+                                <p>Arraste e solte tarefas, acompanhe prioridades e veja gargalos na hora.</p>
+                            </div>
+                        </div>
+                        <div class="landing-feature-row">
+                            <span class="landing-feature-icon">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                            </span>
+                            <div>
+                                <h3>Comunicação centralizada</h3>
+                                <p>Chat por workspace, ligado direto às tarefas e documentos — sem perder contexto.</p>
+                            </div>
+                        </div>
+                        <div class="landing-feature-row">
+                            <span class="landing-feature-icon">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+                            </span>
+                            <div>
+                                <h3>Relatórios de progresso</h3>
+                                <p>Burndown de sprint e progresso por workspace, calculados a partir dos dados reais do time.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="landing-diff-strip">
+                <div class="landing-diff-grid">
+                    <div class="landing-diff-item">
+                        <span class="landing-diff-icon">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg>
+                        </span>
+                        <h3>Mais simples</h3>
+                        <p>Sem curva de aprendizado — sua equipe usa no primeiro dia, sem treinamento.</p>
+                    </div>
+                    <div class="landing-diff-item">
+                        <span class="landing-diff-icon">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14M5 8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4" /></svg>
+                        </span>
+                        <h3>100% em português</h3>
+                        <p>Feito para o time brasileiro, do vocabulário à forma de trabalhar.</p>
+                    </div>
+                    <div class="landing-diff-item">
+                        <span class="landing-diff-icon">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                        </span>
+                        <h3>Suporte direto</h3>
+                        <p>Fale direto com quem desenvolve o produto, sem central de atendimento.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="landing-cta">
+                <div class="landing-cta-card  mt-5">
+                    <div>
+                        <h2>Pronto pra organizar sua equipe?</h2>
+                        <p>Fale com a gente pelo WhatsApp e comece hoje mesmo.</p>
+                    </div>
+                    <div class="landing-cta-actions">
+                        <a class="btn" href="https://wa.me/5500000000000" target="_blank" rel="noopener" style="background:#fff;color:var(--color-primary);">Falar no WhatsApp →</a>
+                        <NavLink href="Account/Register" class="btn btn-secondary" data-enhance-nav="false">Criar conta</NavLink>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="landing-footer">
+                <div class="landing-footer-grid">
+                    <div class="landing-footer-brand-block">
+                        <div class="landing-footer-brand">
+                            <img src="@Assets["IconNexus.png"]" alt="" />
+                            Nexus
+                        </div>
+                        <p class="landing-footer-tagline">O Nexus reúne em um só lugar tudo que uma equipe pequena ou média precisa pra tocar projetos: organize o trabalho em workspaces, visualize tarefas como quadro Kanban, 
+                            lista, calendário, linha do tempo (Gantt) ou backlog de sprints, documente decisões em páginas colaborativas ou planilhas, e converse com o time sem sair da ferramenta.
+                            Construído do zero em português, pensado pra quem não tem tempo pra aprender uma plataforma complicada.</p>
+                    </div>
+                    <div class="landing-footer-links">
+                        <div class="landing-footer-col">
+                            <h4>Produto</h4>
+                            <NavLink href="Account/Register" data-enhance-nav="false">Criar conta</NavLink>
+                            <NavLink href="Account/Login" data-enhance-nav="false">Entrar</NavLink>
+                        </div>
+                        <div class="landing-footer-col">
+                            <h4>Contato</h4>
+                            <a href="https://wa.me/5500000000000" target="_blank" rel="noopener">WhatsApp</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="landing-footer-bottom">
+                    <span>© @DateTime.Now.Year Nexus. Todos os direitos reservados.</span>
+                </div>
+            </footer>
         </div>
     </NotAuthorized>
 </AuthorizeView>
@@ -166,6 +350,11 @@
 
     private List<WorkItem>? doneItems;
     private List<WorkItem>? delegatedItems;
+
+    private int activeSprintCount;
+    private List<WorkspaceProgress>? workspaceProgress;
+
+    private record WorkspaceProgress(string Name, int Percent);
 
     private string Greeting => DateTime.Now.Hour switch
     {
@@ -200,6 +389,31 @@
                 .Where(m => m.UserId == userId)
                 .OrderBy(m => m.Workspace.Name)
                 .ToListAsync();
+
+            var workspaceIds = workspaces.Select(w => w.WorkspaceId).ToList();
+
+            activeSprintCount = await db.Sprints
+                .CountAsync(s => s.Status == SprintStatus.Active && workspaceIds.Contains(s.TaskList.Space.WorkspaceId));
+
+            var progressRaw = await db.WorkItems
+                .Where(wi => workspaceIds.Contains(wi.TaskList.Space.WorkspaceId))
+                .GroupBy(wi => wi.TaskList.Space.WorkspaceId)
+                .Select(g => new
+                {
+                    WorkspaceId = g.Key,
+                    Total = g.Count(),
+                    Done = g.Count(wi => wi.Status.Category == StatusCategory.Done)
+                })
+                .ToListAsync();
+
+            workspaceProgress = workspaces
+                .Where(w => progressRaw.Any(p => p.WorkspaceId == w.WorkspaceId && p.Total > 0))
+                .Select(w =>
+                {
+                    var p = progressRaw.First(p => p.WorkspaceId == w.WorkspaceId);
+                    return new WorkspaceProgress(w.Workspace.Name, (int)Math.Round(p.Done * 100.0 / p.Total));
+                })
+                .ToList();
         }
 
         todoItems = await QueryService.GetAssignedWorkItemsAsync(userId);
