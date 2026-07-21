@@ -16,6 +16,17 @@
                 <button class="btn-link" type="button" @onclick="Close">✕</button>
             </div>
 
+            @if (isEditing && editingCreatedAtUtc is not null)
+            {
+                <p class="topnav-user" style="margin-top:-0.5rem;margin-bottom:1rem;">
+                    Criado em @editingCreatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy")
+                    @if (editingUpdatedAtUtc is not null)
+                    {
+                        <text> · Atualizado em @editingUpdatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</text>
+                    }
+                </p>
+            }
+
             <EditForm Model="model" OnValidSubmit="HandleSave">
                 <DataAnnotationsValidator />
                 @if (!string.IsNullOrEmpty(errorMessage))
@@ -117,7 +128,7 @@
                     @foreach (var field in CustomFieldDefinitions)
                     {
                         <div class="form-field">
-                            <label for="@($"custom-field-{field.Id}")">@field.Name</label>
+                            <label for="@($"custom-field-{field.Id}")">@field.Name@(field.Required ? " *" : "")</label>
                             @switch (field.Type)
                             {
                                 case CustomFieldType.Text:
@@ -215,6 +226,8 @@
     private string? errorMessage;
     private Guid? editingId;
     private Guid? originalStatusId;
+    private DateTime? editingCreatedAtUtc;
+    private DateTime? editingUpdatedAtUtc;
     private readonly WorkItemFormModel model = new();
     private readonly Dictionary<Guid, string> customFieldValues = new();
     private readonly HashSet<Guid> selectedLabelIds = new();
@@ -264,6 +277,8 @@
         isEditing = true;
         editingId = item.Id;
         originalStatusId = item.StatusId;
+        editingCreatedAtUtc = item.CreatedAtUtc;
+        editingUpdatedAtUtc = item.UpdatedAtUtc;
         errorMessage = null;
         model.Title = item.Title;
         model.Description = item.Description ?? "";
@@ -437,6 +452,15 @@
         if (model.StartDate.HasValue && model.DueDate.HasValue && model.StartDate.Value > model.DueDate.Value)
         {
             errorMessage = "A data de início precisa ser antes do prazo.";
+            isSaving = false;
+            return;
+        }
+
+        var missingRequiredField = CustomFieldDefinitions.FirstOrDefault(f =>
+            f.Required && string.IsNullOrWhiteSpace(customFieldValues.GetValueOrDefault(f.Id)));
+        if (missingRequiredField is not null)
+        {
+            errorMessage = $"O campo \"{missingRequiredField.Name}\" é obrigatório.";
             isSaving = false;
             return;
         }

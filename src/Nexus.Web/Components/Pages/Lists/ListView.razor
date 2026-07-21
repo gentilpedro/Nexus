@@ -1,5 +1,6 @@
 @page "/lists/{ListId:guid}/list"
 @attribute [Authorize]
+@using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
@@ -62,6 +63,13 @@
         }
         else
         {
+            <div class="pill-tabs">
+                <button type="button" class="@(rowFilter == "all" ? "active" : "")" @onclick='() => rowFilter = "all"'>Todas <span class="tab-count">@workItems.Count</span></button>
+                <button type="button" class="@(rowFilter == "mine" ? "active" : "")" @onclick='() => rowFilter = "mine"'>Minhas <span class="tab-count">@workItems.Count(w => w.AssigneeId == currentUserId)</span></button>
+                <button type="button" class="@(rowFilter == "urgent" ? "active" : "")" @onclick='() => rowFilter = "urgent"'>Urgentes <span class="tab-count">@workItems.Count(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest)</span></button>
+                <button type="button" class="@(rowFilter == "done" ? "active" : "")" @onclick='() => rowFilter = "done"'>Concluídas <span class="tab-count">@workItems.Count(w => w.Status.Category == StatusCategory.Done)</span></button>
+            </div>
+
             <div class="table-scroll">
                 <table class="data-table">
                     <thead>
@@ -75,9 +83,9 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in workItems)
+                        @foreach (var item in FilteredWorkItems)
                         {
-                            <tr style="cursor:pointer" @onclick="() => OpenEdit(item)">
+                            <tr class="data-table-row" @onclick="() => OpenEdit(item)">
                                 <td><WorkItemTypeIcon Type="item.Type" /></td>
                                 <td>@item.Title</td>
                                 <td><StatusBadge Name="@item.Status.Name" Category="item.Status.Category" /></td>
@@ -88,6 +96,36 @@
                         }
                     </tbody>
                 </table>
+            </div>
+
+            <div class="stat-grid" style="margin-top:1.25rem;">
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Concluídas</span>
+                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category == StatusCategory.Done)</span>
+                    </div>
+                    <span class="stat-card-icon is-success">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Atrasadas</span>
+                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is not null && w.DueDateUtc.Value.Date < DateTime.UtcNow.Date)</span>
+                    </div>
+                    <span class="stat-card-icon is-danger">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Em andamento</span>
+                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category == StatusCategory.InProgress)</span>
+                    </div>
+                    <span class="stat-card-icon is-warning">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                    </span>
+                </div>
             </div>
         }
 
@@ -125,11 +163,24 @@
     private bool canManageFields;
     private TaskDetailPanel? panel;
     private Guid? loadedListId;
+    private string rowFilter = "all";
+    private string? currentUserId;
+
+    private List<WorkItem> FilteredWorkItems => rowFilter switch
+    {
+        "mine" => workItems!.Where(w => w.AssigneeId == currentUserId).ToList(),
+        "urgent" => workItems!.Where(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest).ToList(),
+        "done" => workItems!.Where(w => w.Status.Category == StatusCategory.Done).ToList(),
+        _ => workItems!
+    };
 
     protected override async Task OnParametersSetAsync()
     {
         if (loadedListId == ListId) return;
         loadedListId = ListId;
+
+        var authStateForUser = await AuthStateTask!;
+        currentUserId = authStateForUser.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         notFound = false;
         taskList = null;

@@ -95,6 +95,36 @@
         }
         else
         {
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Tarefas no backlog</span>
+                        <span class="stat-card-value">@(backlogItems?.Count ?? 0)</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Sprints planejadas</span>
+                        <span class="stat-card-value">@sprints.Count(s => s.Status == SprintStatus.Planned)</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Sprint ativa</span>
+                        <span class="stat-card-value" style="font-size:1.05rem;">@(sprints.FirstOrDefault(s => s.Status == SprintStatus.Active)?.Name ?? "Nenhuma")</span>
+                    </div>
+                    <span class="stat-card-icon is-success">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                    </span>
+                </div>
+            </div>
+
             @foreach (var sprint in sprints)
             {
                 <SprintSection Sprint="sprint"
