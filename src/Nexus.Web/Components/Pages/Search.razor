@@ -12,105 +12,257 @@
 @inject WorkItemQueryService QueryService
 @inject NavigationManager NavigationManager
 
-<PageTitle>Buscar</PageTitle>
+<PageTitle>Busca Global</PageTitle>
 
 <div class="page-container page-container--wide">
     <div class="page-header">
-        <h1>Buscar</h1>
+        <div>
+            <h1 style="margin-bottom:0.15rem;">Busca Global</h1>
+            @if (!string.IsNullOrWhiteSpace(textFilter))
+            {
+                <span class="topnav-user">Exibindo @TotalCount resultado@(TotalCount == 1 ? "" : "s") para "@textFilter"</span>
+            }
+            else
+            {
+                <span class="topnav-user">Busque em tarefas, documentos, planilhas e pessoas dos seus workspaces</span>
+            }
+        </div>
+        <button type="button" class="btn btn-secondary" @onclick="() => showAdvancedFilters = !showAdvancedFilters">
+            @(showAdvancedFilters ? "Ocultar filtros" : "Filtros avançados")
+        </button>
     </div>
 
-    <form @onsubmit="OnFilterChanged" @onsubmit:preventDefault="true" class="card search-filters">
-        <div class="form-row">
-            <div class="form-field">
-                <label for="search-text">Texto</label>
-                <input id="search-text" type="text" @bind="textFilter" placeholder="Buscar por título..." />
-            </div>
-            <div class="form-field">
-                <label for="search-workspace">Workspace</label>
-                <select id="search-workspace" @bind="workspaceIdText" @bind:after="OnFilterChanged">
-                    <option value="">Qualquer um dos meus</option>
-                    @foreach (var ws in workspaces ?? [])
-                    {
-                        <option value="@ws.Id">@ws.Name</option>
-                    }
-                </select>
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="form-field">
-                <label for="search-status">Status</label>
-                <select id="search-status" @bind="statusCategoryText" @bind:after="OnFilterChanged">
-                    <option value="">Qualquer</option>
-                    <option value="ToDo">A Fazer</option>
-                    <option value="InProgress">Em Andamento</option>
-                    <option value="Done">Concluído</option>
-                </select>
-            </div>
-            <div class="form-field">
-                <label for="search-priority">Prioridade</label>
-                <select id="search-priority" @bind="priorityText" @bind:after="OnFilterChanged">
-                    <option value="">Qualquer</option>
-                    @foreach (var p in Enum.GetValues<WorkItemPriority>())
-                    {
-                        <option value="@p">@p.ToDisplayLabel()</option>
-                    }
-                </select>
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="form-field">
-                <label for="search-type">Tipo</label>
-                <select id="search-type" @bind="typeText" @bind:after="OnFilterChanged">
-                    <option value="">Qualquer</option>
-                    @foreach (var t in Enum.GetValues<WorkItemType>())
-                    {
-                        <option value="@t">@t.ToDisplayLabel()</option>
-                    }
-                </select>
-            </div>
-            <div class="form-field">
-                <label for="search-assignee">Responsável</label>
-                <select id="search-assignee" @bind="assigneeModeText" @bind:after="OnFilterChanged">
-                    <option value="Any">Qualquer</option>
-                    <option value="Me">Atribuído a mim</option>
-                    <option value="Unassigned">Sem responsável</option>
-                </select>
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="form-field">
-                <label for="search-due">Prazo</label>
-                <select id="search-due" @bind="dueModeText" @bind:after="OnFilterChanged">
-                    <option value="Any">Qualquer</option>
-                    <option value="Overdue">Atrasado</option>
-                    <option value="ThisWeek">Esta semana</option>
-                    <option value="NoDueDate">Sem prazo</option>
-                </select>
-            </div>
-            <div class="form-field search-submit-field">
-                <button type="submit" class="btn">Buscar</button>
-            </div>
-        </div>
+    <form class="topnav-search-form" style="max-width:none;margin-bottom:1.25rem;padding:0.6rem 1rem;" @onsubmit="HandleSearch" @onsubmit:preventDefault="true">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+        <input type="search" placeholder="Buscar tarefas, documentos, planilhas ou pessoas..." @bind="textFilter" @bind:event="oninput" />
+        <button type="submit" class="btn" style="flex-shrink:0;">Buscar</button>
     </form>
 
-    @if (results is null)
+    @if (showAdvancedFilters)
+    {
+        <form @onsubmit="HandleSearch" @onsubmit:preventDefault="true" class="card search-filters">
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="search-workspace">Workspace</label>
+                    <select id="search-workspace" @bind="workspaceIdText" @bind:after="HandleSearch">
+                        <option value="">Qualquer um dos meus</option>
+                        @foreach (var ws in workspaces ?? [])
+                        {
+                            <option value="@ws.Id">@ws.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="search-status">Status</label>
+                    <select id="search-status" @bind="statusCategoryText" @bind:after="HandleSearch">
+                        <option value="">Qualquer</option>
+                        <option value="ToDo">A Fazer</option>
+                        <option value="InProgress">Em Andamento</option>
+                        <option value="Done">Concluído</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="search-priority">Prioridade</label>
+                    <select id="search-priority" @bind="priorityText" @bind:after="HandleSearch">
+                        <option value="">Qualquer</option>
+                        @foreach (var p in Enum.GetValues<WorkItemPriority>())
+                        {
+                            <option value="@p">@p.ToDisplayLabel()</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="search-type">Tipo</label>
+                    <select id="search-type" @bind="typeText" @bind:after="HandleSearch">
+                        <option value="">Qualquer</option>
+                        @foreach (var t in Enum.GetValues<WorkItemType>())
+                        {
+                            <option value="@t">@t.ToDisplayLabel()</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="search-assignee">Responsável</label>
+                    <select id="search-assignee" @bind="assigneeModeText" @bind:after="HandleSearch">
+                        <option value="Any">Qualquer</option>
+                        <option value="Me">Atribuído a mim</option>
+                        <option value="Unassigned">Sem responsável</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="search-due">Prazo</label>
+                    <select id="search-due" @bind="dueModeText" @bind:after="HandleSearch">
+                        <option value="Any">Qualquer</option>
+                        <option value="Overdue">Atrasado</option>
+                        <option value="ThisWeek">Esta semana</option>
+                        <option value="NoDueDate">Sem prazo</option>
+                    </select>
+                </div>
+            </div>
+            <p class="topnav-user">Esses filtros se aplicam à aba Tarefas.</p>
+        </form>
+    }
+
+    <div class="view-tabs">
+        <button type="button" class="@(tab == "all" ? "active" : "")" @onclick='() => tab = "all"'>Tudo <span class="tab-count">@TotalCount</span></button>
+        <button type="button" class="@(tab == "tasks" ? "active" : "")" @onclick='() => tab = "tasks"'>Tarefas <span class="tab-count">@(results?.Count ?? 0)</span></button>
+        <button type="button" class="@(tab == "docs" ? "active" : "")" @onclick='() => tab = "docs"'>Documentos <span class="tab-count">@(docResults?.Count ?? 0)</span></button>
+        <button type="button" class="@(tab == "sheets" ? "active" : "")" @onclick='() => tab = "sheets"'>Planilhas <span class="tab-count">@(sheetResults?.Count ?? 0)</span></button>
+        <button type="button" class="@(tab == "people" ? "active" : "")" @onclick='() => tab = "people"'>Pessoas <span class="tab-count">@(peopleResults?.Count ?? 0)</span></button>
+    </div>
+
+    @if (!HasLoaded)
     {
         <p>Carregando...</p>
     }
-    else if (results.Count == 0)
+    else if (!string.IsNullOrWhiteSpace(textFilter) && TotalCount == 0)
     {
-        <div class="empty-state">
-            <p>Nenhuma task encontrada com esses filtros.</p>
+        <div class="search-empty-state">
+            <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+                <circle cx="60" cy="60" r="56" fill="var(--color-primary-soft)" />
+                <circle cx="52" cy="52" r="22" fill="none" stroke="var(--color-primary)" stroke-width="6" />
+                <line x1="69" y1="69" x2="88" y2="88" stroke="var(--color-primary)" stroke-width="6" stroke-linecap="round" />
+            </svg>
+            <h2>Ops! Nenhum resultado para "@textFilter"</h2>
+            <p>Tente usar palavras-chave mais genéricas, verifique a digitação ou limpe os filtros pra ver mais resultados.</p>
+            <button type="button" class="btn btn-secondary" @onclick="ClearSearch">Limpar busca</button>
         </div>
+    }
+    else if (tab == "all")
+    {
+        @if (results is { Count: > 0 })
+        {
+            <h2 style="font-size:0.95rem;">Tarefas <button type="button" class="btn-link" style="margin-left:0.5rem;" @onclick='() => tab = "tasks"'>ver todas →</button></h2>
+            <div class="dashboard-task-list" style="margin-bottom:1.5rem;">
+                @foreach (var item in results.Take(3))
+                {
+                    <TaskRow Item="item" OnClick="OpenTask" />
+                }
+            </div>
+        }
+        @if (docResults is { Count: > 0 } || sheetResults is { Count: > 0 })
+        {
+            <h2 style="font-size:0.95rem;">Documentos e planilhas <button type="button" class="btn-link" style="margin-left:0.5rem;" @onclick='() => tab = "docs"'>ver todos →</button></h2>
+            <div class="table-scroll" style="margin-bottom:1.5rem;">
+                <table class="data-table">
+                    <tbody>
+                        @foreach (var doc in (docResults ?? []).Concat(sheetResults ?? []).Take(3))
+                        {
+                            <tr class="data-table-row" @onclick="() => OpenDoc(doc)">
+                                <td>@(doc.Type == DocPageType.Spreadsheet ? "📊" : "📄") @doc.Title</td>
+                                <td>@doc.Workspace.Name</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (peopleResults is { Count: > 0 })
+        {
+            <h2 style="font-size:0.95rem;">Pessoas <button type="button" class="btn-link" style="margin-left:0.5rem;" @onclick='() => tab = "people"'>ver todas →</button></h2>
+            <div class="card-list">
+                @foreach (var person in peopleResults.Take(3))
+                {
+                    <div class="card" style="display:flex;align-items:center;gap:0.6rem;">
+                        <span class="dashboard-workspace-avatar" style="width:2.1rem;height:2.1rem;font-size:0.8rem;">@Initial(person.DisplayName ?? person.Email)</span>
+                        <div>
+                            <div style="font-weight:600;">@(person.DisplayName is { Length: > 0 } dn ? dn : person.Email)</div>
+                            <div style="font-size:0.8rem;color:var(--color-text-muted);">@person.Email</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        @if (TotalCount == 0)
+        {
+            <div class="empty-state">
+                <p>Digite algo na busca acima pra encontrar tarefas, documentos, planilhas ou pessoas.</p>
+            </div>
+        }
+    }
+    else if (tab == "tasks")
+    {
+        @if (results is null)
+        {
+            <p>Carregando...</p>
+        }
+        else if (results.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Nenhuma task encontrada com esses filtros.</p>
+            </div>
+        }
+        else
+        {
+            <div class="dashboard-task-list">
+                @foreach (var item in results)
+                {
+                    <TaskRow Item="item" OnClick="OpenTask" />
+                }
+            </div>
+        }
+    }
+    else if (tab is "docs" or "sheets")
+    {
+        var list = tab == "docs" ? docResults : sheetResults;
+        @if (list is null)
+        {
+            <p>Carregando...</p>
+        }
+        else if (list.Count == 0)
+        {
+            <div class="empty-state"><p>Nenhum resultado encontrado.</p></div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Título</th><th>Workspace</th><th>Atualizado</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var doc in list)
+                        {
+                            <tr class="data-table-row" @onclick="() => OpenDoc(doc)">
+                                <td>@doc.Title</td>
+                                <td>@doc.Workspace.Name</td>
+                                <td>@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToLocalTime().ToString("dd/MM/yyyy"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     }
     else
     {
-        <div class="dashboard-task-list">
-            @foreach (var item in results)
-            {
-                <TaskRow Item="item" OnClick="OpenTask" />
-            }
-        </div>
+        @if (peopleResults is null)
+        {
+            <p>Carregando...</p>
+        }
+        else if (peopleResults.Count == 0)
+        {
+            <div class="empty-state"><p>Nenhuma pessoa encontrada.</p></div>
+        }
+        else
+        {
+            <div class="card-list">
+                @foreach (var person in peopleResults)
+                {
+                    <div class="card" style="display:flex;align-items:center;gap:0.6rem;">
+                        <span class="dashboard-workspace-avatar" style="width:2.1rem;height:2.1rem;font-size:0.8rem;">@Initial(person.DisplayName ?? person.Email)</span>
+                        <div>
+                            <div style="font-weight:600;">@(person.DisplayName is { Length: > 0 } dn ? dn : person.Email)</div>
+                            <div style="font-size:0.8rem;color:var(--color-text-muted);">@person.Email</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
     }
 </div>
 
@@ -122,33 +274,15 @@
     [Parameter]
     public string? QText { get; set; }
 
-    [SupplyParameterFromQuery(Name = "ws")]
-    [Parameter]
-    public string? QWorkspace { get; set; }
-
-    [SupplyParameterFromQuery(Name = "status")]
-    [Parameter]
-    public string? QStatus { get; set; }
-
-    [SupplyParameterFromQuery(Name = "priority")]
-    [Parameter]
-    public string? QPriority { get; set; }
-
-    [SupplyParameterFromQuery(Name = "type")]
-    [Parameter]
-    public string? QType { get; set; }
-
-    [SupplyParameterFromQuery(Name = "assignee")]
-    [Parameter]
-    public string? QAssignee { get; set; }
-
-    [SupplyParameterFromQuery(Name = "due")]
-    [Parameter]
-    public string? QDue { get; set; }
-
+    private string tab = "all";
+    private bool showAdvancedFilters;
     private string? userId;
+    private List<Guid>? myWorkspaceIds;
     private List<Workspace>? workspaces;
     private List<WorkItem>? results;
+    private List<DocPage>? docResults;
+    private List<DocPage>? sheetResults;
+    private List<ApplicationUser>? peopleResults;
 
     private string textFilter = "";
     private string workspaceIdText = "";
@@ -158,55 +292,57 @@
     private string assigneeModeText = "Any";
     private string dueModeText = "Any";
 
-    protected override async Task OnParametersSetAsync()
+    private bool HasLoaded => results is not null && docResults is not null && sheetResults is not null && peopleResults is not null;
+
+    private int TotalCount => (results?.Count ?? 0) + (docResults?.Count ?? 0) + (sheetResults?.Count ?? 0) + (peopleResults?.Count ?? 0);
+
+    protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateTask!;
+        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId is null)
         {
-            var authState = await AuthStateTask!;
-            userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (userId is null)
-            {
-                results = [];
-                return;
-            }
+            results = [];
+            docResults = [];
+            sheetResults = [];
+            peopleResults = [];
+            return;
+        }
 
-            await using var db = await DbFactory.CreateDbContextAsync();
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
             workspaces = await db.WorkspaceMembers
                 .Where(m => m.UserId == userId)
                 .Select(m => m.Workspace)
                 .OrderBy(w => w.Name)
                 .ToListAsync();
         }
+        myWorkspaceIds = workspaces.Select(w => w.Id).ToList();
 
         textFilter = QText ?? "";
-        workspaceIdText = QWorkspace ?? "";
-        statusCategoryText = QStatus ?? "";
-        priorityText = QPriority ?? "";
-        typeText = QType ?? "";
-        assigneeModeText = QAssignee ?? "Any";
-        dueModeText = QDue ?? "Any";
-
-        await ReloadAsync();
+        await HandleSearch();
     }
 
-    private void OnFilterChanged()
+    private async Task HandleSearch()
     {
-        var query = new Dictionary<string, object?>
-        {
-            ["q"] = string.IsNullOrWhiteSpace(textFilter) ? null : textFilter,
-            ["ws"] = string.IsNullOrWhiteSpace(workspaceIdText) ? null : workspaceIdText,
-            ["status"] = string.IsNullOrWhiteSpace(statusCategoryText) ? null : statusCategoryText,
-            ["priority"] = string.IsNullOrWhiteSpace(priorityText) ? null : priorityText,
-            ["type"] = string.IsNullOrWhiteSpace(typeText) ? null : typeText,
-            ["assignee"] = assigneeModeText == "Any" ? null : assigneeModeText,
-            ["due"] = dueModeText == "Any" ? null : dueModeText,
-        };
-
-        var uri = NavigationManager.GetUriWithQueryParameters("/search", query);
-        NavigationManager.NavigateTo(uri, replace: true);
+        await ReloadTasksAsync();
+        await ReloadDocsAsync();
+        await ReloadPeopleAsync();
     }
 
-    private async Task ReloadAsync()
+    private void ClearSearch()
+    {
+        textFilter = "";
+        workspaceIdText = "";
+        statusCategoryText = "";
+        priorityText = "";
+        typeText = "";
+        assigneeModeText = "Any";
+        dueModeText = "Any";
+        _ = HandleSearch();
+    }
+
+    private async Task ReloadTasksAsync()
     {
         if (userId is null)
         {
@@ -227,5 +363,51 @@
         results = await QueryService.SearchWorkItemsAsync(userId, filters);
     }
 
+    private async Task ReloadDocsAsync()
+    {
+        if (myWorkspaceIds is null)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.DocPages
+            .Include(d => d.Workspace)
+            .Where(d => myWorkspaceIds.Contains(d.WorkspaceId));
+
+        if (!string.IsNullOrWhiteSpace(textFilter))
+        {
+            query = query.Where(d => d.Title.Contains(textFilter));
+        }
+
+        docResults = await query.Where(d => d.Type == DocPageType.Text).OrderByDescending(d => d.UpdatedAtUtc ?? d.CreatedAtUtc).Take(50).ToListAsync();
+        sheetResults = await query.Where(d => d.Type == DocPageType.Spreadsheet).OrderByDescending(d => d.UpdatedAtUtc ?? d.CreatedAtUtc).Take(50).ToListAsync();
+    }
+
+    private async Task ReloadPeopleAsync()
+    {
+        if (myWorkspaceIds is null || userId is null)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var query = db.WorkspaceMembers
+            .Where(m => myWorkspaceIds.Contains(m.WorkspaceId) && m.UserId != userId)
+            .Select(m => m.User)
+            .Distinct();
+
+        if (!string.IsNullOrWhiteSpace(textFilter))
+        {
+            query = query.Where(u => (u.DisplayName != null && u.DisplayName.Contains(textFilter)) || (u.Email != null && u.Email.Contains(textFilter)));
+        }
+
+        peopleResults = await query.OrderBy(u => u.DisplayName).Take(50).ToListAsync();
+    }
+
     private void OpenTask(WorkItem item) => NavigationManager.NavigateTo($"/lists/{item.TaskListId}/list");
+
+    private void OpenDoc(DocPage doc) => NavigationManager.NavigateTo(doc.Type == DocPageType.Spreadsheet ? $"/spreadsheets/{doc.Id}" : $"/docs/{doc.Id}");
+
+    private static string Initial(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
 }
