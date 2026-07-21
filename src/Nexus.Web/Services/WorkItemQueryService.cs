@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -53,10 +54,26 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     // Returns false (without changing anything) if the list has configured StatusTransitions
     // and the from -> to change isn't one of them. A list with zero configured transitions is
     // unrestricted — every change is allowed, matching the app's behavior before this feature.
-    public async Task<bool> UpdateWorkItemStatusAsync(Guid workItemId, Guid newStatusId, int newSortOrder, CancellationToken ct = default)
+    //
+    // listId is the TaskListId the caller already authorized the current user against (the
+    // page resolves and checks it in OnParametersSetAsync). Both workItemId and newStatusId
+    // are scoped to it below — this is the only thing standing between a legitimate drag on
+    // your own board and a crafted DotNet.invokeMethodAsync call moving a WorkItem that
+    // belongs to a workspace you're not even a member of.
+    public async Task<bool> UpdateWorkItemStatusAsync(Guid listId, Guid workItemId, Guid newStatusId, int newSortOrder, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var workItem = await db.WorkItems.FirstAsync(w => w.Id == workItemId, ct);
+        var workItem = await db.WorkItems.FirstOrDefaultAsync(w => w.Id == workItemId && w.TaskListId == listId, ct);
+        if (workItem is null)
+        {
+            return false;
+        }
+
+        var statusBelongsToList = await db.TaskStatusDefinitions.AnyAsync(s => s.Id == newStatusId && s.TaskListId == listId, ct);
+        if (!statusBelongsToList)
+        {
+            return false;
+        }
 
         if (workItem.StatusId != newStatusId)
         {
@@ -145,7 +162,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.WorkspaceMembers
             .Where(m => m.WorkspaceId == workspaceId)
-            .Select(m => new ValueTuple<string, string>(m.UserId, m.User.DisplayName != "" ? m.User.DisplayName : m.User.Email!))
+            .Select(m => new ValueTuple<string, string>(m.UserId, m.User.DisplayName != "" ? m.User.DisplayName : (m.User.Email ?? "")))
             .ToListAsync(ct);
     }
 
@@ -158,6 +175,8 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             .Where(s => s.TaskListId == taskListId && s.Status != SprintStatus.Completed)
             .Include(s => s.WorkItems).ThenInclude(w => w.Status)
             .Include(s => s.WorkItems).ThenInclude(w => w.Assignee)
+            .Include(s => s.WorkItems).ThenInclude(w => w.WorkItemLabels).ThenInclude(l => l.Label)
+            .Include(s => s.WorkItems).ThenInclude(w => w.Comments)
             .OrderBy(s => s.StartDateUtc)
             .ToListAsync(ct);
     }
@@ -167,6 +186,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.Sprints
             .Where(s => s.TaskListId == taskListId && s.Status == SprintStatus.Completed)
+            .Include(s => s.WorkItems)
             .OrderByDescending(s => s.CompletedAtUtc)
             .ToListAsync(ct);
     }
@@ -178,18 +198,38 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             .Where(w => w.TaskListId == taskListId && w.SprintId == null)
             .Include(w => w.Status)
             .Include(w => w.Assignee)
+            .Include(w => w.WorkItemLabels).ThenInclude(l => l.Label)
+            .Include(w => w.Comments)
             .OrderBy(w => w.SortOrder)
             .ToListAsync(ct);
     }
 
-    public async Task UpdateWorkItemSprintAsync(Guid workItemId, Guid? sprintId, int newSortOrder, CancellationToken ct = default)
+    // listId-scoped for the same IDOR reason as UpdateWorkItemStatusAsync above — both the
+    // dragged item and the target sprint must belong to the list the caller already
+    // authorized the user against.
+    public async Task<bool> UpdateWorkItemSprintAsync(Guid listId, Guid workItemId, Guid? sprintId, int newSortOrder, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var workItem = await db.WorkItems.FirstAsync(w => w.Id == workItemId, ct);
+        var workItem = await db.WorkItems.FirstOrDefaultAsync(w => w.Id == workItemId && w.TaskListId == listId, ct);
+        if (workItem is null)
+        {
+            return false;
+        }
+
+        if (sprintId is not null)
+        {
+            var sprintBelongsToList = await db.Sprints.AnyAsync(s => s.Id == sprintId && s.TaskListId == listId, ct);
+            if (!sprintBelongsToList)
+            {
+                return false;
+            }
+        }
+
         workItem.SprintId = sprintId;
         workItem.SortOrder = newSortOrder;
         workItem.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<List<WorkItem>> GetEpicsForListAsync(Guid taskListId, CancellationToken ct = default)
@@ -204,12 +244,19 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     /// <summary>
     /// Starts a sprint, enforcing at most one Active sprint per list, and writes the
     /// Day-0 burndown snapshot. Returns false (without changing anything) if another
-    /// sprint in the same list is already Active.
+    /// sprint in the same list is already Active, the sprint doesn't belong to listId
+    /// (IDOR guard — see UpdateWorkItemStatusAsync), or a concurrent StartSprintAsync call
+    /// won the race (see the unique filtered index on Sprints in SprintConfiguration —
+    /// the AnyAsync check below is only a fast pre-check, not the actual guarantee).
     /// </summary>
-    public async Task<bool> StartSprintAsync(Guid sprintId, CancellationToken ct = default)
+    public async Task<bool> StartSprintAsync(Guid listId, Guid sprintId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var sprint = await db.Sprints.FirstAsync(s => s.Id == sprintId, ct);
+        var sprint = await db.Sprints.FirstOrDefaultAsync(s => s.Id == sprintId && s.TaskListId == listId, ct);
+        if (sprint is null)
+        {
+            return false;
+        }
 
         var hasActiveSprint = await db.Sprints.AnyAsync(
             s => s.TaskListId == sprint.TaskListId && s.Status == SprintStatus.Active && s.Id != sprintId, ct);
@@ -227,14 +274,24 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
 
         await UpsertSnapshotAsync(db, sprintId, DateTime.UtcNow.Date, totalCount, remainingCount, ct);
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbException)
+        {
+            // Unique filtered index violation — another StartSprintAsync call for the same
+            // list committed first between our AnyAsync check and this SaveChangesAsync.
+            return false;
+        }
+
         return true;
     }
 
-    public async Task CompleteSprintAsync(Guid sprintId, CancellationToken ct = default)
+    public async Task CompleteSprintAsync(Guid listId, Guid sprintId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await db.Sprints.Where(s => s.Id == sprintId).ExecuteUpdateAsync(s => s
+        await db.Sprints.Where(s => s.Id == sprintId && s.TaskListId == listId).ExecuteUpdateAsync(s => s
             .SetProperty(x => x.Status, SprintStatus.Completed)
             .SetProperty(x => x.CompletedAtUtc, DateTime.UtcNow), ct);
     }
