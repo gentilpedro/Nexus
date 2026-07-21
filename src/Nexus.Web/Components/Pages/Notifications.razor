@@ -3,10 +3,12 @@
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
+@using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager NavigationManager
+@inject NotificationBadgeService Badge
 
 <PageTitle>Notificações</PageTitle>
 
@@ -109,6 +111,7 @@
             await using var db = await DbFactory.CreateDbContextAsync();
             await db.Notifications.Where(n => n.Id == notification.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRead, true));
             notification.IsRead = true;
+            Badge.SetUnreadCount(notifications!.Count(n => !n.IsRead));
         }
 
         if (notification.WorkItem is not null)
@@ -127,5 +130,6 @@
         await using var db = await DbFactory.CreateDbContextAsync();
         await db.Notifications.Where(n => n.UserId == userId && !n.IsRead).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRead, true));
         await LoadAsync();
+        Badge.SetUnreadCount(0);
     }
 }

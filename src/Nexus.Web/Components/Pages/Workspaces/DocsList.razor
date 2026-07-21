@@ -93,7 +93,7 @@
                             <tr class="data-table-row" @onclick="() => OpenDoc(doc)">
                                 <td>@(doc.Type == DocPageType.Spreadsheet ? "📊" : "📄")</td>
                                 <td>@doc.Title</td>
-                                <td>@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToString("dd/MM/yyyy HH:mm"))</td>
+                                <td>@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</td>
                                 <td>@AuthorLabel(doc)</td>
                             </tr>
                         }

@@ -11,6 +11,15 @@ public class SprintConfiguration : IEntityTypeConfiguration<Sprint>
         builder.Property(s => s.Name).HasMaxLength(200).IsRequired();
         builder.Property(s => s.Goal).HasMaxLength(1000);
 
+        // Enforces "at most one Active sprint per list" at the database level — the
+        // application-level check in WorkItemQueryService.StartSprintAsync is only a
+        // pre-check; without this, two concurrent StartSprintAsync calls for the same list
+        // could both pass that check before either commits.
+        builder.HasIndex(s => s.TaskListId)
+            .IsUnique()
+            .HasFilter("[Status] = 1")
+            .HasDatabaseName("IX_Sprints_TaskListId_ActiveOnly");
+
         builder.HasMany(s => s.WorkItems)
             .WithOne(w => w.Sprint)
             .HasForeignKey(w => w.SprintId)

@@ -330,7 +330,7 @@
         await ReloadPeopleAsync();
     }
 
-    private void ClearSearch()
+    private async Task ClearSearch()
     {
         textFilter = "";
         workspaceIdText = "";
@@ -339,7 +339,7 @@
         typeText = "";
         assigneeModeText = "Any";
         dueModeText = "Any";
-        _ = HandleSearch();
+        await HandleSearch();
     }
 
     private async Task ReloadTasksAsync()
