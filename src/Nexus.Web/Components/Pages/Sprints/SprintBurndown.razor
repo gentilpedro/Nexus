@@ -41,6 +41,36 @@
             @sprint.StartDateUtc.ToString("dd/MM/yyyy") a @sprint.EndDateUtc.ToString("dd/MM/yyyy") · @statusLabel
         </p>
 
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Tarefas na sprint</span>
+                    <span class="stat-card-value">@sprint.WorkItems.Count</span>
+                </div>
+                <span class="stat-card-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+                </span>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Entregues</span>
+                    <span class="stat-card-value">@sprint.WorkItems.Count(w => w.Status.Category == StatusCategory.Done)</span>
+                </div>
+                <span class="stat-card-icon is-success">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                </span>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Status</span>
+                    <span class="stat-card-value" style="font-size:1.1rem;">@statusLabel</span>
+                </div>
+                <span class="stat-card-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                </span>
+            </div>
+        </div>
+
         <BurndownChart Sprint="sprint" Snapshots="snapshots ?? []" />
     }
 </div>
@@ -105,6 +135,8 @@
                 .Include(s => s.TaskList)
                 .ThenInclude(l => l.Space)
                 .ThenInclude(sp => sp.Workspace)
+                .Include(s => s.WorkItems)
+                .ThenInclude(w => w.Status)
                 .FirstOrDefaultAsync(s => s.Id == SprintId);
             snapshots = await db.SprintBurndownSnapshots
                 .Where(sn => sn.SprintId == SprintId)
