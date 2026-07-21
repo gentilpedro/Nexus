@@ -9,6 +9,7 @@ public class CustomFieldDefinition
 
     public string Name { get; set; } = "";
     public CustomFieldType Type { get; set; }
+    public bool Required { get; set; }
     public int SortOrder { get; set; }
 
     public ICollection<CustomFieldOption> Options { get; set; } = new List<CustomFieldOption>();
