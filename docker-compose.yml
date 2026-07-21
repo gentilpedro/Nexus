@@ -3,7 +3,7 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "Nexus!2026"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
     ports:
       - "1433:1433"
     volumes:
@@ -22,7 +22,7 @@ services:
       - "8080:8080"
     environment:
       APPLY_MIGRATIONS_ON_STARTUP: "true"
-      ConnectionStrings__DefaultConnection: "Server=db;Database=Nexus;User Id=sa;Password=Nexus!2026;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      ConnectionStrings__DefaultConnection: "Server=db;Database=Nexus;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true"
     depends_on:
       db:
         condition: service_healthy
