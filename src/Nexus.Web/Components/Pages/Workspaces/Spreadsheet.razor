@@ -83,7 +83,7 @@
         else if (doc is not null)
         {
             <div class="page-header">
-                <h1>@doc.Title</h1>
+                <h1>@doc.Title <span class="coming-soon-badge" style="opacity:1;">Apenas leitura</span></h1>
                 <div class="form-actions">
                     <a class="btn" href="@($"/spreadsheets/{doc.Id}/download.xlsx")">Baixar planilha (.xlsx)</a>
                     <button type="button" class="btn btn-secondary" @onclick="EnterEditMode">Editar</button>
@@ -93,6 +93,7 @@
                     }
                 </div>
             </div>
+            <p class="topnav-user" style="margin-top:-0.5rem;">@grid.Count linhas · @(grid.Count > 0 ? grid[0].Count : 0) colunas</p>
             <div class="table-scroll">
                 <table class="spreadsheet-grid spreadsheet-grid--readonly">
                     <tbody>
