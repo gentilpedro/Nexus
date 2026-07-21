@@ -41,12 +41,40 @@
             <h1>Labels</h1>
         </div>
 
+        @if (labels is not null)
+        {
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Total de labels</span>
+                        <span class="stat-card-value">@labels.Count</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L3 3v6.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.82 0l4.6-4.6a2 2 0 0 0 0-2.82Z" /><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Cores usadas</span>
+                        <span class="stat-card-value">@labels.Select(l => l.Color).Distinct().Count()</span>
+                    </div>
+                    <span class="stat-card-icon is-success">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2Z" /></svg>
+                    </span>
+                </div>
+            </div>
+        }
+
         <EditForm Model="createModel" OnValidSubmit="HandleCreate" class="card" style="margin-bottom:1.5rem;">
             <DataAnnotationsValidator />
             <div class="form-field">
                 <label for="label-name">Nome</label>
                 <InputText id="label-name" @bind-Value="createModel.Name" placeholder="Ex: Alta prioridade" />
                 <ValidationMessage For="() => createModel.Name" />
+            </div>
+            <div class="form-field">
+                <label for="label-description">Descrição (opcional)</label>
+                <InputText id="label-description" @bind-Value="createModel.Description" placeholder="Pra que serve essa label?" />
             </div>
             <div class="form-field">
                 <label>Cor</label>
@@ -83,19 +111,31 @@
         }
         else
         {
+            <div class="form-field" style="max-width:280px;">
+                <input type="search" placeholder="Buscar labels..." @bind="labelFilter" @bind:event="oninput" />
+            </div>
+
             <div class="table-scroll">
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>Label</th>
+                            <th>Uso</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var label in labels)
+                        @foreach (var label in FilteredLabels)
                         {
                             <tr>
-                                <td><span class="label-chip" style="@ChipStyle(label.Color)">@label.Name</span></td>
+                                <td>
+                                    <span class="label-chip" style="@ChipStyle(label.Color)">@label.Name</span>
+                                    @if (!string.IsNullOrWhiteSpace(label.Description))
+                                    {
+                                        <div class="topnav-user" style="margin-top:0.25rem;">@label.Description</div>
+                                    }
+                                </td>
+                                <td class="topnav-user">@(usageCounts.TryGetValue(label.Id, out var c) ? c : 0) tarefa@((usageCounts.TryGetValue(label.Id, out var c2) ? c2 : 0) == 1 ? "" : "s")</td>
                                 <td><button type="button" class="btn-link" @onclick="() => HandleDelete(label.Id)">Excluir</button></td>
                             </tr>
                         }
@@ -124,11 +164,17 @@
     private string spaceName = "";
     private Guid workspaceId;
     private List<Label>? labels;
+    private Dictionary<Guid, int> usageCounts = new();
     private bool notFound;
     private bool isSaving;
     private string? errorMessage;
     private Guid? loadedListId;
+    private string labelFilter = "";
     private readonly CreateLabelModel createModel = new();
+
+    private IEnumerable<Label> FilteredLabels => labels is null
+        ? []
+        : labels.Where(l => string.IsNullOrWhiteSpace(labelFilter) || l.Name.Contains(labelFilter, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnParametersSetAsync()
     {
@@ -186,6 +232,14 @@
     private async Task LoadLabelsAsync()
     {
         labels = await QueryService.GetLabelsForListAsync(ListId);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var labelIds = labels.Select(l => l.Id).ToList();
+        usageCounts = await db.WorkItemLabels
+            .Where(wl => labelIds.Contains(wl.LabelId))
+            .GroupBy(wl => wl.LabelId)
+            .Select(g => new { LabelId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.LabelId, x => x.Count);
     }
 
     private async Task HandleCreate()
@@ -202,6 +256,7 @@
                 Id = Guid.NewGuid(),
                 TaskListId = ListId,
                 Name = createModel.Name.Trim(),
+                Description = string.IsNullOrWhiteSpace(createModel.Description) ? null : createModel.Description.Trim(),
                 Color = createModel.Color,
                 SortOrder = maxSortOrder + 1
             });
@@ -209,6 +264,7 @@
         }
 
         createModel.Name = "";
+        createModel.Description = "";
         createModel.Color = Palette[0];
         isSaving = false;
         await LoadLabelsAsync();
@@ -230,6 +286,8 @@
         [Required(ErrorMessage = "Informe um nome.")]
         [StringLength(50, ErrorMessage = "Nome muito longo.")]
         public string Name { get; set; } = "";
+        [StringLength(200, ErrorMessage = "Descrição muito longa.")]
+        public string Description { get; set; } = "";
         public string Color { get; set; } = Palette[0];
     }
 }
