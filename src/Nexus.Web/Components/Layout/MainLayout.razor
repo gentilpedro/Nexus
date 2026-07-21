@@ -14,12 +14,17 @@
                 <button type="button" class="app-sidebar-toggle" @onclick="ToggleSidebar" aria-label="Abrir menu">☰</button>
             </Authorized>
         </AuthorizeView>
-        <a class="topnav-brand" href="/">Nexus</a>
+        <a class="topnav-brand-link" href="/">
+            <img class="topnav-logo" src="@Assets["IconNexus.png"]" alt="Nexus" />
+        </a>
     </div>
     <div class="topnav-center">
         <AuthorizeView>
             <Authorized>
-                <a class="topnav-user" href="Account/Manage" data-enhance-nav="false">@context.User.Identity?.Name</a>
+                <form class="topnav-search-form" @onsubmit="SubmitSearch" @onsubmit:preventDefault="true">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                    <input type="search" placeholder="Buscar tarefas, documentos ou pessoas..." @bind="searchText" @bind:event="oninput" />
+                </form>
             </Authorized>
         </AuthorizeView>
     </div>
@@ -27,8 +32,38 @@
         <ThemeSwitch />
         <AuthorizeView>
             <Authorized>
-                <a class="topnav-user topnav-search" href="/search"><img src="@Assets["lupa.png"]" alt="" class="topnav-search-icon" /></a>
-                <a class="topnav-user topnav-notifications" href="/notifications"> <img src="@Assets["notificacao.png"]" alt="" class="topnav-notifications-icon" /> @(unreadCount > 0 ? $" ({unreadCount})" : "")</a>
+                <a class="topnav-icon-btn" href="/notifications" aria-label="Notificações">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+                    @if (unreadCount > 0)
+                    {
+                        <span class="topnav-icon-dot"></span>
+                    }
+                </a>
+                <div class="topnav-user-menu">
+                    <button type="button" class="topnav-avatar-btn" @onclick="ToggleUserMenu">
+                        <span class="topnav-avatar">@avatarInitial</span>
+                        <span class="topnav-avatar-name">@displayName</span>
+                        <svg class="icon" style="width:.9rem;height:.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                    @if (userMenuOpen)
+                    {
+                        <div class="topnav-user-dropdown-backdrop" @onclick="CloseUserMenu"></div>
+                        <div class="topnav-user-dropdown">
+                            <a href="Account/Manage" data-enhance-nav="false">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                                Minha conta
+                            </a>
+                            <form action="Account/Logout" method="post" data-enhance="false">
+                                <AntiforgeryToken />
+                                <input type="hidden" name="ReturnUrl" value="@NavigationManager.ToBaseRelativePath(NavigationManager.Uri)" />
+                                <button type="submit">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+                                    Sair
+                                </button>
+                            </form>
+                        </div>
+                    }
+                </div>
             </Authorized>
             <NotAuthorized>
                 <NavLink href="/Account/Login" class="btn" data-enhance-nav="false">
@@ -68,15 +103,19 @@
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     private bool sidebarOpen;
+    private bool userMenuOpen;
     private int unreadCount;
+    private string displayName = "";
+    private string avatarInitial = "?";
+    private string searchText = "";
 
     protected override async Task OnInitializedAsync()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
-        await RefreshUnreadCountAsync();
+        await RefreshHeaderStateAsync();
     }
 
-    private async Task RefreshUnreadCountAsync()
+    private async Task RefreshHeaderStateAsync()
     {
         if (AuthStateTask is null)
         {
@@ -93,6 +132,10 @@
 
         await using var db = await DbFactory.CreateDbContextAsync();
         unreadCount = await db.Notifications.CountAsync(n => n.UserId == userId && !n.IsRead);
+
+        var user = await db.Users.Where(u => u.Id == userId).Select(u => new { u.DisplayName, u.Email }).FirstOrDefaultAsync();
+        displayName = string.IsNullOrEmpty(user?.DisplayName) ? (user?.Email?.Split('@')[0] ?? "") : user.DisplayName;
+        avatarInitial = string.IsNullOrWhiteSpace(displayName) ? "?" : displayName.Trim()[0].ToString().ToUpperInvariant();
     }
 
     private void ToggleSidebar()
@@ -105,6 +148,23 @@
         sidebarOpen = false;
     }
 
+    private void ToggleUserMenu()
+    {
+        userMenuOpen = !userMenuOpen;
+    }
+
+    private void CloseUserMenu()
+    {
+        userMenuOpen = false;
+    }
+
+    private void SubmitSearch()
+    {
+        userMenuOpen = false;
+        var target = string.IsNullOrWhiteSpace(searchText) ? "/search" : $"/search?q={Uri.EscapeDataString(searchText)}";
+        NavigationManager.NavigateTo(target);
+    }
+
     private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         // Navigating (e.g. tapping a sidebar link on mobile) should close the overlay.
@@ -112,8 +172,9 @@
         {
             sidebarOpen = false;
         }
+        userMenuOpen = false;
 
-        await RefreshUnreadCountAsync();
+        await RefreshHeaderStateAsync();
         await InvokeAsync(StateHasChanged);
     }
 
