@@ -2,7 +2,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="board-column" data-drop-id="@Status.Id">
+<div class="board-column" data-drop-id="@Status.Id" style="@(string.IsNullOrEmpty(Status.Color) ? "" : $"border-top: 3px solid {Status.Color};")">
     <div class="board-column-header">
         @if (isRenaming)
         {
@@ -13,7 +13,7 @@
         else
         {
             <span class="board-column-title-group">
-                <StatusBadge Name="@Status.Name" Category="Status.Category" />
+                <StatusBadge Name="@Status.Name" Category="Status.Category" Color="Status.Color" />
                 <span class="board-column-count">@Items.Count</span>
             </span>
             @if (CanManage)
