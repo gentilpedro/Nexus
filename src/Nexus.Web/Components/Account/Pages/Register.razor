@@ -1,4 +1,5 @@
 @page "/Account/Register"
+@layout AuthLayout
 
 @using System.ComponentModel.DataAnnotations
 @using System.Text
@@ -17,43 +18,58 @@
 
 <PageTitle>Criar conta</PageTitle>
 
-<div class="auth-page">
-    <div class="auth-card">
-        <h1>Criar conta</h1>
-        <p class="auth-subtitle">Comece a organizar seus projetos.</p>
-
-        <StatusMessage Message="@Message" />
-
-        <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
-            <DataAnnotationsValidator />
-            <ValidationSummary class="validation-errors" role="alert" />
-
-            <div class="form-field">
-                <label for="Input.Name">Nome</label>
-                <InputText @bind-Value="Input.Name" id="Input.Name" autocomplete="name" aria-required="true" placeholder="Seu nome" />
-                <ValidationMessage For="() => Input.Name" />
-            </div>
-            <div class="form-field">
-                <label for="Input.Email">Email</label>
-                <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
-                <ValidationMessage For="() => Input.Email" />
-            </div>
-            <div class="form-field">
-                <label for="Input.Password">Senha</label>
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" autocomplete="new-password" aria-required="true" placeholder="Crie uma senha" />
-                <ValidationMessage For="() => Input.Password" />
-            </div>
-            <div class="form-field">
-                <label for="Input.ConfirmPassword">Confirmar senha</label>
-                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" autocomplete="new-password" aria-required="true" placeholder="Repita a senha" />
-                <ValidationMessage For="() => Input.ConfirmPassword" />
+<div class="auth-split">
+    <div class="auth-split-visual" style="background-image:linear-gradient(rgba(15,23,42,.6),rgba(15,23,42,.8)), url('@Assets["LoginImage.png"]');">
+        <div class="auth-split-visual-brand">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
+            Nexus
+        </div>
+        <h1>Comece a organizar sua equipe hoje</h1>
+        <p>Crie sua conta gratuita e centralize tarefas, documentos e colaboração em um só lugar.</p>
+    </div>
+    <div class="auth-split-form">
+        <div class="auth-split-form-inner">
+            <a href="/" class="auth-back-link" data-enhance-nav="false">
+                <svg class="icon" style="width:1rem;height:1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+                Voltar
+            </a>
+            <div class="auth-tabs">
+                <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))" data-enhance-nav="false">Entrar</a>
+                <a class="active" href="Account/Register" data-enhance-nav="false">Criar Conta</a>
             </div>
 
-            <button type="submit" class="btn">Criar conta</button>
-        </EditForm>
+            <h1 style="font-size:1.4rem;margin:0 0 0.25rem;">Crie sua conta</h1>
+            <p style="color:var(--color-text-muted);font-size:0.9rem;margin:0 0 1.5rem;">Comece a organizar seus projetos.</p>
 
-        <div class="auth-links">
-            <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">Já tem uma conta? Entrar</a>
+            <StatusMessage Message="@Message" />
+
+            <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="validation-errors" role="alert" />
+
+                <div class="form-field">
+                    <label for="Input.Name">Nome</label>
+                    <InputText @bind-Value="Input.Name" id="Input.Name" autocomplete="name" aria-required="true" placeholder="Seu nome" />
+                    <ValidationMessage For="() => Input.Name" />
+                </div>
+                <div class="form-field">
+                    <label for="Input.Email">Email</label>
+                    <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
+                    <ValidationMessage For="() => Input.Email" />
+                </div>
+                <div class="form-field">
+                    <label for="Input.Password">Senha</label>
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" autocomplete="new-password" aria-required="true" placeholder="Crie uma senha" />
+                    <ValidationMessage For="() => Input.Password" />
+                </div>
+                <div class="form-field">
+                    <label for="Input.ConfirmPassword">Confirmar senha</label>
+                    <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" autocomplete="new-password" aria-required="true" placeholder="Repita a senha" />
+                    <ValidationMessage For="() => Input.ConfirmPassword" />
+                </div>
+
+                <button type="submit" class="btn">Criar conta</button>
+            </EditForm>
         </div>
     </div>
 </div>
