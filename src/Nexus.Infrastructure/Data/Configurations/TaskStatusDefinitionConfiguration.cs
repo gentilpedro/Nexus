@@ -9,5 +9,6 @@ public class TaskStatusDefinitionConfiguration : IEntityTypeConfiguration<TaskSt
     public void Configure(EntityTypeBuilder<TaskStatusDefinition> builder)
     {
         builder.Property(s => s.Name).HasMaxLength(100).IsRequired();
+        builder.Property(s => s.Color).HasMaxLength(20);
     }
 }

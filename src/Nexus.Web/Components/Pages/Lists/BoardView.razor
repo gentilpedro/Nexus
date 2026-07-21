@@ -78,12 +78,17 @@
                         @if (showAddColumnForm)
                         {
                             <div class="board-add-column-form">
-                                <input type="text" placeholder="Nome da coluna" @bind="newColumnName" @bind:event="oninput" />
-                                <select @bind="newColumnCategory">
-                                    <option value="@StatusCategory.ToDo">A Fazer</option>
-                                    <option value="@StatusCategory.InProgress">Em Andamento</option>
-                                    <option value="@StatusCategory.Done">Concluído</option>
-                                </select>
+                                <label style="font-size:0.75rem;font-weight:600;color:var(--color-text-muted);">Nome da coluna (escreva o que quiser)</label>
+                                <input type="text" placeholder="Ex: Revisão, Bloqueado, Aguardando cliente..." @bind="newColumnName" @bind:event="oninput" />
+                                <label style="font-size:0.75rem;font-weight:600;color:var(--color-text-muted);">Cor da coluna</label>
+                                <div class="color-swatch-row">
+                                    @foreach (var color in ColumnColors)
+                                    {
+                                        <button type="button" class="color-swatch @(newColumnColor == color ? "is-selected" : "")"
+                                                style="background:@color;" @onclick="() => newColumnColor = color"
+                                                aria-label="Selecionar cor @color"></button>
+                                    }
+                                </div>
                                 @if (!string.IsNullOrEmpty(columnErrorMessage))
                                 {
                                     <div class="alert alert-danger" style="padding:0.4rem 0.6rem;font-size:0.8rem;">@columnErrorMessage</div>
@@ -170,8 +175,9 @@
     private Guid? loadedListId;
     private bool showAddColumnForm;
     private string newColumnName = "";
-    private StatusCategory newColumnCategory = StatusCategory.ToDo;
+    private string newColumnColor = ColumnColors[0];
     private string? columnErrorMessage;
+    private static readonly string[] ColumnColors = ["#2563EB", "#16A34A", "#7C3AED", "#DC2626", "#EA580C", "#0D9488"];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -258,7 +264,7 @@
     {
         showAddColumnForm = !showAddColumnForm;
         newColumnName = "";
-        newColumnCategory = StatusCategory.ToDo;
+        newColumnColor = ColumnColors[0];
         columnErrorMessage = null;
     }
 
@@ -287,7 +293,8 @@
                 Id = Guid.NewGuid(),
                 TaskListId = ListId,
                 Name = newColumnName.Trim(),
-                Category = newColumnCategory,
+                Color = newColumnColor,
+                Category = StatusCategory.ToDo,
                 SortOrder = maxSortOrder + 1,
                 IsDefault = false
             });
@@ -335,7 +342,7 @@
 
     private async Task HandleCardMoved((Guid WorkItemId, Guid NewStatusId, int NewIndex) move)
     {
-        var allowed = await QueryService.UpdateWorkItemStatusAsync(move.WorkItemId, move.NewStatusId, move.NewIndex);
+        var allowed = await QueryService.UpdateWorkItemStatusAsync(ListId, move.WorkItemId, move.NewStatusId, move.NewIndex);
         errorMessage = allowed ? null : "Essa mudança de status não é permitida pelo workflow da lista.";
         await ReloadWorkItemsAsync();
         StateHasChanged();

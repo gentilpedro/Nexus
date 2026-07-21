@@ -1,6 +1,13 @@
 @using Nexus.Domain.Entities
 
-<span class="badge badge-status-@Category.ToString().ToLowerInvariant()">@Name</span>
+@if (!string.IsNullOrEmpty(Color))
+{
+    <span class="badge" style="background-color: @(Color)26; color: @Color;">@Name</span>
+}
+else
+{
+    <span class="badge badge-status-@Category.ToString().ToLowerInvariant()">@Name</span>
+}
 
 @code {
     [Parameter, EditorRequired]
@@ -8,4 +15,7 @@
 
     [Parameter, EditorRequired]
     public StatusCategory Category { get; set; }
+
+    [Parameter]
+    public string? Color { get; set; }
 }

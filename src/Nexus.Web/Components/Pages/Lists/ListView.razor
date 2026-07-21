@@ -88,7 +88,7 @@
                             <tr class="data-table-row" @onclick="() => OpenEdit(item)">
                                 <td><WorkItemTypeIcon Type="item.Type" /></td>
                                 <td>@item.Title</td>
-                                <td><StatusBadge Name="@item.Status.Name" Category="item.Status.Category" /></td>
+                                <td><StatusBadge Name="@item.Status.Name" Category="item.Status.Category" Color="item.Status.Color" /></td>
                                 <td><PriorityBadge Priority="item.Priority" /></td>
                                 <td>@(item.Assignee?.DisplayName is { Length: > 0 } dn ? dn : (item.Assignee?.Email ?? "—"))</td>
                                 <td>@(item.DueDateUtc?.ToString("dd/MM/yyyy") ?? "—")</td>
