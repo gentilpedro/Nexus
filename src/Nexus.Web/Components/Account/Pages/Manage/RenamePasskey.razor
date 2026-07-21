@@ -8,27 +8,30 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject IdentityRedirectManager RedirectManager
 
-<EditForm Model="Input" OnValidSubmit="Rename" FormName="rename-passkey" method="post">
-    <DataAnnotationsValidator />
-    @if (passkey?.Name is { } name)
-    {
-        <h4>Enter a new name for your "@name" passkey</h4>
-    }
-    else
-    {
-        <h4>Enter a name for your passkey</h4>
-    }
-    <hr />
-    <ValidationSummary class="text-danger" role="alert" />
-    <div class="form-floating mb-3">
-        <InputText @bind-Value="Input.Name" id="Input.Name" class="form-control" aria-required="true" placeholder="My passkey" />
-        <label for="Input.Name" class="form-label">Passkey name</label>
-        <ValidationMessage For="() => Input.Name" class="text-danger" />
+<div class="page-container">
+    <div class="card" style="max-width:420px;margin:0 auto;">
+        <EditForm Model="Input" OnValidSubmit="Rename" FormName="rename-passkey" method="post">
+            <DataAnnotationsValidator />
+            @if (passkey?.Name is { } name)
+            {
+                <h4>Novo nome para a chave "@name"</h4>
+            }
+            else
+            {
+                <h4>Dê um nome pra sua chave de acesso</h4>
+            }
+            <ValidationSummary class="validation-errors" role="alert" />
+            <div class="form-field">
+                <label for="Input.Name">Nome da chave</label>
+                <InputText @bind-Value="Input.Name" id="Input.Name" aria-required="true" placeholder="Minha chave" />
+                <ValidationMessage For="() => Input.Name" />
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn">Continuar</button>
+            </div>
+        </EditForm>
     </div>
-    <div>
-        <button type="submit" class="w-100 btn btn-lg btn-primary">Continue</button>
-    </div>
-</EditForm>
+</div>
 
 @code {
     private ApplicationUser? user;
@@ -61,14 +64,14 @@
         }
         catch (FormatException)
         {
-            RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Error: The specified passkey ID had an invalid format.", HttpContext);
+            RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Erro: o ID da chave informado tem um formato inválido.", HttpContext);
             return;
         }
 
         passkey = await UserManager.GetPasskeyAsync(user, credentialId);
         if (passkey is null)
         {
-            RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Error: The specified passkey could not be found.", HttpContext);
+            RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Erro: a chave especificada não foi encontrada.", HttpContext);
             return;
         }
     }
@@ -79,17 +82,17 @@
         var result = await UserManager.AddOrUpdatePasskeyAsync(user!, passkey);
         if (!result.Succeeded)
         {
-            RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Error: The passkey could not be updated.", HttpContext);
+            RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Erro: não foi possível atualizar a chave.", HttpContext);
             return;
         }
 
-        RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Passkey updated successfully.", HttpContext);
+        RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Chave atualizada com sucesso.", HttpContext);
     }
 
     private sealed class InputModel
     {
-        [Required]
-        [StringLength(200, ErrorMessage = "Passkey names must be no longer than {1} characters.")]
+        [Required(ErrorMessage = "Informe um nome.")]
+        [StringLength(200, ErrorMessage = "O nome deve ter no máximo {1} caracteres.")]
         public string Name { get; set; } = "";
     }
 }
