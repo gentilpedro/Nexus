@@ -1,17 +1,19 @@
 @page "/chats"
+@page "/chats/{WorkspaceId:guid}"
 @attribute [Authorize]
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
+@using Nexus.Web.Components.Pages.Workspaces
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 
-<PageTitle>Chats</PageTitle>
+<PageTitle>Conversas</PageTitle>
 
-<div class="page-container">
+<div class="page-container page-container--wide">
     <div class="page-header">
-        <h1>Chats</h1>
+        <h1>Conversas</h1>
     </div>
 
     @if (items is null)
@@ -26,39 +28,66 @@
     }
     else
     {
-        <div class="chat-overview-list">
-            @foreach (var item in items)
-            {
-                <a class="chat-overview-item" href="@($"/workspaces/{item.WorkspaceId}/chat")">
-                    <span class="chat-message-avatar">@Initial(item.WorkspaceName)</span>
-                    <div class="chat-overview-body">
-                        <div class="chat-overview-top">
-                            <span class="chat-overview-name">@item.WorkspaceName</span>
-                            @if (item.LastMessageAtUtc is not null)
-                            {
-                                <span class="chat-message-time">@item.LastMessageAtUtc.Value.ToLocalTime().ToString("dd/MM HH:mm")</span>
-                            }
-                        </div>
-                        @if (item.LastMessageContent is not null)
-                        {
-                            <div class="chat-overview-preview"><strong>@item.LastMessageAuthor:</strong> @Truncate(item.LastMessageContent)</div>
-                        }
-                        else
-                        {
-                            <div class="chat-overview-preview chat-overview-preview--empty">Nenhuma mensagem ainda.</div>
-                        }
+        <div class="chats-layout">
+            <div class="chats-sidebar">
+                <div class="chats-sidebar-search">
+                    <input type="search" placeholder="Buscar conversas..." @bind="filterText" @bind:event="oninput" />
+                </div>
+                <div class="chats-sidebar-list">
+                    @foreach (var item in FilteredItems)
+                    {
+                        <a class="chats-sidebar-item @(item.WorkspaceId == WorkspaceId ? "active" : "")" href="@($"/chats/{item.WorkspaceId}")">
+                            <span class="chat-message-avatar">@Initial(item.WorkspaceName)</span>
+                            <div class="chats-sidebar-item-body">
+                                <div class="chats-sidebar-item-top">
+                                    <span>#@item.WorkspaceName</span>
+                                    @if (item.LastMessageAtUtc is not null)
+                                    {
+                                        <span class="chat-message-time">@item.LastMessageAtUtc.Value.ToLocalTime().ToString("dd/MM")</span>
+                                    }
+                                </div>
+                                @if (item.LastMessageContent is not null)
+                                {
+                                    <div class="chats-sidebar-item-preview"><strong>@item.LastMessageAuthor:</strong> @item.LastMessageContent</div>
+                                }
+                                else
+                                {
+                                    <div class="chats-sidebar-item-preview">Nenhuma mensagem ainda.</div>
+                                }
+                            </div>
+                        </a>
+                    }
+                </div>
+            </div>
+            <div class="chats-main">
+                @if (WorkspaceId is Guid selectedId)
+                {
+                    <WorkspaceChat WorkspaceId="selectedId" Embedded="true" @key="selectedId" />
+                }
+                else
+                {
+                    <div class="chats-main-empty">
+                        <p>Selecione uma conversa à esquerda para começar.</p>
                     </div>
-                </a>
-            }
+                }
+            </div>
         </div>
     }
 </div>
 
 @code {
+    [Parameter]
+    public Guid? WorkspaceId { get; set; }
+
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     private List<ChatOverviewItem>? items;
+    private string filterText = "";
+
+    private IEnumerable<ChatOverviewItem> FilteredItems => items is null
+        ? []
+        : items.Where(i => string.IsNullOrWhiteSpace(filterText) || i.WorkspaceName.Contains(filterText, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -106,8 +135,6 @@
     }
 
     private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
-
-    private static string Truncate(string text) => text.Length <= 80 ? text : text[..80] + "…";
 
     private class ChatOverviewItem
     {
