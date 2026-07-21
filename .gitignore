@@ -26,3 +26,4 @@ appsettings.*.local.json
 
 # Locally uploaded task attachments (dev storage, not committed)
 src/Nexus.Web/App_Data/uploads/
+Wireframes/

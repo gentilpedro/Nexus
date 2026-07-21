@@ -12,7 +12,7 @@
 
 <PageTitle>Workspaces</PageTitle>
 
-<div class="page-container">
+<div class="page-container page-container--wide">
     <div class="page-header">
         <h1>Meus Workspaces</h1>
         <a class="btn" href="/workspaces/new">+ Novo workspace</a>
@@ -31,15 +31,62 @@
     }
     else
     {
-        <div class="card-list">
-            @foreach (var membership in memberships)
-            {
-                <a class="card card-link" href="@($"/workspaces/{membership.WorkspaceId}")">
-                    <strong>@membership.Workspace.Name</strong>
-                    <div class="topnav-user">@membership.Role.ToDisplayLabel()</div>
-                </a>
-            }
+        <div class="pill-tabs">
+            <button type="button" class="@(statusTab == "all" ? "active" : "")" @onclick='() => statusTab = "all"'>Todos <span class="tab-count">@memberships.Count</span></button>
+            <button type="button" class="@(statusTab == "active" ? "active" : "")" @onclick='() => statusTab = "active"'>Ativos <span class="tab-count">@memberships.Count(m => !m.Workspace.IsArchived)</span></button>
+            <button type="button" class="@(statusTab == "archived" ? "active" : "")" @onclick='() => statusTab = "archived"'>Arquivados <span class="tab-count">@memberships.Count(m => m.Workspace.IsArchived)</span></button>
         </div>
+
+        <div class="form-field" style="max-width:280px;">
+            <input type="search" placeholder="Buscar workspaces..." @bind="filterText" @bind:event="oninput" />
+        </div>
+
+        @if (!FilteredMemberships.Any())
+        {
+            <div class="empty-state"><p>Nenhum workspace encontrado.</p></div>
+        }
+        else
+        {
+            <div class="card-list">
+                @foreach (var membership in FilteredMemberships)
+                {
+                    <div class="card" style="@(membership.Workspace.IsArchived ? "opacity:.6;" : "")">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                            <a class="card-link" style="display:block;flex:1;min-width:0;" href="@($"/workspaces/{membership.WorkspaceId}")">
+                                <span class="dashboard-workspace-avatar" style="background:@(membership.Workspace.Color ?? "var(--color-primary)")">@Initial(membership.Workspace.Name)</span>
+                                <div style="margin-top:0.6rem;">
+                                    <strong>@membership.Workspace.Name</strong>
+                                    @if (membership.Workspace.IsArchived)
+                                    {
+                                        <span class="coming-soon-badge" style="opacity:1;">Arquivado</span>
+                                    }
+                                    <div class="topnav-user">@membership.Role.ToDisplayLabel()</div>
+                                </div>
+                                <div class="topnav-user" style="margin-top:0.5rem;">
+                                    @membership.Workspace.Members.Count membro@(membership.Workspace.Members.Count == 1 ? "" : "s") · @membership.Workspace.Spaces.Count space@(membership.Workspace.Spaces.Count == 1 ? "" : "s")
+                                </div>
+                            </a>
+                            @if (membership.Role == WorkspaceRole.Owner || membership.Role == WorkspaceRole.Admin)
+                            {
+                                <div class="board-column-menu">
+                                    <button type="button" class="board-column-menu-btn" @onclick="() => ToggleMenu(membership.WorkspaceId)" aria-label="Opções">⋮</button>
+                                    @if (openMenuId == membership.WorkspaceId)
+                                    {
+                                        <div class="board-column-menu-backdrop" @onclick="() => openMenuId = null"></div>
+                                        <div class="board-column-menu-dropdown">
+                                            <a href="@($"/workspaces/{membership.WorkspaceId}/settings")">Configurações</a>
+                                            <button type="button" @onclick="() => HandleToggleArchive(membership.Workspace)">
+                                                @(membership.Workspace.IsArchived ? "Desarquivar" : "Arquivar")
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
     }
 </div>
 
@@ -48,6 +95,15 @@
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     private List<WorkspaceMember>? memberships;
+    private string filterText = "";
+    private string statusTab = "active";
+    private Guid? openMenuId;
+
+    private IEnumerable<WorkspaceMember> FilteredMemberships => memberships is null
+        ? []
+        : memberships.Where(m =>
+            (string.IsNullOrWhiteSpace(filterText) || m.Workspace.Name.Contains(filterText, StringComparison.OrdinalIgnoreCase))
+            && (statusTab == "all" || (statusTab == "active") != m.Workspace.IsArchived));
 
     protected override async Task OnInitializedAsync()
     {
@@ -56,11 +112,38 @@
         var authState = await AuthStateTask!;
         var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
+        await LoadAsync(userId);
+    }
+
+    private async Task LoadAsync(string userId)
+    {
         await using var db = await DbFactory.CreateDbContextAsync();
         memberships = await db.WorkspaceMembers
-            .Include(m => m.Workspace)
+            .Include(m => m.Workspace).ThenInclude(w => w.Members)
+            .Include(m => m.Workspace).ThenInclude(w => w.Spaces)
             .Where(m => m.UserId == userId)
             .OrderBy(m => m.Workspace.Name)
             .ToListAsync();
     }
+
+    private void ToggleMenu(Guid workspaceId)
+    {
+        openMenuId = openMenuId == workspaceId ? null : workspaceId;
+    }
+
+    private async Task HandleToggleArchive(Workspace workspace)
+    {
+        openMenuId = null;
+        var newValue = !workspace.IsArchived;
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            await db.Workspaces.Where(w => w.Id == workspace.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(w => w.IsArchived, newValue));
+        }
+
+        workspace.IsArchived = newValue;
+    }
+
+    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
 }

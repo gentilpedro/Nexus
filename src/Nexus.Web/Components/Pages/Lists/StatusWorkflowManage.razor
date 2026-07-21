@@ -45,20 +45,22 @@
         <EditForm Model="createStatusModel" OnValidSubmit="HandleCreateStatus" class="card" style="margin: 1rem 0 1.5rem;">
             <div class="form-row">
                 <div class="form-field">
-                    <label for="status-name">Nome</label>
-                    <InputText id="status-name" @bind-Value="createStatusModel.Name" placeholder="Ex: Em Revisão" />
+                    <label for="status-name">Nome da coluna (escreva o que quiser)</label>
+                    <InputText id="status-name" @bind-Value="createStatusModel.Name" placeholder="Ex: Em Revisão, Bloqueado, Aguardando cliente..." />
                 </div>
                 <div class="form-field">
-                    <label for="status-category">Categoria</label>
-                    <InputSelect id="status-category" @bind-Value="createStatusModel.Category">
-                        @foreach (var c in Enum.GetValues<StatusCategory>())
+                    <label>Cor da coluna</label>
+                    <div class="color-swatch-row">
+                        @foreach (var color in ColumnColors)
                         {
-                            <option value="@c">@CategoryLabel(c)</option>
+                            <button type="button" class="color-swatch @(createStatusModel.Color == color ? "is-selected" : "")"
+                                    style="background:@color;" @onclick="() => createStatusModel.Color = color"
+                                    aria-label="Selecionar cor @color"></button>
                         }
-                    </InputSelect>
+                    </div>
                 </div>
             </div>
-            <p class="topnav-user">A categoria decide a cor da coluna no board e se ela conta como "concluída" nos relatórios (ex: burndown).</p>
+            <p class="topnav-user">A coluna nasce como "a fazer" — se quiser que ela conte como concluída nos relatórios (ex: burndown), marque isso depois na tabela abaixo.</p>
             @if (!string.IsNullOrEmpty(statusErrorMessage))
             {
                 <div class="alert alert-danger">@statusErrorMessage</div>
@@ -81,7 +83,7 @@
                     <thead>
                         <tr>
                             <th>Nome</th>
-                            <th>Categoria</th>
+                            <th>Conta como concluída?</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -89,8 +91,16 @@
                         @foreach (var s in statuses)
                         {
                             <tr>
-                                <td>@s.Name @(s.IsDefault ? "(padrão)" : "")</td>
-                                <td>@CategoryLabel(s.Category)</td>
+                                <td>
+                                    <span class="dashboard-workspace-avatar" style="width:1.6rem;height:1.6rem;font-size:0.75rem;margin-right:0.5rem;background:@(s.Color ?? "var(--color-primary)");">@(statuses.IndexOf(s) + 1)</span>
+                                    @s.Name @(s.IsDefault ? "(padrão)" : "")
+                                </td>
+                                <td>
+                                    <label class="switch" title="Conta como concluída nos relatórios">
+                                        <input type="checkbox" class="switch-input" checked="@(s.Category == StatusCategory.Done)" @onchange="@(e => HandleToggleDone(s, (bool)e.Value!))" />
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                </td>
                                 <td>
                                     <button type="button" class="btn-link" disabled="@(s == statuses.First())" @onclick="() => HandleMoveStatus(s, -1)">‹</button>
                                     <button type="button" class="btn-link" disabled="@(s == statuses.Last())" @onclick="() => HandleMoveStatus(s, 1)">›</button>
@@ -178,6 +188,18 @@
                 </table>
             </div>
         }
+
+        <h2 style="margin-top: 2rem;">Automações de transição <span class="coming-soon-badge">Em breve</span></h2>
+        <div class="card coming-soon">
+            <div class="form-field" style="flex-direction:row;align-items:center;justify-content:space-between;">
+                <span>Atribuir automaticamente ao mover para "Em Andamento"</span>
+                <div class="toggle-switch"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:1rem;">
+            <a class="btn-link" href="@($"/lists/{ListId}/fields")">Gerenciar campos customizados desta lista →</a>
+        </div>
     }
 </div>
 
@@ -203,6 +225,7 @@
     private bool isSavingStatus;
     private string? statusErrorMessage;
     private string? deleteStatusErrorMessage;
+    private static readonly string[] ColumnColors = ["#2563EB", "#16A34A", "#7C3AED", "#DC2626", "#EA580C", "#0D9488"];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -342,7 +365,8 @@
                 Id = Guid.NewGuid(),
                 TaskListId = ListId,
                 Name = createStatusModel.Name.Trim(),
-                Category = createStatusModel.Category,
+                Color = createStatusModel.Color,
+                Category = StatusCategory.ToDo,
                 SortOrder = maxSortOrder + 1,
                 IsDefault = false
             });
@@ -392,6 +416,16 @@
         await LoadStatusesAsync();
     }
 
+    private async Task HandleToggleDone(TaskStatusDefinition status, bool isDone)
+    {
+        var newCategory = isDone ? StatusCategory.Done : StatusCategory.ToDo;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.TaskStatusDefinitions.Where(s => s.Id == status.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Category, newCategory));
+
+        status.Category = newCategory;
+    }
+
     private async Task HandleDeleteStatus(TaskStatusDefinition status)
     {
         deleteStatusErrorMessage = null;
@@ -420,14 +454,6 @@
         await LoadTransitionsAsync();
     }
 
-    private static string CategoryLabel(StatusCategory category) => category switch
-    {
-        StatusCategory.ToDo => "A Fazer",
-        StatusCategory.InProgress => "Em Andamento",
-        StatusCategory.Done => "Concluído",
-        _ => category.ToString()
-    };
-
     private class CreateTransitionModel
     {
         public Guid FromStatusId { get; set; }
@@ -437,6 +463,6 @@
     private class CreateStatusModel
     {
         public string Name { get; set; } = "";
-        public StatusCategory Category { get; set; } = StatusCategory.ToDo;
+        public string Color { get; set; } = ColumnColors[0];
     }
 }

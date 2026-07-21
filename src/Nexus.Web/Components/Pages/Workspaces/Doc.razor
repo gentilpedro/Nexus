@@ -57,7 +57,13 @@
         else if (doc is not null)
         {
             <div class="page-header">
-                <h1>@doc.Title</h1>
+                <div class="doc-title-block">
+                    <span class="doc-title-icon">📄</span>
+                    <div>
+                        <h1 style="margin-bottom:0.15rem;">@doc.Title</h1>
+                        <span class="topnav-user">@workspace.Name · @LastEditedLabel() · Visível para todo o workspace</span>
+                    </div>
+                </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" @onclick="EnterEditMode">Editar</button>
                     @if (canDelete)
@@ -66,8 +72,47 @@
                     }
                 </div>
             </div>
-            <div class="doc-content">
-                @((MarkupString)(doc.ContentHtml ?? ""))
+            <div class="dashboard-layout">
+                <div>
+                    <div class="doc-content">
+                        @((MarkupString)(doc.ContentHtml ?? ""))
+                    </div>
+                    <div class="doc-footer-bar">
+                        <span>@WordCount() palavras</span>
+                        <span>Salvo na nuvem</span>
+                    </div>
+                </div>
+                <div>
+                    @{ var outline = GetOutline(); }
+                    @if (outline.Count > 0)
+                    {
+                        <div class="side-card">
+                            <h2>Sumário</h2>
+                            @foreach (var (level, text) in outline)
+                            {
+                                <a href="#" class="doc-outline-item doc-outline-item--@level" @onclick:preventDefault="true">@text</a>
+                            }
+                        </div>
+                    }
+                    <div class="side-card">
+                        <h2>Sobre este documento</h2>
+                        <div class="progress-row">
+                            <div class="progress-row-top"><span class="name">Criado por</span></div>
+                            <span>@AuthorLabel(doc.CreatedByUser)</span>
+                        </div>
+                        <div class="progress-row">
+                            <div class="progress-row-top"><span class="name">Criado em</span></div>
+                            <span>@doc.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</span>
+                        </div>
+                        @if (doc.UpdatedAtUtc is not null)
+                        {
+                            <div class="progress-row">
+                                <div class="progress-row-top"><span class="name">Última edição</span></div>
+                                <span>@AuthorLabel(doc.UpdatedByUser) · @doc.UpdatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
             </div>
         }
     }
@@ -153,7 +198,10 @@
 
         await using (var db2 = await DbFactory.CreateDbContextAsync())
         {
-            doc = await db2.DocPages.FirstOrDefaultAsync(d => d.Id == DocId && d.WorkspaceId == WorkspaceId);
+            doc = await db2.DocPages
+                .Include(d => d.CreatedByUser)
+                .Include(d => d.UpdatedByUser)
+                .FirstOrDefaultAsync(d => d.Id == DocId && d.WorkspaceId == WorkspaceId);
         }
 
         if (doc is null)
@@ -280,7 +328,71 @@
         isSaving = false;
         isEditing = false;
 
-        doc = await db.DocPages.FirstOrDefaultAsync(d => d.Id == doc!.Id);
+        doc = await db.DocPages
+            .Include(d => d.CreatedByUser)
+            .Include(d => d.UpdatedByUser)
+            .FirstOrDefaultAsync(d => d.Id == doc!.Id);
+    }
+
+    private List<(string Level, string Text)> GetOutline()
+    {
+        if (string.IsNullOrEmpty(doc?.ContentHtml))
+        {
+            return [];
+        }
+
+        var results = new List<(string, string)>();
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(
+            doc.ContentHtml, @"<h([1-3])[^>]*>(.*?)</h\1>", System.Text.RegularExpressions.RegexOptions.Singleline))
+        {
+            var text = System.Text.RegularExpressions.Regex.Replace(m.Groups[2].Value, "<[^>]+>", "").Trim();
+            if (text.Length > 0)
+            {
+                results.Add(("h" + m.Groups[1].Value, System.Net.WebUtility.HtmlDecode(text)));
+            }
+        }
+
+        return results;
+    }
+
+    private int WordCount()
+    {
+        if (string.IsNullOrEmpty(doc?.ContentHtml))
+        {
+            return 0;
+        }
+
+        var plain = System.Text.RegularExpressions.Regex.Replace(doc.ContentHtml, "<[^>]+>", " ");
+        return plain.Split(' ', '\n', '\r', '\t').Count(w => w.Trim().Length > 0);
+    }
+
+    private string LastEditedLabel()
+    {
+        if (doc is null)
+        {
+            return "";
+        }
+
+        var when = doc.UpdatedAtUtc ?? doc.CreatedAtUtc;
+        var who = AuthorLabel(doc.UpdatedByUser ?? doc.CreatedByUser);
+        var delta = DateTime.UtcNow - when;
+
+        var whenLabel = delta.TotalMinutes < 1 ? "agora mesmo"
+            : delta.TotalMinutes < 60 ? $"há {(int)delta.TotalMinutes} min"
+            : delta.TotalHours < 24 ? $"há {(int)delta.TotalHours}h"
+            : $"em {when.ToLocalTime():dd/MM/yyyy}";
+
+        return $"Editado {whenLabel} por {who}";
+    }
+
+    private static string AuthorLabel(ApplicationUser? user)
+    {
+        if (user is null)
+        {
+            return "—";
+        }
+
+        return string.IsNullOrEmpty(user.DisplayName) ? user.Email ?? "—" : user.DisplayName;
     }
 
     private async Task HandleDelete()

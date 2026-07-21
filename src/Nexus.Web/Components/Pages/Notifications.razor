@@ -3,19 +3,21 @@
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
+@using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager NavigationManager
+@inject NotificationBadgeService Badge
 
 <PageTitle>Notificações</PageTitle>
 
-<div class="page-container">
+<div class="page-container page-container--wide">
     <div class="page-header">
-        <h1>Notificações</h1>
+        <h1>Central de notificações</h1>
         @if (notifications is { Count: > 0 } && notifications.Any(n => !n.IsRead))
         {
-            <button type="button" class="btn btn-secondary" @onclick="MarkAllRead">Marcar todas como lidas</button>
+            <button type="button" class="btn btn-secondary" @onclick="MarkAllRead">Marcar tudo como lido</button>
         }
     </div>
 
@@ -23,22 +25,46 @@
     {
         <p>Carregando...</p>
     }
-    else if (notifications.Count == 0)
-    {
-        <div class="empty-state">
-            <p>Nenhuma notificação ainda.</p>
-        </div>
-    }
     else
     {
-        <div class="notification-list">
-            @foreach (var n in notifications)
-            {
-                <div class="notification-item @(n.IsRead ? "" : "is-unread")" @onclick="() => OpenAsync(n)">
-                    <div class="notification-message">@n.Message</div>
-                    <div class="notification-time">@n.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+        <div class="dashboard-layout">
+            <div>
+                <div class="pill-tabs">
+                    <button type="button" class="@(filter == "all" ? "active" : "")" @onclick='() => filter = "all"'>Todas <span class="tab-count">@notifications.Count</span></button>
+                    <button type="button" class="@(filter == "unread" ? "active" : "")" @onclick='() => filter = "unread"'>Não lidas <span class="tab-count">@notifications.Count(n => !n.IsRead)</span></button>
                 </div>
-            }
+
+                @if (VisibleNotifications.Count == 0)
+                {
+                    <div class="empty-state">
+                        <p>Nenhuma notificação por aqui.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="notification-list">
+                        @foreach (var n in VisibleNotifications)
+                        {
+                            <div class="notification-item @(n.IsRead ? "" : "is-unread")" @onclick="() => OpenAsync(n)">
+                                <div class="notification-message">@n.Message</div>
+                                <div class="notification-time">@n.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div>
+                <div class="side-card">
+                    <h2>Resumo de hoje</h2>
+                    <div class="progress-row">
+                        <div class="progress-row-top"><span class="name">Não lidas</span><span class="pct">@notifications.Count(n => !n.IsRead)</span></div>
+                    </div>
+                    <div class="progress-row">
+                        <div class="progress-row-top"><span class="name">Recebidas hoje</span><span class="pct">@notifications.Count(n => n.CreatedAtUtc.ToLocalTime().Date == DateTime.Now.Date)</span></div>
+                    </div>
+                </div>
+            </div>
         </div>
     }
 </div>
@@ -49,6 +75,10 @@
 
     private List<Notification>? notifications;
     private string? userId;
+    private string filter = "all";
+
+    private List<Notification> VisibleNotifications =>
+        (filter == "unread" ? notifications!.Where(n => !n.IsRead) : notifications!).ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -81,6 +111,7 @@
             await using var db = await DbFactory.CreateDbContextAsync();
             await db.Notifications.Where(n => n.Id == notification.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRead, true));
             notification.IsRead = true;
+            Badge.SetUnreadCount(notifications!.Count(n => !n.IsRead));
         }
 
         if (notification.WorkItem is not null)
@@ -99,5 +130,6 @@
         await using var db = await DbFactory.CreateDbContextAsync();
         await db.Notifications.Where(n => n.UserId == userId && !n.IsRead).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRead, true));
         await LoadAsync();
+        Badge.SetUnreadCount(0);
     }
 }

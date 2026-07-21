@@ -38,7 +38,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DataProtectionKeys", (string)null);
+                    b.ToTable("DataProtectionKeys");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -203,13 +203,22 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
 
+                    b.Property<string>("AvatarContentType")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("AvatarStoragePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
@@ -296,7 +305,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("WorkspaceId", "CreatedAtUtc");
 
-                    b.ToTable("ChatMessages", (string)null);
+                    b.ToTable("ChatMessages");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.ChatMessageAttachment", b =>
@@ -330,7 +339,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("ChatMessageId");
 
-                    b.ToTable("ChatMessageAttachments", (string)null);
+                    b.ToTable("ChatMessageAttachments");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.CustomFieldDefinition", b =>
@@ -343,6 +352,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("Required")
+                        .HasColumnType("bit");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
@@ -357,7 +369,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("TaskListId");
 
-                    b.ToTable("CustomFieldDefinitions", (string)null);
+                    b.ToTable("CustomFieldDefinitions");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.CustomFieldOption", b =>
@@ -381,7 +393,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("CustomFieldDefinitionId");
 
-                    b.ToTable("CustomFieldOptions", (string)null);
+                    b.ToTable("CustomFieldOptions");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.CustomFieldValue", b =>
@@ -408,7 +420,7 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("WorkItemId", "CustomFieldDefinitionId")
                         .IsUnique();
 
-                    b.ToTable("CustomFieldValues", (string)null);
+                    b.ToTable("CustomFieldValues");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.DocPage", b =>
@@ -454,7 +466,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("WorkspaceId");
 
-                    b.ToTable("DocPages", (string)null);
+                    b.ToTable("DocPages");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.Label", b =>
@@ -467,6 +479,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(9)
                         .HasColumnType("nvarchar(9)");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -483,7 +498,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("TaskListId");
 
-                    b.ToTable("Labels", (string)null);
+                    b.ToTable("Labels");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.Notification", b =>
@@ -519,7 +534,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("UserId", "IsRead");
 
-                    b.ToTable("Notifications", (string)null);
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.Space", b =>
@@ -551,7 +566,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("WorkspaceId");
 
-                    b.ToTable("Spaces", (string)null);
+                    b.ToTable("Spaces");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.Sprint", b =>
@@ -592,9 +607,12 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TaskListId");
+                    b.HasIndex("TaskListId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Sprints_TaskListId_ActiveOnly")
+                        .HasFilter("[Status] = 1");
 
-                    b.ToTable("Sprints", (string)null);
+                    b.ToTable("Sprints");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.SprintBurndownSnapshot", b =>
@@ -620,7 +638,7 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("SprintId", "SnapshotDateUtc")
                         .IsUnique();
 
-                    b.ToTable("SprintBurndownSnapshots", (string)null);
+                    b.ToTable("SprintBurndownSnapshots");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.StatusTransition", b =>
@@ -642,7 +660,7 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("FromStatusId", "ToStatusId")
                         .IsUnique();
 
-                    b.ToTable("StatusTransitions", (string)null);
+                    b.ToTable("StatusTransitions");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.TaskList", b =>
@@ -666,7 +684,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("SpaceId");
 
-                    b.ToTable("TaskLists", (string)null);
+                    b.ToTable("TaskLists");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.TaskStatusDefinition", b =>
@@ -677,6 +695,10 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.Property<int>("Category")
                         .HasColumnType("int");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
@@ -696,7 +718,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("TaskListId");
 
-                    b.ToTable("TaskStatusDefinitions", (string)null);
+                    b.ToTable("TaskStatusDefinitions");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkItem", b =>
@@ -766,7 +788,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("TaskListId");
 
-                    b.ToTable("WorkItems", (string)null);
+                    b.ToTable("WorkItems");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkItemAttachment", b =>
@@ -808,7 +830,36 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("WorkItemId");
 
-                    b.ToTable("WorkItemAttachments", (string)null);
+                    b.ToTable("WorkItemAttachments");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkItemComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<Guid>("WorkItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WorkItemId", "CreatedAtUtc");
+
+                    b.ToTable("WorkItemComments");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkItemLabel", b =>
@@ -830,7 +881,7 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("WorkItemId", "LabelId")
                         .IsUnique();
 
-                    b.ToTable("WorkItemLabels", (string)null);
+                    b.ToTable("WorkItemLabels");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.Workspace", b =>
@@ -839,8 +890,14 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Color")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -857,7 +914,7 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("Workspaces", (string)null);
+                    b.ToTable("Workspaces");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceMember", b =>
@@ -886,7 +943,7 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("WorkspaceId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("WorkspaceMembers", (string)null);
+                    b.ToTable("WorkspaceMembers");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -953,7 +1010,7 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                             b1.HasKey("IdentityUserPasskeyCredentialId");
 
-                            b1.ToTable("AspNetUserPasskeys", (string)null);
+                            b1.ToTable("AspNetUserPasskeys");
 
                             b1
                                 .ToJson("Data")
@@ -1261,6 +1318,24 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("WorkItem");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkItemComment", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.WorkItem", "WorkItem")
+                        .WithMany("Comments")
+                        .HasForeignKey("WorkItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("WorkItem");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.WorkItemLabel", b =>
                 {
                     b.HasOne("Nexus.Domain.Entities.Label", "Label")
@@ -1335,6 +1410,8 @@ namespace Nexus.Infrastructure.Data.Migrations
             modelBuilder.Entity("Nexus.Domain.Entities.WorkItem", b =>
                 {
                     b.Navigation("Attachments");
+
+                    b.Navigation("Comments");
 
                     b.Navigation("CustomFieldValues");
 

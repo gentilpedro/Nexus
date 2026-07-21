@@ -80,6 +80,14 @@
                     </div>
                 }
             </div>
+
+            <div class="priority-legend">
+                <span style="font-weight:600;color:var(--color-text);">Prioridade:</span>
+                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--badge-priority-highest-fg);"></span>@WorkItemPriority.Highest.ToDisplayLabel()</span>
+                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--badge-priority-high-fg);"></span>@WorkItemPriority.High.ToDisplayLabel()</span>
+                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--badge-priority-medium-fg);"></span>@WorkItemPriority.Medium.ToDisplayLabel()</span>
+                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--badge-priority-low-fg);"></span>@WorkItemPriority.Low.ToDisplayLabel()</span>
+            </div>
         }
 
         <TaskDetailPanel @ref="panel"

@@ -2,10 +2,35 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="board-column" data-drop-id="@Status.Id">
+<div class="board-column" data-drop-id="@Status.Id" style="@(string.IsNullOrEmpty(Status.Color) ? "" : $"border-top: 3px solid {Status.Color};")">
     <div class="board-column-header">
-        <StatusBadge Name="@Status.Name" Category="Status.Category" />
-        <span class="board-column-count">@Items.Count</span>
+        @if (isRenaming)
+        {
+            <input class="board-column-rename-input" value="@renameValue" @oninput="@(e => renameValue = e.Value?.ToString() ?? "")" @onkeydown="HandleRenameKeyDown" @ref="renameInputRef" />
+            <button type="button" class="btn-link" @onclick="SaveRename">✓</button>
+            <button type="button" class="btn-link" @onclick="CancelRename">✕</button>
+        }
+        else
+        {
+            <span class="board-column-title-group">
+                <StatusBadge Name="@Status.Name" Category="Status.Category" Color="Status.Color" />
+                <span class="board-column-count">@Items.Count</span>
+            </span>
+            @if (CanManage)
+            {
+                <div class="board-column-menu">
+                    <button type="button" class="board-column-menu-btn" @onclick="ToggleMenu" aria-label="Opções da coluna">⋮</button>
+                    @if (menuOpen)
+                    {
+                        <div class="board-column-menu-backdrop" @onclick="CloseMenu"></div>
+                        <div class="board-column-menu-dropdown">
+                            <button type="button" @onclick="StartRename">Renomear</button>
+                            <button type="button" @onclick="HandleDeleteClick">Excluir</button>
+                        </div>
+                    }
+                </div>
+            }
+        }
     </div>
     <div class="board-column-body" @ref="bodyRef">
         @foreach (var item in Items)
@@ -32,6 +57,19 @@
     [Parameter]
     public EventCallback<(Guid WorkItemId, Guid NewStatusId, int NewIndex)> OnCardMoved { get; set; }
 
+    [Parameter]
+    public bool CanManage { get; set; }
+
+    [Parameter]
+    public EventCallback<(Guid StatusId, string NewName)> OnRename { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnDelete { get; set; }
+
+    private bool menuOpen;
+    private bool isRenaming;
+    private string renameValue = "";
+    private ElementReference renameInputRef;
     private ElementReference bodyRef;
     private IJSObjectReference? module;
     private DotNetObjectReference<BoardColumn>? selfRef;
@@ -52,6 +90,64 @@
         if (OnCardMoved.HasDelegate)
         {
             await OnCardMoved.InvokeAsync((workItemId, newStatusId, newIndex));
+        }
+    }
+
+    private void ToggleMenu() => menuOpen = !menuOpen;
+
+    private void CloseMenu() => menuOpen = false;
+
+    private async Task StartRename()
+    {
+        menuOpen = false;
+        renameValue = Status.Name;
+        isRenaming = true;
+        await Task.Yield();
+        try
+        {
+            await renameInputRef.FocusAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit already gone — nothing to focus.
+        }
+    }
+
+    private void CancelRename() => isRenaming = false;
+
+    private async Task SaveRename()
+    {
+        isRenaming = false;
+        var trimmed = renameValue.Trim();
+        if (string.IsNullOrEmpty(trimmed) || trimmed == Status.Name)
+        {
+            return;
+        }
+
+        if (OnRename.HasDelegate)
+        {
+            await OnRename.InvokeAsync((Status.Id, trimmed));
+        }
+    }
+
+    private async Task HandleRenameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveRename();
+        }
+        else if (e.Key == "Escape")
+        {
+            CancelRename();
+        }
+    }
+
+    private async Task HandleDeleteClick()
+    {
+        menuOpen = false;
+        if (OnDelete.HasDelegate)
+        {
+            await OnDelete.InvokeAsync(Status.Id);
         }
     }
 

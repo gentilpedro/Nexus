@@ -1,6 +1,7 @@
 @page "/lists/{ListId:guid}/backlog"
 @attribute [Authorize]
 @using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
@@ -45,9 +46,14 @@
                     <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
                     <a class="btn btn-secondary" href="@($"/lists/{ListId}/labels")">Labels</a>
                 }
+                @if (completedSprints is { Count: > 0 })
+                {
+                    <button type="button" class="btn btn-secondary" @onclick="() => showHistory = !showHistory">Histórico</button>
+                }
                 @if (canManage)
                 {
-                    <button class="btn" @onclick="ToggleCreateSprintForm">+ Nova sprint</button>
+                    <button class="btn btn-secondary" @onclick="ToggleCreateSprintForm">+ Criar sprint</button>
+                    <button class="btn" @onclick="OpenCreate">+ Nova tarefa</button>
                 }
             </div>
         </div>
@@ -95,10 +101,59 @@
         }
         else
         {
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
+                <input type="search" placeholder="Filtrar tarefas..." style="flex:1;min-width:200px;" @bind="filterText" @bind:event="oninput" />
+                <div class="pill-tabs">
+                    <button type="button" class="@(rowFilter == "all" ? "active" : "")" @onclick='() => rowFilter = "all"'>Todas <span class="tab-count">@AllItems.Count</span></button>
+                    <button type="button" class="@(rowFilter == "mine" ? "active" : "")" @onclick='() => rowFilter = "mine"'>Minhas <span class="tab-count">@AllItems.Count(w => w.AssigneeId == currentUserId)</span></button>
+                    <button type="button" class="@(rowFilter == "urgent" ? "active" : "")" @onclick='() => rowFilter = "urgent"'>Urgentes <span class="tab-count">@AllItems.Count(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest)</span></button>
+                </div>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Total de tarefas</span>
+                        <span class="stat-card-value">@AllItems.Count</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Prioridade alta</span>
+                        <span class="stat-card-value">@AllItems.Count(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest)</span>
+                    </div>
+                    <span class="stat-card-icon is-danger">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Sprint velocity</span>
+                        <span class="stat-card-value">@SprintVelocity</span>
+                        <span style="font-size:0.75rem;color:var(--color-text-muted);">tarefas concluídas / sprint</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Atrasadas</span>
+                        <span class="stat-card-value">@AllItems.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is not null && w.DueDateUtc.Value.Date < DateTime.UtcNow.Date)</span>
+                    </div>
+                    <span class="stat-card-icon is-warning">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                    </span>
+                </div>
+            </div>
+
             @foreach (var sprint in sprints)
             {
                 <SprintSection Sprint="sprint"
-                               Items="sprint.WorkItems.OrderBy(w => w.SortOrder).ToList()"
+                               Items="FilteredItems(sprint.WorkItems.OrderBy(w => w.SortOrder))"
                                CanManage="canManage"
                                AnotherSprintActive="hasActiveSprint && sprint.Status != SprintStatus.Active"
                                OnCardClick="OpenEdit"
@@ -108,18 +163,18 @@
             }
 
             <SprintSection Sprint="null"
-                           Items="backlogItems ?? []"
+                           Items="FilteredItems(backlogItems ?? [])"
                            CanManage="canManage"
                            OnCardClick="OpenEdit"
                            OnCardMoved="HandleCardMoved" />
 
-            @if (completedSprints is { Count: > 0 })
+            @if (showHistory && completedSprints is { Count: > 0 })
             {
                 <h2 style="margin-top:2rem;">Sprints concluídas</h2>
                 @foreach (var cs in completedSprints)
                 {
                     <div class="sprint-history-item">
-                        <span>@cs.Name — @cs.StartDateUtc.ToString("dd/MM/yyyy") a @cs.EndDateUtc.ToString("dd/MM/yyyy")</span>
+                        <span>@cs.Name — @cs.StartDateUtc.ToString("dd/MM/yyyy") a @cs.EndDateUtc.ToString("dd/MM/yyyy") · @cs.WorkItems.Count(w => w.Status.Category == StatusCategory.Done) concluídas</span>
                         <a class="btn-link" href="@($"/sprints/{cs.Id}/burndown")">Ver burndown</a>
                     </div>
                 }
@@ -163,12 +218,54 @@
     private bool canManageFields;
     private bool showCreateSprintForm;
     private bool isSavingSprint;
+    private bool showHistory;
+    private string filterText = "";
+    private string rowFilter = "all";
+    private string? currentUserId;
     private string? errorMessage;
     private TaskDetailPanel? panel;
     private readonly CreateSprintModel createSprintModel = new();
     private Guid? loadedListId;
 
     private bool hasActiveSprint => sprints?.Any(s => s.Status == SprintStatus.Active) ?? false;
+
+    private List<WorkItem> AllItems =>
+        (sprints?.SelectMany(s => s.WorkItems) ?? []).Concat(backlogItems ?? []).ToList();
+
+    // Real, schema-backed stand-in for "sprint velocity" — there's no story-point field on
+    // WorkItem, so this counts delivered tasks per completed sprint instead of story points.
+    private string SprintVelocity
+    {
+        get
+        {
+            if (completedSprints is not { Count: > 0 })
+            {
+                return "—";
+            }
+
+            var avg = completedSprints.Average(s => s.WorkItems.Count(w => w.Status.Category == StatusCategory.Done));
+            return avg.ToString("0.#");
+        }
+    }
+
+    private List<WorkItem> FilteredItems(IEnumerable<WorkItem> items)
+    {
+        var query = items;
+
+        if (!string.IsNullOrWhiteSpace(filterText))
+        {
+            query = query.Where(w => w.Title.Contains(filterText, StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = rowFilter switch
+        {
+            "mine" => query.Where(w => w.AssigneeId == currentUserId),
+            "urgent" => query.Where(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest),
+            _ => query
+        };
+
+        return query.ToList();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -186,7 +283,13 @@
         customFieldDefinitions = null;
         statusTransitions = null;
         showCreateSprintForm = false;
+        showHistory = false;
+        filterText = "";
+        rowFilter = "all";
         errorMessage = null;
+
+        var authStateForUser = await AuthStateTask!;
+        currentUserId = authStateForUser.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var resolvedWorkspaceId = await QueryService.GetWorkspaceIdForListAsync(ListId);
         if (resolvedWorkspaceId is null)
@@ -248,6 +351,8 @@
         StateHasChanged();
     }
 
+    private void OpenCreate() => panel?.OpenForCreate();
+
     private async Task OpenEdit(WorkItem item)
     {
         if (panel is not null)
@@ -258,20 +363,20 @@
 
     private async Task HandleCardMoved((Guid WorkItemId, Guid? NewSprintId, int NewIndex) move)
     {
-        await QueryService.UpdateWorkItemSprintAsync(move.WorkItemId, move.NewSprintId, move.NewIndex);
+        await QueryService.UpdateWorkItemSprintAsync(ListId, move.WorkItemId, move.NewSprintId, move.NewIndex);
         await ReloadAsync();
     }
 
     private async Task HandleStart(Guid sprintId)
     {
-        var started = await QueryService.StartSprintAsync(sprintId);
+        var started = await QueryService.StartSprintAsync(ListId, sprintId);
         errorMessage = started ? null : "Já existe um sprint ativo nessa lista. Conclua-o antes de iniciar outro.";
         await ReloadAsync();
     }
 
     private async Task HandleComplete(Guid sprintId)
     {
-        await QueryService.CompleteSprintAsync(sprintId);
+        await QueryService.CompleteSprintAsync(ListId, sprintId);
         await ReloadAsync();
     }
 

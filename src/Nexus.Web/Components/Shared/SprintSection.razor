@@ -1,14 +1,19 @@
 @using Nexus.Domain.Entities
+@using Nexus.Web.Extensions
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <div class="sprint-section" data-drop-id="@(Sprint?.Id.ToString() ?? "")">
     <div class="sprint-section-header">
         <div>
-            <strong>@(Sprint?.Name ?? "Backlog")</strong>
+            <strong>@(Sprint?.Name ?? "Backlog geral")</strong>
             @if (Sprint is not null)
             {
-                <span class="sprint-section-dates">@Sprint.StartDateUtc.ToString("dd/MM") – @Sprint.EndDateUtc.ToString("dd/MM")</span>
+                @if (Sprint.Status == SprintStatus.Active)
+                {
+                    <span class="badge badge-status-done" style="margin-left:0.5rem;">Ativo</span>
+                }
+                <span class="sprint-section-dates">@Sprint.StartDateUtc.ToString("dd MMM") – @Sprint.EndDateUtc.ToString("dd MMM") · @Items.Count @(Items.Count == 1 ? "tarefa" : "tarefas")</span>
                 @if (!string.IsNullOrWhiteSpace(Sprint.Goal))
                 {
                     <div class="sprint-section-goal">@Sprint.Goal</div>
@@ -16,7 +21,10 @@
             }
         </div>
         <div class="form-actions">
-            <span class="board-column-count">@Items.Count</span>
+            @if (Sprint is null)
+            {
+                <span class="board-column-count">@Items.Count</span>
+            }
             @if (Sprint is not null && CanManage)
             {
                 @if (Sprint.Status == SprintStatus.Planned)
@@ -26,7 +34,7 @@
                 else if (Sprint.Status == SprintStatus.Active)
                 {
                     <a class="btn-link" href="@($"/sprints/{Sprint.Id}/burndown")">Ver burndown</a>
-                    <button class="btn btn-secondary" @onclick="() => OnComplete.InvokeAsync(Sprint.Id)">Concluir sprint</button>
+                    <button class="btn btn-secondary" @onclick="() => OnComplete.InvokeAsync(Sprint.Id)">Finalizar sprint</button>
                 }
             }
         </div>
@@ -34,7 +42,36 @@
     <div class="sprint-section-body" @ref="bodyRef">
         @foreach (var item in Items)
         {
-            <TaskCard WorkItem="item" OnClick="OnCardClick" />
+            <div class="task-row" data-workitem-id="@item.Id" @onclick="() => OnCardClick.InvokeAsync(item)">
+                <WorkItemTypeIcon Type="item.Type" />
+                <span class="task-row-title">@item.Title</span>
+                @if (item.WorkItemLabels.Count > 0)
+                {
+                    <span class="task-row-tags">
+                        @foreach (var label in item.WorkItemLabels.Select(l => l.Label))
+                        {
+                            <span class="label-chip label-chip--sm" style="background-color: @label.Color; color: @LabelColor.TextColorFor(label.Color);">@label.Name</span>
+                        }
+                    </span>
+                }
+                <PriorityBadge Priority="item.Priority" />
+                @if (item.DueDateUtc is not null)
+                {
+                    <span class="task-row-due @(IsOverdue(item) ? "is-overdue" : "")">@item.DueDateUtc.Value.ToString("dd/MM")</span>
+                }
+                <span class="task-row-comments" title="Comentários">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                    @item.Comments.Count
+                </span>
+                @if (item.Assignee?.AvatarStoragePath is not null)
+                {
+                    <img class="task-row-avatar" src="@AvatarUrl(item.Assignee)" alt="" title="@AssigneeLabel(item)" />
+                }
+                else
+                {
+                    <span class="task-row-avatar" title="@AssigneeLabel(item)">@AssigneeInitial(item)</span>
+                }
+            </div>
         }
         @if (Items.Count == 0)
         {
@@ -67,6 +104,28 @@
 
     [Parameter]
     public EventCallback<Guid> OnComplete { get; set; }
+
+    private static bool IsOverdue(WorkItem item) =>
+        item.DueDateUtc is not null && item.Status.Category != StatusCategory.Done && item.DueDateUtc.Value.Date < DateTime.UtcNow.Date;
+
+    private static string AssigneeLabel(WorkItem item) =>
+        item.Assignee is null
+            ? "Sem responsável"
+            : (string.IsNullOrEmpty(item.Assignee.DisplayName) ? item.Assignee.Email ?? "" : item.Assignee.DisplayName);
+
+    private static string AssigneeInitial(WorkItem item)
+    {
+        if (item.Assignee is null)
+        {
+            return "?";
+        }
+
+        var name = string.IsNullOrEmpty(item.Assignee.DisplayName) ? item.Assignee.Email : item.Assignee.DisplayName;
+        return string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+    }
+
+    private static string AvatarUrl(ApplicationUser user) =>
+        $"/avatars/{user.Id}/download?v={Uri.EscapeDataString(System.IO.Path.GetFileNameWithoutExtension(user.AvatarStoragePath)!)}";
 
     private ElementReference bodyRef;
     private IJSObjectReference? module;
