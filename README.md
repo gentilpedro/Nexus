@@ -6,9 +6,17 @@ só para demonstrar o aplicativo. Não é dado real — nomes, e-mails e o
 
 ## Como acessar
 
-Suba o app localmente (`docker compose up db -d` + `dotnet run --project
-src/Nexus.Web`) e faça login em `/Account/Login` com qualquer um dos
-e-mails abaixo.
+Antes da primeira vez, copie `.env.example` para `.env` (não versionado)
+e ajuste a senha se quiser. Suba o app localmente (`docker compose up db
+-d` + `dotnet run --project src/Nexus.Web`) e faça login em
+`/Account/Login` com qualquer um dos e-mails abaixo.
+
+> A connection string local (com a senha do `sa`) fica nos User Secrets
+> do projeto, não no `appsettings.json` — se clonar em outra máquina,
+> rode `dotnet user-secrets set "ConnectionStrings:DefaultConnection"
+> "Server=localhost,1433;Database=Nexus;User Id=sa;Password=<a mesma do
+> seu .env>;TrustServerCertificate=True;MultipleActiveResultSets=true"
+> --project src/Nexus.Web` primeiro.
 
 **Senha de todas as contas de demonstração:** `Demo@2026`
 
