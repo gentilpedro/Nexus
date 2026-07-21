@@ -11,7 +11,7 @@
     <div class="task-row" @onclick="() => OnClick.InvokeAsync(Item)">
         <WorkItemTypeIcon Type="Item.Type" />
         <span class="task-row-title">@Item.Title</span>
-        <StatusBadge Name="@Item.Status.Name" Category="Item.Status.Category" />
+        <StatusBadge Name="@Item.Status.Name" Category="Item.Status.Category" Color="Item.Status.Color" />
         <PriorityBadge Priority="Item.Priority" />
         @if (Item.DueDateUtc is not null)
         {

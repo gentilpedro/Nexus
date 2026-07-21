@@ -68,6 +68,27 @@
             <div class="alert alert-danger">@errorMessage</div>
         }
 
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Tarefas</span>
+                    <span class="stat-card-value">@taskTotal</span>
+                </div>
+                <span class="stat-card-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+                </span>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Concluídas</span>
+                    <span class="stat-card-value">@taskDonePercent%</span>
+                </div>
+                <span class="stat-card-icon is-success">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                </span>
+            </div>
+        </div>
+
         <div class="page-header">
             <h2>Listas</h2>
             @if (canManageSpace)
@@ -107,8 +128,20 @@
             <div class="card-list">
                 @foreach (var list in taskLists)
                 {
+                    var progress = listProgress.TryGetValue(list.Id, out var p) ? p : (Done: 0, Total: 0);
                     <a class="card card-link" href="@($"/lists/{list.Id}/list")">
                         <strong>@list.Name</strong>
+                        @if (progress.Total > 0)
+                        {
+                            <div class="topnav-user" style="margin-top:0.35rem;">@progress.Done de @progress.Total tarefas concluídas</div>
+                            <div class="progress-track" style="margin-top:0.4rem;">
+                                <div class="progress-fill" style="width:@(progress.Done * 100 / progress.Total)%"></div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="topnav-user" style="margin-top:0.35rem;">Nenhuma tarefa ainda</div>
+                        }
                     </a>
                 }
             </div>
@@ -138,6 +171,9 @@
     private readonly RenameSpaceModel renameModel = new();
     private readonly CreateListModel createListModel = new();
     private Guid? loadedSpaceId;
+    private int taskTotal;
+    private int taskDonePercent;
+    private Dictionary<Guid, (int Done, int Total)> listProgress = new();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -192,6 +228,18 @@
             .OrderBy(l => l.SortOrder)
             .ThenBy(l => l.Name)
             .ToListAsync();
+
+        var workItems = await db.WorkItems
+            .Where(wi => wi.TaskList.SpaceId == SpaceId)
+            .Select(wi => new { wi.TaskListId, wi.Status.Category })
+            .ToListAsync();
+
+        taskTotal = workItems.Count;
+        taskDonePercent = taskTotal == 0 ? 0 : (int)Math.Round(workItems.Count(c => c.Category == StatusCategory.Done) * 100.0 / taskTotal);
+
+        listProgress = workItems
+            .GroupBy(wi => wi.TaskListId)
+            .ToDictionary(g => g.Key, g => (Done: g.Count(wi => wi.Category == StatusCategory.Done), Total: g.Count()));
     }
 
     private void ToggleCreateListForm()

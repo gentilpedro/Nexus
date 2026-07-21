@@ -83,7 +83,7 @@
         else if (doc is not null)
         {
             <div class="page-header">
-                <h1>@doc.Title</h1>
+                <h1>@doc.Title <span class="coming-soon-badge" style="opacity:1;">Apenas leitura</span></h1>
                 <div class="form-actions">
                     <a class="btn" href="@($"/spreadsheets/{doc.Id}/download.xlsx")">Baixar planilha (.xlsx)</a>
                     <button type="button" class="btn btn-secondary" @onclick="EnterEditMode">Editar</button>
@@ -93,6 +93,7 @@
                     }
                 </div>
             </div>
+            <p class="topnav-user" style="margin-top:-0.5rem;">@grid.Count linhas · @(grid.Count > 0 ? grid[0].Count : 0) colunas</p>
             <div class="table-scroll">
                 <table class="spreadsheet-grid spreadsheet-grid--readonly">
                     <tbody>
@@ -341,6 +342,15 @@
         }
 
         await using var db = await DbFactory.CreateDbContextAsync();
+
+        // ReferencedDocPageId is Restrict (not SetNull, to avoid a second cascade path from
+        // Workspace) — clear any chat messages pointing here first, or the delete below fails.
+        // Same fix as Doc.razor.HandleDelete; a spreadsheet is a DocPage too, so it can be
+        // referenced from chat the same way a text doc can.
+        await db.ChatMessages
+            .Where(m => m.ReferencedDocPageId == doc.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.ReferencedDocPageId, (Guid?)null));
+
         await db.DocPages.Where(d => d.Id == doc.Id).ExecuteDeleteAsync();
         NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
     }

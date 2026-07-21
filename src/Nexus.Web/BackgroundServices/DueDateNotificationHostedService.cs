@@ -41,12 +41,17 @@ public class DueDateNotificationHostedService(
                 .Select(w => new { w.Id, w.Title, w.AssigneeId, DueDate = w.DueDateUtc!.Value.Date })
                 .ToListAsync(ct);
 
+            var dueSoonIds = dueSoon.Select(w => w.Id).ToList();
+            var alreadyNotifiedPairs = (await db.Notifications
+                    .Where(n => dueSoonIds.Contains(n.WorkItemId!.Value) && n.Type == NotificationType.DueDateApproaching)
+                    .Select(n => new { n.WorkItemId, n.UserId })
+                    .ToListAsync(ct))
+                .Select(n => (n.WorkItemId!.Value, n.UserId))
+                .ToHashSet();
+
             foreach (var item in dueSoon)
             {
-                var alreadyNotified = await db.Notifications.AnyAsync(
-                    n => n.WorkItemId == item.Id && n.UserId == item.AssigneeId && n.Type == NotificationType.DueDateApproaching, ct);
-
-                if (alreadyNotified)
+                if (alreadyNotifiedPairs.Contains((item.Id, item.AssigneeId!)))
                 {
                     continue;
                 }

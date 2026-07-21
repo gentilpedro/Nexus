@@ -1,22 +1,18 @@
 ﻿<StatusMessage Message="@StatusMessage" />
-<h3>Recovery codes</h3>
+<h3>Códigos de recuperação</h3>
 <div class="alert alert-warning" role="alert">
     <p>
-        <strong>Put these codes in a safe place.</strong>
+        <strong>Guarde esses códigos em um lugar seguro.</strong>
     </p>
     <p>
-        If you lose your device and don't have the recovery codes you will lose access to your account.
+        Se você perder o dispositivo e não tiver os códigos de recuperação, vai perder o acesso à sua conta.
     </p>
 </div>
-<div class="row">
-    <div class="col-md-12">
-        @foreach (var recoveryCode in RecoveryCodes)
-        {
-            <div>
-                <code class="recovery-code">@recoveryCode</code>
-            </div>
-        }
-    </div>
+<div class="card" style="max-width:320px;">
+    @foreach (var recoveryCode in RecoveryCodes)
+    {
+        <div><code>@recoveryCode</code></div>
+    }
 </div>
 
 @code {

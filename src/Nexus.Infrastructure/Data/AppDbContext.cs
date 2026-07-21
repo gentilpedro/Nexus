@@ -27,6 +27,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<DocPage> DocPages => Set<DocPage>();
     public DbSet<WorkItemAttachment> WorkItemAttachments => Set<WorkItemAttachment>();
+    public DbSet<WorkItemComment> WorkItemComments => Set<WorkItemComment>();
     public DbSet<ChatMessageAttachment> ChatMessageAttachments => Set<ChatMessageAttachment>();
     public DbSet<Label> Labels => Set<Label>();
     public DbSet<WorkItemLabel> WorkItemLabels => Set<WorkItemLabel>();

@@ -3,19 +3,49 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
 @using Nexus.Domain.Entities
+@using Nexus.Web.Services
 
 @inject UserManager<ApplicationUser> UserManager
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityRedirectManager RedirectManager
+@inject AttachmentStorageService Storage
 
 <PageTitle>Perfil</PageTitle>
 
 <h2>Perfil</h2>
 <StatusMessage />
 
-<EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post" class="card">
+<EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post" enctype="multipart/form-data" class="card">
     <DataAnnotationsValidator />
     <ValidationSummary class="validation-errors" role="alert" />
+    <div class="form-field">
+        <label>Foto de perfil</label>
+        <div class="profile-avatar-row">
+            @if (avatarUrl is not null)
+            {
+                <img class="profile-avatar" src="@avatarUrl" alt="Foto de perfil" />
+            }
+            else
+            {
+                <span class="profile-avatar profile-avatar-fallback">@avatarInitial</span>
+            }
+            <div class="profile-avatar-actions">
+                <input type="file" name="AvatarFile" accept="image/png,image/jpeg,image/webp" />
+                @if (avatarUrl is not null)
+                {
+                    <label class="form-check">
+                        <InputCheckbox @bind-Value="Input.RemoveAvatar" />
+                        Remover foto atual
+                    </label>
+                }
+                <span style="font-size:0.8rem;color:var(--color-text-muted);">JPG, PNG ou WEBP, até 5 MB.</span>
+            </div>
+        </div>
+        @if (!string.IsNullOrEmpty(avatarErrorMessage))
+        {
+            <div class="alert alert-danger">@avatarErrorMessage</div>
+        }
+    </div>
     <div class="form-field">
         <label for="Input.Name">Nome</label>
         <InputText @bind-Value="Input.Name" id="Input.Name" placeholder="Seu nome" />
@@ -34,15 +64,23 @@
 </EditForm>
 
 @code {
+    private const long MaxAvatarSizeBytes = 5 * 1024 * 1024;
+
     private ApplicationUser? user;
     private string? username;
     private string? phoneNumber;
+    private string? avatarUrl;
+    private string avatarInitial = "?";
+    private string? avatarErrorMessage;
 
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private IFormFile? AvatarFile { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -60,6 +98,17 @@
 
         Input.PhoneNumber ??= phoneNumber;
         Input.Name ??= user.DisplayName;
+
+        RefreshAvatarState();
+    }
+
+    private void RefreshAvatarState()
+    {
+        var name = user!.DisplayName;
+        avatarInitial = string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+        avatarUrl = user.AvatarStoragePath is null
+            ? null
+            : $"/avatars/{user.Id}/download?v={Uri.EscapeDataString(Path.GetFileNameWithoutExtension(user.AvatarStoragePath))}";
     }
 
     private async Task OnValidSubmitAsync()
@@ -92,6 +141,43 @@
             }
         }
 
+        if (AvatarFile is not null)
+        {
+            if (AvatarFile.Length > MaxAvatarSizeBytes)
+            {
+                avatarErrorMessage = "A foto excede o limite de 5 MB.";
+                RefreshAvatarState();
+                return;
+            }
+
+            if (AvatarFile.ContentType is not ("image/png" or "image/jpeg" or "image/webp"))
+            {
+                avatarErrorMessage = "Envie uma imagem JPG, PNG ou WEBP.";
+                RefreshAvatarState();
+                return;
+            }
+
+            var oldPath = user.AvatarStoragePath;
+            await using (var stream = AvatarFile.OpenReadStream())
+            {
+                user.AvatarStoragePath = await Storage.SaveAsync(Guid.Parse(user.Id), Guid.NewGuid(), AvatarFile.FileName, stream);
+            }
+            user.AvatarContentType = AvatarFile.ContentType;
+            await UserManager.UpdateAsync(user);
+
+            if (oldPath is not null)
+            {
+                Storage.Delete(oldPath);
+            }
+        }
+        else if (Input.RemoveAvatar && user.AvatarStoragePath is not null)
+        {
+            Storage.Delete(user.AvatarStoragePath);
+            user.AvatarStoragePath = null;
+            user.AvatarContentType = null;
+            await UserManager.UpdateAsync(user);
+        }
+
         await SignInManager.RefreshSignInAsync(user);
         RedirectManager.RedirectToCurrentPageWithStatus("Your profile has been updated", HttpContext);
     }
@@ -101,6 +187,8 @@
         [StringLength(200, ErrorMessage = "Nome muito longo.")]
         [Display(Name = "Nome")]
         public string? Name { get; set; }
+
+        public bool RemoveAvatar { get; set; }
 
         [Phone]
         [Display(Name = "Phone number")]

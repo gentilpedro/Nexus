@@ -67,8 +67,74 @@
                     <BoardColumn Status="status"
                                  Items="workItems.Where(w => w.StatusId == status.Id).ToList()"
                                  OnCardClick="OpenEdit"
-                                 OnCardMoved="HandleCardMoved" />
+                                 OnCardMoved="HandleCardMoved"
+                                 CanManage="canManageFields"
+                                 OnRename="HandleRenameStatus"
+                                 OnDelete="HandleDeleteStatus" />
                 }
+                @if (canManageFields)
+                {
+                    <div class="board-add-column">
+                        @if (showAddColumnForm)
+                        {
+                            <div class="board-add-column-form">
+                                <label style="font-size:0.75rem;font-weight:600;color:var(--color-text-muted);">Nome da coluna (escreva o que quiser)</label>
+                                <input type="text" placeholder="Ex: Revisão, Bloqueado, Aguardando cliente..." @bind="newColumnName" @bind:event="oninput" />
+                                <label style="font-size:0.75rem;font-weight:600;color:var(--color-text-muted);">Cor da coluna</label>
+                                <div class="color-swatch-row">
+                                    @foreach (var color in ColumnColors)
+                                    {
+                                        <button type="button" class="color-swatch @(newColumnColor == color ? "is-selected" : "")"
+                                                style="background:@color;" @onclick="() => newColumnColor = color"
+                                                aria-label="Selecionar cor @color"></button>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(columnErrorMessage))
+                                {
+                                    <div class="alert alert-danger" style="padding:0.4rem 0.6rem;font-size:0.8rem;">@columnErrorMessage</div>
+                                }
+                                <div class="form-actions" style="margin-top:0;">
+                                    <button type="button" class="btn" style="flex:1;" @onclick="HandleCreateColumn">Adicionar</button>
+                                    <button type="button" class="btn btn-secondary" @onclick="ToggleAddColumnForm">Cancelar</button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button" class="board-add-column-btn" @onclick="ToggleAddColumnForm">+ Nova coluna</button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="stat-grid" style="margin-top:1.25rem;">
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Concluídas</span>
+                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category == StatusCategory.Done)</span>
+                    </div>
+                    <span class="stat-card-icon is-success">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Atrasadas</span>
+                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is not null && w.DueDateUtc.Value.Date < DateTime.UtcNow.Date)</span>
+                    </div>
+                    <span class="stat-card-icon is-danger">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Em andamento</span>
+                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category == StatusCategory.InProgress)</span>
+                    </div>
+                    <span class="stat-card-icon is-warning">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                    </span>
+                </div>
             </div>
         }
 
@@ -107,6 +173,11 @@
     private string? errorMessage;
     private TaskDetailPanel? panel;
     private Guid? loadedListId;
+    private bool showAddColumnForm;
+    private string newColumnName = "";
+    private string newColumnColor = ColumnColors[0];
+    private string? columnErrorMessage;
+    private static readonly string[] ColumnColors = ["#2563EB", "#16A34A", "#7C3AED", "#DC2626", "#EA580C", "#0D9488"];
 
     protected override async Task OnParametersSetAsync()
     {
@@ -189,9 +260,89 @@
         }
     }
 
+    private void ToggleAddColumnForm()
+    {
+        showAddColumnForm = !showAddColumnForm;
+        newColumnName = "";
+        newColumnColor = ColumnColors[0];
+        columnErrorMessage = null;
+    }
+
+    private async Task ReloadStatusesAsync()
+    {
+        statuses = await QueryService.GetStatusesForListAsync(ListId);
+    }
+
+    private async Task HandleCreateColumn()
+    {
+        if (string.IsNullOrWhiteSpace(newColumnName))
+        {
+            columnErrorMessage = "Informe um nome.";
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var maxSortOrder = await db.TaskStatusDefinitions
+                .Where(s => s.TaskListId == ListId)
+                .Select(s => (int?)s.SortOrder)
+                .MaxAsync() ?? -1;
+
+            db.TaskStatusDefinitions.Add(new TaskStatusDefinition
+            {
+                Id = Guid.NewGuid(),
+                TaskListId = ListId,
+                Name = newColumnName.Trim(),
+                Color = newColumnColor,
+                Category = StatusCategory.ToDo,
+                SortOrder = maxSortOrder + 1,
+                IsDefault = false
+            });
+            await db.SaveChangesAsync();
+        }
+
+        ToggleAddColumnForm();
+        await ReloadStatusesAsync();
+    }
+
+    private async Task HandleRenameStatus((Guid StatusId, string NewName) req)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await db.TaskStatusDefinitions
+            .Where(s => s.Id == req.StatusId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, req.NewName));
+        await ReloadStatusesAsync();
+    }
+
+    private async Task HandleDeleteStatus(Guid statusId)
+    {
+        errorMessage = null;
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // StatusTransition's FKs to TaskStatusDefinition are Restrict — clear any transitions
+        // referencing this column first, or the delete below fails.
+        await db.StatusTransitions
+            .Where(t => t.FromStatusId == statusId || t.ToStatusId == statusId)
+            .ExecuteDeleteAsync();
+
+        try
+        {
+            await db.TaskStatusDefinitions.Where(s => s.Id == statusId).ExecuteDeleteAsync();
+        }
+        catch (System.Data.Common.DbException)
+        {
+            // Restrict FK violation — a task still uses this column.
+            errorMessage = "Mova as tarefas dessa coluna pra outra antes de excluí-la.";
+            return;
+        }
+
+        await ReloadStatusesAsync();
+        await ReloadWorkItemsAsync();
+    }
+
     private async Task HandleCardMoved((Guid WorkItemId, Guid NewStatusId, int NewIndex) move)
     {
-        var allowed = await QueryService.UpdateWorkItemStatusAsync(move.WorkItemId, move.NewStatusId, move.NewIndex);
+        var allowed = await QueryService.UpdateWorkItemStatusAsync(ListId, move.WorkItemId, move.NewStatusId, move.NewIndex);
         errorMessage = allowed ? null : "Essa mudança de status não é permitida pelo workflow da lista.";
         await ReloadWorkItemsAsync();
         StateHasChanged();
