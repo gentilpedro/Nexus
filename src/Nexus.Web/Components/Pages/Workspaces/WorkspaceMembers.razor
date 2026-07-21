@@ -38,6 +38,30 @@
             <h1>Membros</h1>
         </div>
 
+        @if (members is not null)
+        {
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Total de membros</span>
+                        <span class="stat-card-value">@members.Count</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                    </span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Administradores</span>
+                        <span class="stat-card-value">@members.Count(m => m.Role is WorkspaceRole.Admin or WorkspaceRole.Owner)</span>
+                    </div>
+                    <span class="stat-card-icon is-success">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>
+                    </span>
+                </div>
+            </div>
+        }
+
         @if (!string.IsNullOrEmpty(errorMessage))
         {
             <div class="alert alert-danger">@errorMessage</div>
@@ -73,6 +97,10 @@
         }
         else
         {
+            <div class="form-field" style="max-width:280px;">
+                <input type="search" placeholder="Buscar por nome ou e-mail..." @bind="memberFilter" @bind:event="oninput" />
+            </div>
+
             <div class="table-scroll">
                 <table class="data-table">
                     <thead>
@@ -88,7 +116,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var member in members)
+                        @foreach (var member in FilteredMembers)
                         {
                             <tr>
                                 <td>@(string.IsNullOrEmpty(member.User.DisplayName) ? "—" : member.User.DisplayName)</td>
@@ -140,8 +168,15 @@
     private string? errorMessage;
     private Guid? loadedWorkspaceId;
     private readonly AddMemberModel addModel = new();
+    private string memberFilter = "";
 
     private int OwnerCount => members?.Count(m => m.Role == WorkspaceRole.Owner) ?? 0;
+
+    private IEnumerable<WorkspaceMember> FilteredMembers => members is null
+        ? []
+        : members.Where(m => string.IsNullOrWhiteSpace(memberFilter)
+            || (m.User.DisplayName?.Contains(memberFilter, StringComparison.OrdinalIgnoreCase) ?? false)
+            || (m.User.Email?.Contains(memberFilter, StringComparison.OrdinalIgnoreCase) ?? false));
 
     protected override async Task OnParametersSetAsync()
     {

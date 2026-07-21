@@ -42,6 +42,36 @@
             </div>
         </div>
 
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Spaces</span>
+                    <span class="stat-card-value">@(spaces?.Count ?? 0)</span>
+                </div>
+                <span class="stat-card-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
+                </span>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Listas</span>
+                    <span class="stat-card-value">@(listCounts?.Values.Sum() ?? 0)</span>
+                </div>
+                <span class="stat-card-icon">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
+                </span>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-body">
+                    <span class="stat-card-label">Membros</span>
+                    <span class="stat-card-value">@memberCount</span>
+                </div>
+                <span class="stat-card-icon is-success">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                </span>
+            </div>
+        </div>
+
         @if (showCreateForm)
         {
             <EditForm Model="createModel" OnValidSubmit="HandleCreateSpace" class="card" style="margin-bottom:1rem;">
@@ -57,6 +87,8 @@
                 </div>
             </EditForm>
         }
+
+        <h2 style="font-size:1rem;margin-bottom:0.75rem;">Spaces</h2>
 
         @if (spaces is null)
         {
@@ -75,6 +107,9 @@
                 {
                     <a class="card card-link" href="@($"/workspaces/{WorkspaceId}/spaces/{space.Id}")">
                         <strong>@space.Name</strong>
+                        <div class="topnav-user" style="margin-top:0.35rem;">
+                            @(listCounts != null && listCounts.TryGetValue(space.Id, out var c) ? c : 0) lista(s)
+                        </div>
                     </a>
                 }
             </div>
@@ -91,6 +126,8 @@
 
     private Workspace? workspace;
     private List<Space>? spaces;
+    private Dictionary<Guid, int>? listCounts;
+    private int memberCount;
     private bool notFound;
     private bool canManageSpaces;
     private bool showCreateForm;
@@ -126,6 +163,7 @@
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
             workspace = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+            memberCount = await db.WorkspaceMembers.CountAsync(m => m.WorkspaceId == WorkspaceId);
         }
         if (workspace is null)
         {
@@ -146,6 +184,12 @@
             .OrderBy(s => s.SortOrder)
             .ThenBy(s => s.Name)
             .ToListAsync();
+
+        listCounts = await db.TaskLists
+            .Where(l => l.Space.WorkspaceId == WorkspaceId)
+            .GroupBy(l => l.SpaceId)
+            .Select(g => new { SpaceId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.SpaceId, x => x.Count);
     }
 
     private void ToggleCreateForm()
