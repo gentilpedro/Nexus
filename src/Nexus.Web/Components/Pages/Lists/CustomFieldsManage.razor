@@ -41,6 +41,21 @@
             <h1>Campos customizados</h1>
         </div>
 
+        @if (definitions is not null)
+        {
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Campos definidos</span>
+                        <span class="stat-card-value">@definitions.Count</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /></svg>
+                    </span>
+                </div>
+            </div>
+        }
+
         <EditForm Model="createModel" OnValidSubmit="HandleCreate" class="card" style="margin-bottom:1.5rem;">
             <DataAnnotationsValidator />
             <div class="form-row">
@@ -66,6 +81,10 @@
                     <InputText id="field-options" @bind-Value="createModel.OptionsCsv" placeholder="Ex: Baixa, Média, Alta" />
                 </div>
             }
+            <label class="checkbox-field">
+                <InputCheckbox @bind-Value="createModel.Required" />
+                Campo obrigatório — o usuário não poderá salvar a tarefa sem preencher
+            </label>
             @if (!string.IsNullOrEmpty(errorMessage))
             {
                 <div class="alert alert-danger">@errorMessage</div>
@@ -94,6 +113,7 @@
                             <th>Nome</th>
                             <th>Tipo</th>
                             <th>Opções</th>
+                            <th>Obrigatório</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -104,6 +124,7 @@
                                 <td>@def.Name</td>
                                 <td>@def.Type.ToDisplayLabel()</td>
                                 <td>@(def.Type == CustomFieldType.Select ? string.Join(", ", def.Options.Select(o => o.Label)) : "—")</td>
+                                <td>@(def.Required ? "Sim" : "Não")</td>
                                 <td><button type="button" class="btn-link" @onclick="() => HandleDelete(def.Id)">Excluir</button></td>
                             </tr>
                         }
@@ -203,6 +224,7 @@
             TaskListId = ListId,
             Name = createModel.Name.Trim(),
             Type = createModel.Type,
+            Required = createModel.Required,
             SortOrder = maxSortOrder + 1
         };
 
@@ -235,6 +257,7 @@
         createModel.Name = "";
         createModel.Type = CustomFieldType.Text;
         createModel.OptionsCsv = "";
+        createModel.Required = false;
         isSaving = false;
         await LoadDefinitionsAsync();
     }
@@ -254,5 +277,6 @@
         public string Name { get; set; } = "";
         public CustomFieldType Type { get; set; } = CustomFieldType.Text;
         public string OptionsCsv { get; set; } = "";
+        public bool Required { get; set; }
     }
 }

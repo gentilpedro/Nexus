@@ -89,7 +89,10 @@
                         @foreach (var s in statuses)
                         {
                             <tr>
-                                <td>@s.Name @(s.IsDefault ? "(padrão)" : "")</td>
+                                <td>
+                                    <span class="dashboard-workspace-avatar" style="width:1.6rem;height:1.6rem;font-size:0.75rem;margin-right:0.5rem;">@(statuses.IndexOf(s) + 1)</span>
+                                    @s.Name @(s.IsDefault ? "(padrão)" : "")
+                                </td>
                                 <td>@CategoryLabel(s.Category)</td>
                                 <td>
                                     <button type="button" class="btn-link" disabled="@(s == statuses.First())" @onclick="() => HandleMoveStatus(s, -1)">‹</button>
@@ -178,6 +181,18 @@
                 </table>
             </div>
         }
+
+        <h2 style="margin-top: 2rem;">Automações de transição <span class="coming-soon-badge">Em breve</span></h2>
+        <div class="card coming-soon">
+            <div class="form-field" style="flex-direction:row;align-items:center;justify-content:space-between;">
+                <span>Atribuir automaticamente ao mover para "Em Andamento"</span>
+                <div class="toggle-switch"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:1rem;">
+            <a class="btn-link" href="@($"/lists/{ListId}/fields")">Gerenciar campos customizados desta lista →</a>
+        </div>
     }
 </div>
 
