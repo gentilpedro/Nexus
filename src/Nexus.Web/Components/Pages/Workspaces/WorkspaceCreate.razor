@@ -22,6 +22,28 @@
         <div class="alert alert-danger">@errorMessage</div>
     }
 
+    @if (createdWorkspaceId is not null)
+    {
+        <div class="card">
+            <h2>Workspace criado!</h2>
+            @if (skippedInviteEmails.Count > 0)
+            {
+                <p>Não encontramos conta cadastrada para estes e-mails, então eles não foram adicionados como membros — você pode convidar de novo pela página de Membros assim que a pessoa criar uma conta:</p>
+                <ul>
+                    @foreach (var email in skippedInviteEmails)
+                    {
+                        <li>@email</li>
+                    }
+                </ul>
+            }
+            <div class="form-actions">
+                <a class="btn" href="@($"/workspaces/{createdWorkspaceId}/members")">Ir para Membros</a>
+                <a class="btn btn-secondary" href="@($"/workspaces/{createdWorkspaceId}")">Ir para o workspace</a>
+            </div>
+        </div>
+    }
+    else
+    {
     <div class="dashboard-layout">
         <div>
             <EditForm Model="model" OnValidSubmit="HandleCreate" class="card" style="margin-bottom:1rem;">
@@ -44,10 +66,8 @@
                         }
                     </div>
                 </div>
-            </EditForm>
 
-            <div class="card">
-                <label style="font-weight:600;display:block;margin-bottom:0.5rem;">Convidar membros</label>
+                <label style="font-weight:600;display:block;margin:1rem 0 0.5rem;">Convidar membros</label>
                 <p style="font-size:0.85rem;color:var(--color-text-muted);margin:0 0 0.75rem;">Adicione o e-mail de quem já tem conta no Nexus. Quem ainda não tem conta pode ser adicionado depois, pela página de membros.</p>
                 <div class="form-row">
                     <input type="email" placeholder="email@exemplo.com" @bind="inviteEmail" @bind:event="oninput" style="flex:1;padding:0.5rem 0.65rem;border:1px solid var(--color-border);border-radius:var(--radius);background:var(--color-surface);color:var(--color-text);" />
@@ -69,12 +89,12 @@
                 {
                     <div class="empty-state" style="padding:1rem;">Nenhum membro adicionado ainda.</div>
                 }
-            </div>
 
-            <div class="form-actions">
-                <button type="button" class="btn" disabled="@isSaving" @onclick="HandleCreate">Criar workspace agora</button>
-                <a class="btn btn-secondary" href="/workspaces">Cancelar</a>
-            </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn" disabled="@isSaving">Criar workspace agora</button>
+                    <a class="btn btn-secondary" href="/workspaces">Cancelar</a>
+                </div>
+            </EditForm>
         </div>
 
         <div>
@@ -99,6 +119,7 @@
             }
         </div>
     </div>
+    }
 </div>
 
 @code {
@@ -114,6 +135,8 @@
     private readonly List<string> pendingInvites = new();
     private List<ApplicationUser>? suggestions;
     private string? userId;
+    private Guid? createdWorkspaceId;
+    private List<string> skippedInviteEmails = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -219,7 +242,9 @@
 
             if (skippedInvites.Count > 0)
             {
-                NavigationManager.NavigateTo($"/workspaces/{workspace.Id}/members");
+                skippedInviteEmails = skippedInvites;
+                createdWorkspaceId = workspace.Id;
+                isSaving = false;
             }
             else
             {

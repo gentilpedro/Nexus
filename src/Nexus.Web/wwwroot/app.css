@@ -1795,6 +1795,31 @@ table th, table td {
     font-weight: 700;
 }
 
+img.task-row-avatar {
+    object-fit: cover;
+}
+
+.task-row-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    flex-shrink: 0;
+}
+
+.task-row-comments {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+
+.task-row-comments .icon {
+    width: 0.9rem;
+    height: 0.9rem;
+}
+
 .app-sidebar-backdrop {
     display: none;
 }
@@ -3065,6 +3090,47 @@ table th, table td {
     white-space: nowrap;
 }
 
+img.topnav-avatar {
+    object-fit: cover;
+}
+
+.profile-avatar-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.profile-avatar {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+}
+
+.profile-avatar-fallback {
+    background: var(--color-primary);
+    color: var(--color-text-on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.profile-avatar-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.form-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+}
+
 .topnav-user-dropdown {
     position: absolute;
     top: calc(100% + 0.5rem);
@@ -3904,4 +3970,52 @@ table th, table td {
     background: #fff;
     border-radius: 50%;
     box-shadow: var(--shadow-sm);
+}
+
+/* Functional checkbox-backed toggle switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 2.6rem;
+    height: 1.5rem;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.switch-input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+
+.switch-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--color-border);
+    border-radius: var(--radius-pill);
+    transition: background-color 0.15s ease;
+}
+
+.switch-slider::before {
+    content: "";
+    position: absolute;
+    width: 1.1rem;
+    height: 1.1rem;
+    left: 0.2rem;
+    top: 0.2rem;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.15s ease;
+}
+
+.switch-input:checked + .switch-slider {
+    background: var(--color-primary);
+}
+
+.switch-input:checked + .switch-slider::before {
+    transform: translateX(1.1rem);
 }
