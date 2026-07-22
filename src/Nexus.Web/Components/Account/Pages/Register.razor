@@ -1,4 +1,6 @@
-@page "/Account/Register"
+﻿@page "/Account/Register"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth")]
 @layout AuthLayout
 
 @using System.ComponentModel.DataAnnotations
@@ -67,6 +69,13 @@
                     <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" autocomplete="new-password" aria-required="true" placeholder="Repita a senha" />
                     <ValidationMessage For="() => Input.ConfirmPassword" />
                 </div>
+                <div class="form-field" style="flex-direction:row;align-items:flex-start;gap:0.5rem;">
+                    <InputCheckbox @bind-Value="Input.AcceptedPrivacyPolicy" id="Input.AcceptedPrivacyPolicy" style="width:auto;margin-top:0.2rem;" />
+                    <label for="Input.AcceptedPrivacyPolicy" style="font-weight:normal;">
+                        Li e aceito a <a href="/privacidade" target="_blank" data-enhance-nav="false">Política de Privacidade</a>.
+                    </label>
+                </div>
+                <ValidationMessage For="() => Input.AcceptedPrivacyPolicy" />
 
                 <button type="submit" class="btn">Criar conta</button>
             </EditForm>
@@ -174,5 +183,8 @@
         [Display(Name = "Confirm password")]
         [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
         public string ConfirmPassword { get; set; } = "";
+
+        [Range(typeof(bool), "true", "true", ErrorMessage = "É preciso aceitar a Política de Privacidade para criar uma conta.")]
+        public bool AcceptedPrivacyPolicy { get; set; }
     }
 }

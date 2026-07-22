@@ -7,6 +7,8 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityRedirectManager RedirectManager
+@inject Nexus.Web.Services.AttachmentStorageService Storage
+@inject Nexus.Web.Services.AuditLogService AuditLog
 @inject ILogger<DeletePersonalData> Logger
 
 <PageTitle>Excluir dados pessoais</PageTitle>
@@ -15,7 +17,13 @@
 <StatusMessage Message="@message" />
 
 <div class="alert alert-warning" role="alert">
-    <strong>Excluir esses dados removerá permanentemente sua conta, e isso não pode ser desfeito.</strong>
+    <strong>Isso encerra sua conta e apaga seus dados de identificação (nome, e-mail, foto) permanentemente. Não pode ser desfeito.</strong>
+    <p>
+        Tarefas, comentários, documentos e mensagens que você criou continuam visíveis para o
+        restante da equipe do workspace (são dados do workspace, não só seus), mas deixam de
+        exibir seu nome ou e-mail — aparecerão como autor "Usuário removido". Sua conta é
+        bloqueada e não pode mais ser usada para entrar.
+    </p>
 </div>
 
 <EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post" class="card">
@@ -70,16 +78,48 @@
             return;
         }
 
-        var result = await UserManager.DeleteAsync(user);
+        var userId = await UserManager.GetUserIdAsync(user);
+
+        // Anonymize instead of hard-deleting the AspNetUsers row. WorkItem.CreatedByUserId,
+        // DocPage.CreatedByUserId/UpdatedByUserId and WorkItemAttachment.UploadedByUserId are
+        // all DeleteBehavior.Restrict (SQL Server rejects a second SetNull/Cascade path to the
+        // same table alongside the existing Assignee/Workspace path — see those configs), so
+        // UserManager.DeleteAsync would throw a FK violation for any user who ever authored
+        // content. Anonymizing satisfies LGPD art. 12 §3 (anonymized data stops being personal
+        // data) while leaving the team's shared work items/docs/attachments intact.
+        if (requirePassword)
+        {
+            await UserManager.RemovePasswordAsync(user);
+        }
+        await UserManager.SetLockoutEnabledAsync(user, true);
+        await UserManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+
+        var anonymizedHandle = $"deleted-{userId}@removed.nexus.local";
+        await UserManager.SetEmailAsync(user, anonymizedHandle);
+        await UserManager.SetUserNameAsync(user, anonymizedHandle);
+
+        if (!string.IsNullOrEmpty(user.AvatarStoragePath))
+        {
+            Storage.Delete(user.AvatarStoragePath);
+        }
+
+        user.DisplayName = "Usuário removido";
+        user.AvatarStoragePath = null;
+        user.AvatarContentType = null;
+        user.EmailConfirmed = false;
+        user.PhoneNumber = null;
+        user.PhoneNumberConfirmed = false;
+
+        var result = await UserManager.UpdateAsync(user);
         if (!result.Succeeded)
         {
-            throw new InvalidOperationException("Unexpected error occurred deleting user.");
+            throw new InvalidOperationException("Unexpected error occurred anonymizing user.");
         }
 
         await SignInManager.SignOutAsync();
 
-        var userId = await UserManager.GetUserIdAsync(user);
-        Logger.LogInformation("User with ID '{UserId}' deleted themselves.", userId);
+        Logger.LogInformation("User with ID '{UserId}' anonymized their personal data and ended their account.", userId);
+        await AuditLog.LogAsync(userId, AuditAction.PersonalDataAnonymized, targetId: userId);
 
         RedirectManager.RedirectToCurrentPage();
     }

@@ -1,6 +1,7 @@
 @page "/workspaces/{WorkspaceId:guid}/members"
 @attribute [Authorize]
 @using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
 @using System.Text
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
@@ -12,6 +13,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
+@inject Nexus.Web.Services.AuditLogService AuditLog
 @inject IJSRuntime JS
 
 <PageTitle>Membros</PageTitle>
@@ -223,6 +225,7 @@
     private string memberFilter = "";
     private int currentPage = 1;
     private Guid? openMenuId;
+    private string? currentUserId;
 
     private int OwnerCount => members?.Count(m => m.Role == WorkspaceRole.Owner) ?? 0;
 
@@ -259,6 +262,7 @@
         errorMessage = null;
 
         var authState = await AuthStateTask!;
+        currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
         var authResult = await AuthorizationService.AuthorizeAsync(
             authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
@@ -351,9 +355,14 @@
         }
 
         await using var db = await DbFactory.CreateDbContextAsync();
-        await db.WorkspaceMembers
+        var updated = await db.WorkspaceMembers
             .Where(m => m.Id == memberId && m.WorkspaceId == WorkspaceId && m.Role != WorkspaceRole.Owner)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Role, newRole));
+
+        if (updated > 0)
+        {
+            await AuditLog.LogAsync(currentUserId, AuditAction.WorkspaceMemberRoleChanged, targetId: memberId.ToString(), detail: $"workspace={WorkspaceId};newRole={newRole}");
+        }
 
         await LoadMembersAsync();
     }
@@ -377,6 +386,7 @@
         }
 
         await db.WorkspaceMembers.Where(m => m.Id == memberId).ExecuteDeleteAsync();
+        await AuditLog.LogAsync(currentUserId, AuditAction.WorkspaceMemberRemoved, targetId: memberId.ToString(), detail: $"workspace={WorkspaceId};removedUserId={member.UserId}");
         await LoadMembersAsync();
     }
 

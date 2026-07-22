@@ -1,7 +1,10 @@
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.DependencyInjection;
@@ -28,11 +31,21 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 
-builder.Services.AddAuthorizationCore();
+builder.Services.AddAuthorizationCore(options =>
+{
+    // Deny-by-default: any route without an explicit [Authorize]/[AllowAnonymous] now
+    // requires an authenticated user, instead of quietly defaulting to public. Every
+    // genuinely public page (landing, login/register/forgot-password flow, error/404)
+    // is marked [AllowAnonymous] explicitly — see those files for the full list.
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 builder.Services.AddScoped<IAuthorizationHandler, WorkspaceAuthorizationHandler>();
 builder.Services.AddScoped<WorkItemQueryService>();
 builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddScoped<NotificationBadgeService>();
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddSingleton<WorkspaceChatBroadcaster>();
 builder.Services.AddSingleton<AttachmentStorageService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
@@ -50,6 +63,24 @@ builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+
+// Login/Register/ForgotPassword are static SSR pages (not interactive — see
+// AcceptsInteractiveRouting in App.razor), so their form posts are real discrete HTTP
+// requests this middleware can see and throttle, unlike most of the app which runs over a
+// persistent SignalR circuit. Keyed by client IP (post-ForwardedHeaders in production) so
+// one abusive client can't lock out everyone else sharing the limiter.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+});
 
 var app = builder.Build();
 
@@ -82,7 +113,19 @@ else
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
+// Baseline security headers — not a substitute for the framework protections already in
+// place (antiforgery, HttpOnly/Secure auth cookie), but cheap defense-in-depth against
+// clickjacking and MIME-sniffing that costs nothing to add.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    await next();
+});
+
 app.UseAntiforgery();
+app.UseRateLimiter();
 
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
@@ -164,13 +207,34 @@ app.MapGet("/chat-attachments/{id:guid}/download", async (
 
 app.MapGet("/avatars/{userId:guid}/download", async (
     Guid userId,
+    HttpContext http,
     UserManager<ApplicationUser> userManager,
+    IDbContextFactory<Nexus.Infrastructure.Data.AppDbContext> dbFactory,
     AttachmentStorageService storage) =>
 {
     var user = await userManager.FindByIdAsync(userId.ToString());
     if (user?.AvatarStoragePath is null)
     {
         return Results.NotFound();
+    }
+
+    // Avatars are personal data (LGPD art. 5, I) — gate them the same way as every other
+    // attachment endpoint: only someone who shares a workspace with the owner (or the owner
+    // themselves) can fetch it, not just "any authenticated user in the whole system".
+    var requesterId = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (requesterId != userId.ToString())
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var sharesWorkspace = await db.WorkspaceMembers
+            .Where(m => m.UserId == requesterId)
+            .Select(m => m.WorkspaceId)
+            .Intersect(db.WorkspaceMembers.Where(m => m.UserId == userId.ToString()).Select(m => m.WorkspaceId))
+            .AnyAsync();
+
+        if (!sharesWorkspace)
+        {
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        }
     }
 
     var fullPath = storage.GetFullPath(user.AvatarStoragePath);
