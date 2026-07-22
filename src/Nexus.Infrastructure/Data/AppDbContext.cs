@@ -31,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<ChatMessageAttachment> ChatMessageAttachments => Set<ChatMessageAttachment>();
     public DbSet<Label> Labels => Set<Label>();
     public DbSet<WorkItemLabel> WorkItemLabels => Set<WorkItemLabel>();
+    public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
