@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nexus.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using Nexus.Infrastructure.Data;
 namespace Nexus.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260722191102_AddWorkspaceInvites")]
+    partial class AddWorkspaceInvites
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -562,14 +565,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Property<Guid?>("WorkItemId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("WorkspaceId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("WorkItemId");
-
-                    b.HasIndex("WorkspaceId");
 
                     b.HasIndex("UserId", "IsRead");
 
@@ -1269,16 +1267,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .HasForeignKey("WorkItemId")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
-                        .WithMany()
-                        .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("User");
 
                     b.Navigation("WorkItem");
-
-                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.Space", b =>
