@@ -114,7 +114,8 @@ internal static class IdentityComponentsEndpointRouteBuilderExtensions
         manageGroup.MapPost("/DownloadPersonalData", async (
             HttpContext context,
             [FromServices] UserManager<ApplicationUser> userManager,
-            [FromServices] AuthenticationStateProvider authenticationStateProvider) =>
+            [FromServices] AuthenticationStateProvider authenticationStateProvider,
+            [FromServices] Nexus.Web.Services.AuditLogService auditLog) =>
         {
             var user = await userManager.GetUserAsync(context.User);
             if (user is null)
@@ -124,6 +125,7 @@ internal static class IdentityComponentsEndpointRouteBuilderExtensions
 
             var userId = await userManager.GetUserIdAsync(user);
             downloadLogger.LogInformation("User with ID '{UserId}' asked for their personal data.", userId);
+            await auditLog.LogAsync(userId, AuditAction.PersonalDataDownloaded, targetId: userId);
 
             // Only include personal data for download
             var personalData = new Dictionary<string, string>();
