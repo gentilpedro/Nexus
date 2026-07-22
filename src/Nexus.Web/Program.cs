@@ -50,6 +50,7 @@ builder.Services.AddSingleton<WorkspaceChatBroadcaster>();
 builder.Services.AddSingleton<AttachmentStorageService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
 builder.Services.AddHostedService<DueDateNotificationHostedService>();
+builder.Services.AddHostedService<DataRetentionHostedService>();
 
 builder.Services.AddAuthentication(options =>
     {
@@ -139,7 +140,11 @@ app.Use(async (context, next) =>
 app.UseAntiforgery();
 app.UseRateLimiter();
 
-app.MapStaticAssets();
+// AllowAnonymous is required here despite MapStaticAssets serving public files: without it,
+// the global FallbackPolicy (RequireAuthenticatedUser) applies to these endpoints too, and an
+// anonymous visitor hitting the landing page gets every CSS/JS/image request redirected to
+// /Account/Login — the page silently renders unstyled instead of failing loudly.
+app.MapStaticAssets().AllowAnonymous();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
