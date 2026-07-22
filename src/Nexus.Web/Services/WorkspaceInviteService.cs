@@ -26,10 +26,12 @@ public class WorkspaceInviteService(
     public async Task NotifyAddedAsync(string toEmail, string workspaceName, Guid workspaceId)
     {
         var workspaceUrl = navigationManager.ToAbsoluteUri($"/workspaces/{workspaceId}").ToString();
+        // Workspace name is user-controlled — encode before it goes into an HTML email body.
+        var safeName = System.Net.WebUtility.HtmlEncode(workspaceName);
         await mailer.SendAsync(
             toEmail,
-            $"Você foi adicionado ao workspace \"{workspaceName}\" no Nexus",
-            $"<p>Você agora faz parte do workspace <strong>{workspaceName}</strong> no Nexus.</p><p><a href='{workspaceUrl}'>Clique aqui para acessar</a>.</p>");
+            $"Você foi adicionado ao workspace \"{safeName}\" no Nexus",
+            $"<p>Você agora faz parte do workspace <strong>{safeName}</strong> no Nexus.</p><p><a href='{workspaceUrl}'>Clique aqui para acessar</a>.</p>");
     }
 
     public async Task CreateAndSendAsync(Guid workspaceId, string workspaceName, string email, WorkspaceRole role, string? invitedByUserId)
@@ -53,10 +55,12 @@ public class WorkspaceInviteService(
         }
 
         var acceptUrl = navigationManager.ToAbsoluteUri($"/convite/{token}").ToString();
+        // Workspace name is user-controlled — encode before it goes into an HTML email body.
+        var safeName = System.Net.WebUtility.HtmlEncode(workspaceName);
         await mailer.SendAsync(
             email,
-            $"Você foi convidado para o workspace \"{workspaceName}\" no Nexus",
-            $"<p>Você foi convidado para participar do workspace <strong>{workspaceName}</strong> no Nexus.</p>" +
+            $"Você foi convidado para o workspace \"{safeName}\" no Nexus",
+            $"<p>Você foi convidado para participar do workspace <strong>{safeName}</strong> no Nexus.</p>" +
             $"<p><a href='{acceptUrl}'>Clique aqui para aceitar o convite</a> — se ainda não tiver conta, você poderá criar uma na mesma página.</p>" +
             "<p>Este convite expira em 7 dias.</p>");
     }
@@ -94,12 +98,30 @@ public class WorkspaceInviteService(
         var alreadyMember = await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == invite.WorkspaceId && m.UserId == userId);
         if (!alreadyMember)
         {
+            // Re-check the inviter's standing instead of trusting the role captured at invite
+            // creation — an invite can sit unaccepted for up to 7 days, long enough for the
+            // inviter to be demoted or removed. Only Admin/Owner can grant Admin, so a stale
+            // invite from someone no longer in that position is honored as a Member invite
+            // instead of silently granting the privilege they can no longer hand out.
+            var grantedRole = invite.Role;
+            if (grantedRole == WorkspaceRole.Admin)
+            {
+                var inviterStillAdmin = invite.InvitedByUserId is not null && await db.WorkspaceMembers.AnyAsync(
+                    m => m.WorkspaceId == invite.WorkspaceId
+                        && m.UserId == invite.InvitedByUserId
+                        && (m.Role == WorkspaceRole.Admin || m.Role == WorkspaceRole.Owner));
+                if (!inviterStillAdmin)
+                {
+                    grantedRole = WorkspaceRole.Member;
+                }
+            }
+
             db.WorkspaceMembers.Add(new WorkspaceMember
             {
                 Id = Guid.NewGuid(),
                 WorkspaceId = invite.WorkspaceId,
                 UserId = userId,
-                Role = invite.Role,
+                Role = grantedRole,
                 JoinedAtUtc = DateTime.UtcNow,
             });
         }

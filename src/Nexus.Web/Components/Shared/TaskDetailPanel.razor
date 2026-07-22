@@ -750,7 +750,7 @@
                     Id = Guid.NewGuid(),
                     UserId = workItem.AssigneeId,
                     Type = NotificationType.TaskAssigned,
-                    Message = $"{assignerName} atribuiu \"{workItem.Title.Trim()}\" a você.",
+                    Message = Notification.TruncateMessage($"{assignerName} atribuiu \"{workItem.Title.Trim()}\" a você."),
                     WorkItemId = workItem.Id,
                     IsRead = false,
                     CreatedAtUtc = DateTime.UtcNow
@@ -761,10 +761,15 @@
                 if (!string.IsNullOrEmpty(assigneeEmail))
                 {
                     var taskUrl = NavigationManager.ToAbsoluteUri($"/lists/{workItem.TaskListId}/list").ToString();
+                    // Display name and task title are user-controlled — encode before dropping
+                    // them into an HTML email body, or a name/title like "<a href=evil>..." would
+                    // render as a live link in the recipient's inbox.
+                    var safeAssignerName = System.Net.WebUtility.HtmlEncode(assignerName);
+                    var safeTitle = System.Net.WebUtility.HtmlEncode(workItem.Title.Trim());
                     await Mailer.SendAsync(
                         assigneeEmail,
-                        $"{assignerName} atribuiu uma tarefa a você no Nexus",
-                        $"<p>{assignerName} atribuiu a tarefa <strong>{workItem.Title.Trim()}</strong> a você.</p><p><a href='{taskUrl}'>Clique aqui para abrir</a>.</p>");
+                        $"{safeAssignerName} atribuiu uma tarefa a você no Nexus",
+                        $"<p>{safeAssignerName} atribuiu a tarefa <strong>{safeTitle}</strong> a você.</p><p><a href='{taskUrl}'>Clique aqui para abrir</a>.</p>");
                 }
             }
 
