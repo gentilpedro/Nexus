@@ -99,6 +99,7 @@
         notifications = await db.Notifications
             .Where(n => n.UserId == userId)
             .Include(n => n.WorkItem)
+            .Include(n => n.Workspace)
             .OrderByDescending(n => n.CreatedAtUtc)
             .Take(200)
             .ToListAsync();
@@ -117,6 +118,10 @@
         if (notification.WorkItem is not null)
         {
             NavigationManager.NavigateTo($"/lists/{notification.WorkItem.TaskListId}/list");
+        }
+        else if (notification.WorkspaceId is not null)
+        {
+            NavigationManager.NavigateTo($"/workspaces/{notification.WorkspaceId}/chat");
         }
     }
 

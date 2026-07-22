@@ -16,6 +16,11 @@ public class Notification
     public Guid? WorkItemId { get; set; }
     public WorkItem? WorkItem { get; set; }
 
+    // Set for ChatMessage notifications so Notifications.razor can link back to the chat —
+    // chat messages have no WorkItem to hang the link off of.
+    public Guid? WorkspaceId { get; set; }
+    public Workspace? Workspace { get; set; }
+
     public bool IsRead { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }
