@@ -8,6 +8,27 @@ public class AttachmentStorageService(IWebHostEnvironment env, IConfiguration co
 {
     public const long MaxSizeBytes = 10 * 1024 * 1024;
 
+    // Browser-supplied Content-Type is client input, not verified against the actual file
+    // bytes — this allowlist only narrows what gets persisted and later served back with
+    // that same Content-Type header; it isn't a substitute for the sandboxing already done
+    // in AttachmentStorageService.SaveAsync (GUID-only physical paths) and Program.cs
+    // (download responses always set Content-Disposition: attachment, so nothing here can
+    // render inline in a browser regardless of the stored type).
+    public static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/png", "image/jpeg", "image/webp", "image/gif",
+        "application/pdf",
+        "text/plain", "text/csv",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/zip",
+    };
+
+    public static bool IsAllowedContentType(string? contentType) =>
+        contentType is not null && AllowedContentTypes.Contains(contentType);
+
     private string RootPath => Path.Combine(env.ContentRootPath, configuration["UPLOADS_PATH"] ?? "App_Data/uploads");
 
     public async Task<string> SaveAsync(Guid ownerId, Guid attachmentId, string originalFileName, Stream content, CancellationToken ct = default)
