@@ -73,6 +73,11 @@ public class DueDateNotificationHostedService(
                     CreatedAtUtc = DateTime.UtcNow
                 });
 
+                // Persist the "already notified" row before sending the email, not after — if the
+                // process dies mid-pass, we'd rather miss an email than resend a duplicate once
+                // the row never made it to disk but the email already went out.
+                await db.SaveChangesAsync(ct);
+
                 if (!string.IsNullOrEmpty(item.AssigneeEmail))
                 {
                     // Task title is user-controlled — encode before it goes into an HTML email body.
@@ -83,8 +88,6 @@ public class DueDateNotificationHostedService(
                         $"<p>A tarefa <strong>{safeTitle}</strong> vence {when}.</p><p><a href='{baseUrl}/lists/{item.TaskListId}/list'>Clique aqui para abrir</a>.</p>");
                 }
             }
-
-            await db.SaveChangesAsync(ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

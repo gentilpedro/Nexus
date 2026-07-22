@@ -127,7 +127,24 @@ public class WorkspaceInviteService(
         }
 
         invite.AcceptedAtUtc ??= DateTime.UtcNow;
-        await db.SaveChangesAsync();
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException) when (!alreadyMember)
+        {
+            // Lost a race with a concurrent accept of the same invite (double-click, two open
+            // tabs) — the unique (WorkspaceId, UserId) index on WorkspaceMembers rejected our
+            // insert because the other request's already landed and committed first. The end
+            // state we wanted (user is a member) is already true, so this isn't a real failure;
+            // only re-throw if that assumption turns out wrong.
+            var stillNotMember = !await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == invite.WorkspaceId && m.UserId == userId);
+            if (stillNotMember)
+            {
+                throw;
+            }
+        }
 
         return InviteAcceptResult.Accepted;
     }
