@@ -1,0 +1,119 @@
+@page "/termos-de-uso"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+
+<PageTitle>Termos de Uso</PageTitle>
+
+<div class="page-container" style="max-width:760px;">
+    <h1>Termos de Uso</h1>
+    <p><em>Última atualização: 22/07/2026</em></p>
+
+    <div class="alert alert-warning" role="alert">
+        Este texto é um modelo inicial genérico, pensado para cobrir o essencial enquanto o
+        produto está em fase inicial de comercialização (cobrança via Stripe). Recomenda-se
+        revisão jurídica antes de considerá-lo definitivo — em especial a seção 4, assim que os
+        planos e preços forem definidos e publicados na página de contratação.
+    </div>
+
+    <h2>1. Objeto e aceite</h2>
+    <p>
+        Estes Termos regem o uso do Nexus, plataforma de gestão de projetos e colaboração em
+        equipe, operada por Pedro Gentil Roodes Rodrigues (ver identificação completa na
+        <a href="/privacidade">Política de Privacidade</a>). Ao criar uma conta, você declara
+        que leu, entendeu e aceita estes Termos e a Política de Privacidade.
+    </p>
+
+    <h2>2. Definições</h2>
+    <ul>
+        <li><strong>Contratante:</strong> a pessoa ou empresa que assina um plano pago e cria um workspace — responsável pelo pagamento e pelas decisões sobre aquele workspace.</li>
+        <li><strong>Usuário:</strong> qualquer pessoa com conta no Nexus, incluindo membros convidados pelo Contratante para um workspace.</li>
+        <li><strong>Workspace:</strong> o ambiente de colaboração (tarefas, documentos, chat) criado por um Contratante para sua equipe.</li>
+    </ul>
+
+    <h2>3. Cadastro e conta</h2>
+    <ul>
+        <li>Você deve fornecer informações verdadeiras no cadastro e é responsável por manter sua senha em sigilo.</li>
+        <li>Cada conta é pessoal e intransferível; o compartilhamento de credenciais entre pessoas diferentes não é permitido.</li>
+        <li>O Contratante é responsável por gerenciar quem tem acesso ao seu workspace (convidar/remover membros) e pelo nível de permissão concedido a cada um.</li>
+    </ul>
+
+    <h2>4. Planos, assinatura e pagamento</h2>
+    <ul>
+        <li>Os planos disponíveis, seus preços e limites (ex.: número de workspaces ou membros) são exibidos na página de contratação no momento da assinatura e passam a compor estes Termos para o respectivo Contratante.</li>
+        <li>A cobrança é processada pelo <strong>Stripe</strong>, meio de pagamento aceito (cartão de crédito e demais métodos disponibilizados pelo Stripe). O Nexus não recebe nem armazena os dados completos do cartão — eles são tratados diretamente pelo Stripe, que atua como operador de dados de pagamento (art. 5º, VII da LGPD) sob suas próprias práticas de segurança e conformidade (PCI-DSS).</li>
+        <li>A assinatura é recorrente e renovada automaticamente ao fim de cada ciclo (mensal ou anual, conforme escolhido na contratação), salvo cancelamento prévio pelo Contratante.</li>
+        <li>Reajuste de preço: qualquer alteração de valor é comunicada ao Contratante com pelo menos 30 dias de antecedência e só se aplica a partir da próxima renovação — nunca retroativamente ao período já pago.</li>
+        <li>Falha no pagamento: se a cobrança automática falhar, o Stripe tentará novas cobranças conforme sua rotina padrão de retentativa; persistindo a falha, o acesso ao workspace pode ser suspenso até a regularização, mediante aviso prévio ao Contratante.</li>
+        <li>Cancelamento: o Contratante pode cancelar a qualquer momento pela própria plataforma ou pelo canal de suporte; o acesso permanece ativo até o fim do período já pago, sem reembolso proporcional do período em curso, salvo disposição em contrário aqui definida.</li>
+        <li><strong>Direito de arrependimento (art. 49 do Código de Defesa do Consumidor):</strong> se a contratação ocorrer fora do estabelecimento comercial (ex.: online, sem negociação prévia) e o Contratante for consumidor pessoa física, ele pode desistir em até 7 dias corridos da contratação, com reembolso integral. Para contratos entre empresas (B2B), este direito não se aplica automaticamente.</li>
+        <li>Nota fiscal/recibo de pagamento é emitido conforme o regime tributário vigente do operador no momento da cobrança.</li>
+    </ul>
+
+    <h2>5. Dados tratados no seu workspace (LGPD)</h2>
+    <p>
+        Para o conteúdo que você e sua equipe inserem no workspace (tarefas, comentários, chat,
+        documentos), o <strong>Contratante é o controlador</strong> desses dados perante a LGPD, e
+        o Nexus atua como <strong>operador</strong> (art. 5º, VII), tratando-os apenas conforme as
+        instruções do Contratante e para viabilizar o serviço contratado. Isso vale inclusive para
+        eventual dado pessoal de terceiro (ex.: CPF, telefone ou dado bancário de um cliente do
+        Contratante) que a equipe do Contratante decida inserir em campos de texto livre — a
+        responsabilidade por essa decisão e pela base legal correspondente é do Contratante.
+    </p>
+    <p>
+        Mais detalhes sobre quais dados são tratados, por quanto tempo e com quem são
+        compartilhados estão na <a href="/privacidade">Política de Privacidade</a>.
+    </p>
+
+    <h2>6. Uso aceitável</h2>
+    <p>Ao usar o Nexus, você concorda em não:</p>
+    <ul>
+        <li>Usar a plataforma para fins ilegais ou para armazenar conteúdo ilícito;</li>
+        <li>Inserir dados pessoais sensíveis (art. 5º, II da LGPD — saúde, biometria, orientação sexual, convicção religiosa, etc.) sem necessidade real para o uso do produto;</li>
+        <li>Tentar acessar workspaces, contas ou dados de terceiros sem autorização;</li>
+        <li>Revender, sublicenciar ou redistribuir o acesso ao Nexus sem autorização prévia por escrito.</li>
+    </ul>
+
+    <h2>7. Disponibilidade do serviço</h2>
+    <p>
+        O Nexus é oferecido em regime de melhor esforço ("as is"). Não há, neste momento, um
+        Acordo de Nível de Serviço (SLA) formal com garantia contratual de tempo de atividade.
+        Manutenções programadas serão comunicadas com antecedência razoável quando possível.
+    </p>
+
+    <h2>8. Propriedade intelectual</h2>
+    <p>
+        O software, marca e design do Nexus pertencem ao seu operador. O conteúdo que você cria
+        dentro de um workspace (tarefas, documentos, mensagens) pertence a você/ao Contratante —
+        o uso desse conteúdo pelo Nexus se limita ao necessário para prestar o serviço.
+    </p>
+
+    <h2>9. Limitação de responsabilidade</h2>
+    <p>
+        Na máxima extensão permitida por lei, o Nexus não se responsabiliza por danos indiretos,
+        lucros cessantes ou perda de dados decorrentes de uso indevido da plataforma, falha de
+        terceiros (ex.: provedor de hospedagem) ou de conteúdo inserido pelo próprio Contratante
+        ou seus Usuários, incluindo dado pessoal de terceiro inserido em campos de texto livre em
+        desacordo com a seção 5.
+    </p>
+
+    <h2>10. Rescisão e efeitos</h2>
+    <p>
+        Ao encerrar a assinatura, recomendamos exportar os dados do workspace antes do
+        cancelamento. Dados de conta pessoal seguem o tratamento descrito na
+        <a href="/privacidade">Política de Privacidade</a> (seção 8 — retenção). O Nexus pode
+        suspender ou encerrar contas que violem a seção 6 (uso aceitável).
+    </p>
+
+    <h2>11. Alterações nestes Termos</h2>
+    <p>
+        Podemos atualizar estes Termos para refletir mudanças no produto ou na legislação.
+        Mudanças relevantes serão comunicadas por e-mail ou aviso no produto antes de entrarem
+        em vigor.
+    </p>
+
+    <h2>12. Legislação aplicável e foro</h2>
+    <p>
+        Estes Termos são regidos pela legislação brasileira. Fica eleito o foro da comarca do
+        domicílio do operador do Nexus para dirimir eventuais controvérsias, ressalvado o foro
+        do domicílio do consumidor quando aplicável por lei.
+    </p>
+</div>

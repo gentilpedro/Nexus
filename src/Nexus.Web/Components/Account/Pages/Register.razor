@@ -76,6 +76,13 @@
                     </label>
                 </div>
                 <ValidationMessage For="() => Input.AcceptedPrivacyPolicy" />
+                <div class="form-field" style="flex-direction:row;align-items:flex-start;gap:0.5rem;">
+                    <InputCheckbox @bind-Value="Input.AcceptedTermsOfService" id="Input.AcceptedTermsOfService" style="width:auto;margin-top:0.2rem;" />
+                    <label for="Input.AcceptedTermsOfService" style="font-weight:normal;">
+                        Li e aceito os <a href="/termos-de-uso" target="_blank" data-enhance-nav="false">Termos de Uso</a>.
+                    </label>
+                </div>
+                <ValidationMessage For="() => Input.AcceptedTermsOfService" />
 
                 <button type="submit" class="btn">Criar conta</button>
             </EditForm>
@@ -186,5 +193,8 @@
 
         [Range(typeof(bool), "true", "true", ErrorMessage = "É preciso aceitar a Política de Privacidade para criar uma conta.")]
         public bool AcceptedPrivacyPolicy { get; set; }
+
+        [Range(typeof(bool), "true", "true", ErrorMessage = "É preciso aceitar os Termos de Uso para criar uma conta.")]
+        public bool AcceptedTermsOfService { get; set; }
     }
 }
