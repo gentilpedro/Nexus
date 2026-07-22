@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -44,6 +45,7 @@ builder.Services.AddScoped<IAuthorizationHandler, WorkspaceAuthorizationHandler>
 builder.Services.AddScoped<WorkItemQueryService>();
 builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddScoped<NotificationBadgeService>();
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddSingleton<WorkspaceChatBroadcaster>();
 builder.Services.AddSingleton<AttachmentStorageService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
@@ -205,13 +207,34 @@ app.MapGet("/chat-attachments/{id:guid}/download", async (
 
 app.MapGet("/avatars/{userId:guid}/download", async (
     Guid userId,
+    HttpContext http,
     UserManager<ApplicationUser> userManager,
+    IDbContextFactory<Nexus.Infrastructure.Data.AppDbContext> dbFactory,
     AttachmentStorageService storage) =>
 {
     var user = await userManager.FindByIdAsync(userId.ToString());
     if (user?.AvatarStoragePath is null)
     {
         return Results.NotFound();
+    }
+
+    // Avatars are personal data (LGPD art. 5, I) — gate them the same way as every other
+    // attachment endpoint: only someone who shares a workspace with the owner (or the owner
+    // themselves) can fetch it, not just "any authenticated user in the whole system".
+    var requesterId = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (requesterId != userId.ToString())
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var sharesWorkspace = await db.WorkspaceMembers
+            .Where(m => m.UserId == requesterId)
+            .Select(m => m.WorkspaceId)
+            .Intersect(db.WorkspaceMembers.Where(m => m.UserId == userId.ToString()).Select(m => m.WorkspaceId))
+            .AnyAsync();
+
+        if (!sharesWorkspace)
+        {
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        }
     }
 
     var fullPath = storage.GetFullPath(user.AvatarStoragePath);
