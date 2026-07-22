@@ -3,9 +3,11 @@
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
+@using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject WorkspaceInviteService InviteService
 @inject NavigationManager NavigationManager
 
 <PageTitle>Novo workspace</PageTitle>
@@ -22,28 +24,6 @@
         <div class="alert alert-danger">@errorMessage</div>
     }
 
-    @if (createdWorkspaceId is not null)
-    {
-        <div class="card">
-            <h2>Workspace criado!</h2>
-            @if (skippedInviteEmails.Count > 0)
-            {
-                <p>Não encontramos conta cadastrada para estes e-mails, então eles não foram adicionados como membros — você pode convidar de novo pela página de Membros assim que a pessoa criar uma conta:</p>
-                <ul>
-                    @foreach (var email in skippedInviteEmails)
-                    {
-                        <li>@email</li>
-                    }
-                </ul>
-            }
-            <div class="form-actions">
-                <a class="btn" href="@($"/workspaces/{createdWorkspaceId}/members")">Ir para Membros</a>
-                <a class="btn btn-secondary" href="@($"/workspaces/{createdWorkspaceId}")">Ir para o workspace</a>
-            </div>
-        </div>
-    }
-    else
-    {
     <div class="dashboard-layout">
         <div>
             <EditForm Model="model" OnValidSubmit="HandleCreate" class="card" style="margin-bottom:1rem;">
@@ -68,7 +48,7 @@
                 </div>
 
                 <label style="font-weight:600;display:block;margin:1rem 0 0.5rem;">Convidar membros</label>
-                <p style="font-size:0.85rem;color:var(--color-text-muted);margin:0 0 0.75rem;">Adicione o e-mail de quem já tem conta no Nexus. Quem ainda não tem conta pode ser adicionado depois, pela página de membros.</p>
+                <p style="font-size:0.85rem;color:var(--color-text-muted);margin:0 0 0.75rem;">A pessoa recebe um convite por e-mail. Se já tiver conta, entra direto; se não tiver, cria uma e já entra no workspace.</p>
                 <div class="form-row">
                     <input type="email" placeholder="email@exemplo.com" @bind="inviteEmail" @bind:event="oninput" style="flex:1;padding:0.5rem 0.65rem;border:1px solid var(--color-border);border-radius:var(--radius);background:var(--color-surface);color:var(--color-text);" />
                     <button type="button" class="btn btn-secondary" @onclick="AddInvite">+ Adicionar</button>
@@ -119,7 +99,6 @@
             }
         </div>
     </div>
-    }
 </div>
 
 @code {
@@ -135,8 +114,6 @@
     private readonly List<string> pendingInvites = new();
     private List<ApplicationUser>? suggestions;
     private string? userId;
-    private Guid? createdWorkspaceId;
-    private List<string> skippedInviteEmails = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -215,14 +192,19 @@
 
         db.Workspaces.Add(workspace);
 
-        var skippedInvites = new List<string>();
+        var addedDirectlyEmails = new List<string>();
+        var newInviteEmails = new List<string>();
         foreach (var email in pendingInvites)
         {
             var normalized = email.Trim().ToUpperInvariant();
             var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalized);
-            if (user is null || user.Id == currentUserId)
+            if (user is null)
             {
-                skippedInvites.Add(email);
+                newInviteEmails.Add(email.Trim());
+                continue;
+            }
+            if (user.Id == currentUserId)
+            {
                 continue;
             }
 
@@ -234,22 +216,23 @@
                 Role = WorkspaceRole.Member,
                 JoinedAtUtc = DateTime.UtcNow
             });
+            addedDirectlyEmails.Add(user.Email!);
         }
 
         try
         {
             await db.SaveChangesAsync();
 
-            if (skippedInvites.Count > 0)
+            foreach (var email in addedDirectlyEmails)
             {
-                skippedInviteEmails = skippedInvites;
-                createdWorkspaceId = workspace.Id;
-                isSaving = false;
+                await InviteService.NotifyAddedAsync(email, workspace.Name, workspace.Id);
             }
-            else
+            foreach (var email in newInviteEmails)
             {
-                NavigationManager.NavigateTo($"/workspaces/{workspace.Id}");
+                await InviteService.CreateAndSendAsync(workspace.Id, workspace.Name, email, WorkspaceRole.Member, currentUserId);
             }
+
+            NavigationManager.NavigateTo($"/workspaces/{workspace.Id}");
         }
         catch (Exception)
         {
