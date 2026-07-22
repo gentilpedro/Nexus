@@ -15,7 +15,7 @@ Controlador: Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física
 | **Onde vive** | `ApplicationUser` (`AspNetUsers`) |
 | **Finalidade** | Criar/autenticar a conta, viabilizar identificação dentro dos workspaces |
 | **Base legal** | Execução de contrato (art. 7º, V) |
-| **Compartilhamento** | Nenhum terceiro além do provedor de hospedagem (operador, art. 5º, VII) |
+| **Compartilhamento** | Provedor de hospedagem (operador, art. 5º, VII); Brevo recebe nome e e-mail apenas para entregar e-mail de confirmação de cadastro/redefinição de senha (`BrevoEmailSender.cs`) |
 | **Retenção** | Enquanto a conta estiver ativa; anonimizado imediatamente ao pedido de exclusão (`DeletePersonalData.razor`) |
 | **Titular pode** | Baixar (`PersonalData.razor`), corrigir (`Account/Manage`), excluir/anonimizar |
 
@@ -74,6 +74,18 @@ Controlador: Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física
 | **Base legal** | Execução de contrato |
 | **Compartilhamento** | Nenhum |
 | **Retenção** | 180 dias, expurgo automático via `DataRetentionHostedService` — configurável em `NOTIFICATION_RETENTION_DAYS` |
+
+## 7b. Convite para workspace (pessoa ainda não usuária)
+
+| | |
+|---|---|
+| **Dados tratados** | E-mail de quem foi convidado para um workspace, antes de ter conta no Nexus |
+| **Onde vive** | `WorkspaceInvite` |
+| **Finalidade** | Permitir que a pessoa convidada crie conta (ou entre, se já tiver) e seja automaticamente adicionada ao workspace |
+| **Base legal** | Execução de contrato — a pedido do Contratante/membro que fez o convite; o e-mail foi fornecido por um terceiro (quem convidou), não pela própria pessoa |
+| **Compartilhamento** | Enviado ao Brevo apenas para entrega do e-mail de convite (mesmo operador da seção 1) |
+| **Retenção** | Expira em 7 dias se não aceito; não há hoje expurgo automático de convites expirados/aceitos — considerar incluir no `DataRetentionHostedService` |
+| **Titular pode** | Se decidir não criar conta, o único dado retido é o e-mail em si — pode solicitar remoção via contato do controlador |
 
 ## 7. Chaves de proteção de dados (Data Protection)
 
