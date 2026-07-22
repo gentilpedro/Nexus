@@ -67,22 +67,27 @@ public class DueDateNotificationHostedService(
                     Id = Guid.NewGuid(),
                     UserId = item.AssigneeId!,
                     Type = NotificationType.DueDateApproaching,
-                    Message = $"\"{item.Title}\" vence {when}.",
+                    Message = Notification.TruncateMessage($"\"{item.Title}\" vence {when}."),
                     WorkItemId = item.Id,
                     IsRead = false,
                     CreatedAtUtc = DateTime.UtcNow
                 });
 
+                // Persist the "already notified" row before sending the email, not after — if the
+                // process dies mid-pass, we'd rather miss an email than resend a duplicate once
+                // the row never made it to disk but the email already went out.
+                await db.SaveChangesAsync(ct);
+
                 if (!string.IsNullOrEmpty(item.AssigneeEmail))
                 {
+                    // Task title is user-controlled — encode before it goes into an HTML email body.
+                    var safeTitle = System.Net.WebUtility.HtmlEncode(item.Title);
                     await mailer.SendAsync(
                         item.AssigneeEmail,
                         $"Tarefa vence {when} no Nexus",
-                        $"<p>A tarefa <strong>{item.Title}</strong> vence {when}.</p><p><a href='{baseUrl}/lists/{item.TaskListId}/list'>Clique aqui para abrir</a>.</p>");
+                        $"<p>A tarefa <strong>{safeTitle}</strong> vence {when}.</p><p><a href='{baseUrl}/lists/{item.TaskListId}/list'>Clique aqui para abrir</a>.</p>");
                 }
             }
-
-            await db.SaveChangesAsync(ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
