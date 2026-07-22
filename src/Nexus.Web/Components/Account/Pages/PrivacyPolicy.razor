@@ -5,7 +5,7 @@
 
 <div class="page-container" style="max-width:760px;">
     <h1>Política de Privacidade</h1>
-    <p><em>Última atualização: [PREENCHER DATA]</em></p>
+    <p><em>Última atualização: 22/07/2026</em></p>
 
     <div class="alert alert-warning" role="alert">
         Este texto é um modelo inicial gerado para revisão. Os trechos entre colchetes
@@ -15,9 +15,11 @@
 
     <h2>1. Quem somos</h2>
     <p>
-        O Nexus é operado por [PREENCHER RAZÃO SOCIAL], [PREENCHER CNPJ], doravante
-        "controlador". Dúvidas sobre esta política ou sobre seus dados pessoais podem ser
-        enviadas para [PREENCHER E-MAIL DE CONTATO/DPO].
+        O Nexus é operado por Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física,
+        doravante "controlador". <em>[Ao formalizar um CNPJ (ex.: MEI), substituir este
+        parágrafo por: "O Nexus é operado por [RAZÃO SOCIAL], CNPJ [CNPJ]".]</em> Dúvidas sobre
+        esta política ou sobre seus dados pessoais podem ser enviadas para
+        pedro.desenv@outlook.com.
     </p>
 
     <h2>2. Quais dados coletamos</h2>
@@ -43,19 +45,23 @@
     </ul>
 
     <h2>4. Base legal</h2>
-    <p>
-        Tratamos seus dados de cadastro com base na <strong>execução de contrato</strong>
-        (art. 7º, V da LGPD) — são necessários para fornecer o serviço que você contratou/usa.
-        [PREENCHER: descrever a base legal para outros tratamentos específicos, se houver —
-        ex. legítimo interesse para logs de segurança.]
-    </p>
+    <ul>
+        <li><strong>Execução de contrato</strong> (art. 7º, V): dados de cadastro (nome, e-mail, senha) e o conteúdo que você cria nos workspaces — são necessários para prestar o serviço que você usa.</li>
+        <li><strong>Legítimo interesse</strong> (art. 7º, IX): registro de tentativas de login e demais dados técnicos de segurança, usados só para proteger sua conta contra acesso indevido.</li>
+        <li><strong>Cumprimento de obrigação legal</strong> (art. 7º, II): quando aplicável, guarda de registros exigida por legislação (ex.: Marco Civil da Internet).</li>
+    </ul>
 
     <h2>5. Com quem compartilhamos</h2>
     <p>
-        Hoje o Nexus não compartilha seus dados pessoais com serviços de terceiros. [PREENCHER
-        e manter atualizado caso um provedor de e-mail transacional, hospedagem ou outro
-        serviço passe a processar dados pessoais em nome do controlador — nesse caso, listar o
-        fornecedor e informar que há contrato com cláusulas de proteção de dados.]
+        O Nexus não vende nem compartilha seus dados pessoais para fins de marketing ou
+        publicidade. Hoje os únicos terceiros com acesso à infraestrutura são:
+    </p>
+    <ul>
+        <li><strong>Provedor de hospedagem</strong> ([PREENCHER: nome do provedor, ex. MonsterASP.NET]), que armazena o servidor e o banco de dados sob contrato, na qualidade de operador (art. 5º, VII da LGPD).</li>
+    </ul>
+    <p>
+        Se um provedor de e-mail transacional ou outro serviço passar a processar dados
+        pessoais em nome do controlador, esta seção será atualizada para listar o fornecedor.
     </p>
 
     <h2>6. Seus direitos</h2>
@@ -67,13 +73,42 @@
         <li>Solicitar informações adicionais ou exercer outros direitos da LGPD (art. 18) entrando em contato pelo e-mail acima.</li>
     </ul>
 
-    <h2>7. Retenção</h2>
+    <h2>7. Cookies</h2>
     <p>
-        [PREENCHER: definir por quanto tempo os dados são mantidos após o encerramento da
-        conta ou do workspace, e o processo de eliminação ao final desse prazo.]
+        O Nexus usa apenas cookies essenciais ao funcionamento do produto — nenhum cookie de
+        rastreamento, publicidade ou análise de terceiros é utilizado.
+    </p>
+    <ul>
+        <li><strong>Autenticação (<code>Identity.Application</code>):</strong> mantém você conectado após o login.</li>
+        <li><strong>Antifalsificação (antiforgery):</strong> protege os formulários contra ataques CSRF.</li>
+        <li><strong>Mensagens de status:</strong> exibe confirmações pontuais (ex.: "senha alterada com sucesso") logo após uma ação, e é descartado em seguida.</li>
+    </ul>
+    <p>
+        Por serem estritamente necessários para fornecer o serviço que você solicitou ao entrar
+        na conta, esses cookies não dependem de consentimento prévio — mas você pode revogá-los
+        a qualquer momento limpando os cookies do navegador ou encerrando a sessão (logout).
     </p>
 
-    <h2>8. Segurança</h2>
+    <h2>8. Retenção</h2>
+    <p>
+        Seus dados de identificação (nome, e-mail, foto) são mantidos enquanto sua conta
+        estiver ativa. Ao encerrar a conta em
+        <a href="Account/Manage/PersonalData">Minha conta → Dados pessoais</a>, esses dados são
+        anonimizados imediatamente — seu nome e e-mail deixam de ficar associados a qualquer
+        conteúdo, que passa a exibir "Usuário removido" como autor.
+    </p>
+    <p>
+        Tarefas, comentários, documentos e mensagens que você criou continuam existindo depois
+        disso, pois pertencem ao workspace da equipe, não só a você — encerrar sua conta não
+        apaga o trabalho coletivo do time. Workspaces hoje podem ser arquivados (ficam ocultos,
+        mas os dados são preservados) — o Nexus ainda não tem uma função de exclusão definitiva
+        de um workspace inteiro; quando essa função existir, esta seção será atualizada para
+        descrever o prazo de eliminação.
+        [PREENCHER: informar por quanto tempo cópias de segurança (backup) do banco de dados
+        são retidas pelo provedor de hospedagem antes de serem sobrescritas/apagadas.]
+    </p>
+
+    <h2>9. Segurança</h2>
     <p>
         Senhas são armazenadas com hash (nunca em texto puro). O acesso a dados de um
         workspace é restrito aos seus membros. Conexões com o produto usam HTTPS.

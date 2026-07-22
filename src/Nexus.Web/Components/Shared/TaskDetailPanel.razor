@@ -570,6 +570,12 @@
                 continue;
             }
 
+            if (!AttachmentStorageService.IsAllowedContentType(file.ContentType))
+            {
+                uploadError = $"\"{file.Name}\" tem um tipo de arquivo não permitido.";
+                continue;
+            }
+
             var attachmentId = Guid.NewGuid();
             string storagePath;
             await using (var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes))
