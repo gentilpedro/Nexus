@@ -6,6 +6,8 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject AttachmentStorageService Storage
+@inject BrevoMailer Mailer
+@inject NavigationManager NavigationManager
 
 @if (isOpen)
 {
@@ -753,6 +755,17 @@
                     IsRead = false,
                     CreatedAtUtc = DateTime.UtcNow
                 });
+
+                var assigneeEmail = await db.Users.Where(u => u.Id == workItem.AssigneeId)
+                    .Select(u => u.Email).FirstOrDefaultAsync();
+                if (!string.IsNullOrEmpty(assigneeEmail))
+                {
+                    var taskUrl = NavigationManager.ToAbsoluteUri($"/lists/{workItem.TaskListId}/list").ToString();
+                    await Mailer.SendAsync(
+                        assigneeEmail,
+                        $"{assignerName} atribuiu uma tarefa a você no Nexus",
+                        $"<p>{assignerName} atribuiu a tarefa <strong>{workItem.Title.Trim()}</strong> a você.</p><p><a href='{taskUrl}'>Clique aqui para abrir</a>.</p>");
+                }
             }
 
             await db.SaveChangesAsync();
