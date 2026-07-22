@@ -382,6 +382,30 @@
                 .Include(m => m.ReferencedDocPage)
                 .Include(m => m.Attachments)
                 .FirstAsync(m => m.Id == message.Id);
+
+            // Notify every other workspace member — WorkspaceChatBroadcaster only reaches
+            // circuits with this chat page currently open, so this is what tells someone who
+            // isn't looking at the chat right now that a message is waiting.
+            var senderName = string.IsNullOrEmpty(message.User!.DisplayName) ? (message.User.Email ?? "Alguém") : message.User.DisplayName;
+            var recipientIds = await db.WorkspaceMembers
+                .Where(m => m.WorkspaceId == WorkspaceId && m.UserId != currentUserId)
+                .Select(m => m.UserId)
+                .ToListAsync();
+
+            foreach (var recipientId in recipientIds)
+            {
+                db.Notifications.Add(new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = recipientId,
+                    Type = NotificationType.ChatMessage,
+                    Message = $"{senderName} enviou uma mensagem no chat de \"{workspace!.Name}\".",
+                    WorkspaceId = WorkspaceId,
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+            await db.SaveChangesAsync();
         }
 
         sendModel.Content = "";
