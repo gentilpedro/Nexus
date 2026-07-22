@@ -276,6 +276,13 @@
                 sendError = $"\"{file.Name}\" excede o limite de 10 MB e não foi selecionado.";
                 continue;
             }
+
+            if (!AttachmentStorageService.IsAllowedContentType(file.ContentType))
+            {
+                sendError = $"\"{file.Name}\" tem um tipo de arquivo não permitido.";
+                continue;
+            }
+
             accepted.Add(file);
         }
 

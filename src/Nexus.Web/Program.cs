@@ -58,6 +58,18 @@ builder.Services.AddAuthentication(options =>
     })
     .AddIdentityCookies();
 
+// Explicit hardening of the Identity.Application cookie — without this, SecurePolicy
+// defaults to SameAsRequest, so the session cookie could be issued/accepted over a plain
+// HTTP request if ForwardedHeaders ever misreports the original scheme (misconfigured
+// proxy, direct health-check hit). Always is safe here since HTTPS is enforced end-to-end
+// in every environment this app runs in (HSTS + reverse-proxy TLS termination).
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = true;
+});
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
