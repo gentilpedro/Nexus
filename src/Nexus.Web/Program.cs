@@ -75,7 +75,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.Configure<BrevoOptions>(builder.Configuration.GetSection("Brevo"));
+builder.Services.AddSingleton<BrevoMailer>();
+builder.Services.AddSingleton<IEmailSender<ApplicationUser>, BrevoEmailSender>();
+builder.Services.AddScoped<WorkspaceInviteService>();
 
 // Login/Register/ForgotPassword are static SSR pages (not interactive — see
 // AcceptsInteractiveRouting in App.razor), so their form posts are real discrete HTTP

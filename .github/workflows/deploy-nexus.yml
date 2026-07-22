@@ -37,6 +37,15 @@ jobs:
              publish/appsettings.Production.json > publish/appsettings.Production.json.tmp
           mv publish/appsettings.Production.json.tmp publish/appsettings.Production.json
 
+      - name: Inject Brevo SMTP credentials
+        run: |
+          jq --arg login "${{ secrets.BREVO_SMTP_LOGIN }}" \
+             --arg key "${{ secrets.BREVO_SMTP_KEY }}" \
+             --arg sender "${{ secrets.BREVO_SENDER_EMAIL }}" \
+             '.Brevo.Login = $login | .Brevo.SmtpKey = $key | .Brevo.SenderEmail = $sender' \
+             publish/appsettings.Production.json > publish/appsettings.Production.json.tmp
+          mv publish/appsettings.Production.json.tmp publish/appsettings.Production.json
+
       - name: Take app offline (release IIS file locks)
         run: |
           echo "App temporarily offline for deployment." > app_offline.htm
