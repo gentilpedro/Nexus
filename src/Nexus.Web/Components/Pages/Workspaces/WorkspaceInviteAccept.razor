@@ -1,0 +1,91 @@
+@page "/convite/{Token}"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Web.Services
+@inject WorkspaceInviteService InviteService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Convite para workspace</PageTitle>
+
+<div class="page-container" style="max-width:520px;">
+    @if (invite is null)
+    {
+        <div class="empty-state">
+            <p>Convite não encontrado. Peça para quem te convidou enviar um novo link.</p>
+        </div>
+    }
+    else if (invite.AcceptedAtUtc is not null)
+    {
+        <div class="empty-state">
+            <p>Este convite já foi utilizado. Se você já tem conta, <a href="/Account/Login">entre por aqui</a>.</p>
+        </div>
+    }
+    else if (invite.ExpiresAtUtc <= DateTime.UtcNow)
+    {
+        <div class="empty-state">
+            <p>Este convite expirou. Peça para quem te convidou enviar um novo.</p>
+        </div>
+    }
+    else if (emailMismatch is not null)
+    {
+        <div class="alert alert-danger">
+            Este convite é para <strong>@invite.Email</strong>, mas você está logado como <strong>@emailMismatch</strong>.
+            Saia da conta atual e entre (ou crie uma conta) com o e-mail convidado.
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <h2>Convite para workspace</h2>
+            <p>Você foi convidado para participar do workspace <strong>@invite.Workspace.Name</strong> no Nexus.</p>
+            <div class="form-actions">
+                <a class="btn" href="@LoginUrl" data-enhance-nav="false">Já tenho conta — Entrar</a>
+                <a class="btn btn-secondary" href="@RegisterUrl" data-enhance-nav="false">Criar conta</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string Token { get; set; } = "";
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private WorkspaceInvite? invite;
+    private string? emailMismatch;
+
+    private string ReturnUrl => $"/convite/{Token}";
+    private string LoginUrl => NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl });
+    private string RegisterUrl => NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl });
+
+    protected override async Task OnInitializedAsync()
+    {
+        invite = await InviteService.GetAsync(Token);
+        if (invite is null || invite.AcceptedAtUtc is not null || invite.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            return;
+        }
+
+        var authState = await AuthStateTask!;
+        if (!(authState.User.Identity?.IsAuthenticated ?? false))
+        {
+            return;
+        }
+
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var userEmail = authState.User.FindFirstValue(ClaimTypes.Email) ?? "";
+
+        var result = await InviteService.AcceptAsync(Token, userId, userEmail);
+        if (result == InviteAcceptResult.Accepted)
+        {
+            NavigationManager.NavigateTo($"/workspaces/{invite.WorkspaceId}");
+        }
+        else if (result == InviteAcceptResult.EmailMismatch)
+        {
+            emailMismatch = userEmail;
+        }
+    }
+}

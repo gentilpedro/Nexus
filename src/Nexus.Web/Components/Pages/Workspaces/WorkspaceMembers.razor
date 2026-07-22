@@ -14,6 +14,7 @@
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
 @inject Nexus.Web.Services.AuditLogService AuditLog
+@inject WorkspaceInviteService InviteService
 @inject IJSRuntime JS
 
 <PageTitle>Membros</PageTitle>
@@ -79,6 +80,11 @@
         @if (!string.IsNullOrEmpty(errorMessage))
         {
             <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert alert-success">@statusMessage</div>
         }
 
         @if (canManage && showAddForm)
@@ -220,6 +226,7 @@
     private bool isSaving;
     private bool showAddForm;
     private string? errorMessage;
+    private string? statusMessage;
     private Guid? loadedWorkspaceId;
     private readonly AddMemberModel addModel = new();
     private string memberFilter = "";
@@ -308,16 +315,24 @@
     {
         isSaving = true;
         errorMessage = null;
+        statusMessage = null;
 
-        var normalizedEmail = addModel.Email.Trim().ToUpperInvariant();
+        var email = addModel.Email.Trim();
+        var normalizedEmail = email.ToUpperInvariant();
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
             var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail);
             if (user is null)
             {
-                errorMessage = "Nenhuma conta encontrada com esse e-mail. A pessoa precisa criar uma conta primeiro.";
+                // No account yet — send an invite email instead of adding a member row now;
+                // WorkspaceInviteAccept.razor adds the row once they register/log in.
+                await InviteService.CreateAndSendAsync(WorkspaceId, workspace!.Name, email, addModel.Role, currentUserId);
+                statusMessage = $"Convite enviado para {email}.";
+                addModel.Email = "";
+                addModel.Role = WorkspaceRole.Member;
                 isSaving = false;
+                showAddForm = false;
                 return;
             }
 
@@ -338,6 +353,7 @@
                 JoinedAtUtc = DateTime.UtcNow
             });
             await db.SaveChangesAsync();
+            await InviteService.NotifyAddedAsync(user.Email!, workspace!.Name, WorkspaceId);
         }
 
         addModel.Email = "";
