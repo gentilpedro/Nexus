@@ -67,7 +67,7 @@ public class DueDateNotificationHostedService(
                     Id = Guid.NewGuid(),
                     UserId = item.AssigneeId!,
                     Type = NotificationType.DueDateApproaching,
-                    Message = $"\"{item.Title}\" vence {when}.",
+                    Message = Notification.TruncateMessage($"\"{item.Title}\" vence {when}."),
                     WorkItemId = item.Id,
                     IsRead = false,
                     CreatedAtUtc = DateTime.UtcNow
@@ -75,10 +75,12 @@ public class DueDateNotificationHostedService(
 
                 if (!string.IsNullOrEmpty(item.AssigneeEmail))
                 {
+                    // Task title is user-controlled — encode before it goes into an HTML email body.
+                    var safeTitle = System.Net.WebUtility.HtmlEncode(item.Title);
                     await mailer.SendAsync(
                         item.AssigneeEmail,
                         $"Tarefa vence {when} no Nexus",
-                        $"<p>A tarefa <strong>{item.Title}</strong> vence {when}.</p><p><a href='{baseUrl}/lists/{item.TaskListId}/list'>Clique aqui para abrir</a>.</p>");
+                        $"<p>A tarefa <strong>{safeTitle}</strong> vence {when}.</p><p><a href='{baseUrl}/lists/{item.TaskListId}/list'>Clique aqui para abrir</a>.</p>");
                 }
             }
 

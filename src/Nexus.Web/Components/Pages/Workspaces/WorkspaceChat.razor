@@ -399,7 +399,7 @@
                     Id = Guid.NewGuid(),
                     UserId = recipientId,
                     Type = NotificationType.ChatMessage,
-                    Message = $"{senderName} enviou uma mensagem no chat de \"{workspace!.Name}\".",
+                    Message = Notification.TruncateMessage($"{senderName} enviou uma mensagem no chat de \"{workspace!.Name}\"."),
                     WorkspaceId = WorkspaceId,
                     IsRead = false,
                     CreatedAtUtc = DateTime.UtcNow
