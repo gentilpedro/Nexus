@@ -1,5 +1,6 @@
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
+using Nexus.Web.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Nexus.Web.BackgroundServices;
@@ -12,6 +13,8 @@ namespace Nexus.Web.BackgroundServices;
 /// </summary>
 public class DueDateNotificationHostedService(
     IDbContextFactory<AppDbContext> dbFactory,
+    BrevoMailer mailer,
+    IConfiguration configuration,
     ILogger<DueDateNotificationHostedService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -38,7 +41,7 @@ public class DueDateNotificationHostedService(
                     && w.DueDateUtc != null
                     && (w.DueDateUtc.Value.Date == today || w.DueDateUtc.Value.Date == tomorrow)
                     && w.Status.Category != StatusCategory.Done)
-                .Select(w => new { w.Id, w.Title, w.AssigneeId, DueDate = w.DueDateUtc!.Value.Date })
+                .Select(w => new { w.Id, w.Title, w.AssigneeId, w.TaskListId, AssigneeEmail = w.Assignee!.Email, DueDate = w.DueDateUtc!.Value.Date })
                 .ToListAsync(ct);
 
             var dueSoonIds = dueSoon.Select(w => w.Id).ToList();
@@ -48,6 +51,8 @@ public class DueDateNotificationHostedService(
                     .ToListAsync(ct))
                 .Select(n => (n.WorkItemId!.Value, n.UserId))
                 .ToHashSet();
+
+            var baseUrl = configuration.GetValue("PUBLIC_BASE_URL", "http://localhost:5289")!.TrimEnd('/');
 
             foreach (var item in dueSoon)
             {
@@ -67,6 +72,14 @@ public class DueDateNotificationHostedService(
                     IsRead = false,
                     CreatedAtUtc = DateTime.UtcNow
                 });
+
+                if (!string.IsNullOrEmpty(item.AssigneeEmail))
+                {
+                    await mailer.SendAsync(
+                        item.AssigneeEmail,
+                        $"Tarefa vence {when} no Nexus",
+                        $"<p>A tarefa <strong>{item.Title}</strong> vence {when}.</p><p><a href='{baseUrl}/lists/{item.TaskListId}/list'>Clique aqui para abrir</a>.</p>");
+                }
             }
 
             await db.SaveChangesAsync(ct);
