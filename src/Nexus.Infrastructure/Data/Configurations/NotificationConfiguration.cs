@@ -23,6 +23,14 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
             .HasForeignKey(n => n.WorkItemId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Restrict, not Cascade: Workspace already reaches Notification via a cascading chain
+        // (Workspace -> Space -> TaskList -> WorkItem -> Notification), so a second cascade path
+        // straight from Workspace would hit SQL Server's multiple-cascade-paths error.
+        builder.HasOne(n => n.Workspace)
+            .WithMany()
+            .HasForeignKey(n => n.WorkspaceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(n => new { n.UserId, n.IsRead });
     }
 }

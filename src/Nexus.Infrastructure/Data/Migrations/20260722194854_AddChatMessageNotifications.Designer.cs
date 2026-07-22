@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Nexus.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using Nexus.Infrastructure.Data;
 namespace Nexus.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260722194854_AddChatMessageNotifications")]
+    partial class AddChatMessageNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -956,52 +959,6 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.ToTable("Workspaces");
                 });
 
-            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceInvite", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("AcceptedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<DateTime>("ExpiresAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("InvitedByUserId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
-                    b.Property<Guid>("WorkspaceId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InvitedByUserId");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
-
-                    b.HasIndex("WorkspaceId", "Email");
-
-                    b.ToTable("WorkspaceInvites");
-                });
-
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceMember", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1455,24 +1412,6 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Label");
 
                     b.Navigation("WorkItem");
-                });
-
-            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceInvite", b =>
-                {
-                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "InvitedByUser")
-                        .WithMany()
-                        .HasForeignKey("InvitedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
-                        .WithMany()
-                        .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("InvitedByUser");
-
-                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceMember", b =>
