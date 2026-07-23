@@ -289,7 +289,10 @@ a:hover {
 
 .topnav {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    /* minmax(0, 1fr), not 1fr alone — a bare 1fr track still won't shrink below its content's
+       min-content size, so on narrow screens the avatar name / theme switch label pushed the
+       whole grid (and with it the page body) wider than the viewport instead of wrapping. */
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     padding: 0.75rem 1.5rem;
     background: var(--color-surface);
@@ -309,6 +312,7 @@ a:hover {
 .topnav-brand-link {
     display: inline-flex;
     align-items: center;
+    gap: 0.6rem;
     line-height: 0;
 }
 
@@ -317,6 +321,12 @@ a:hover {
     width: auto;
     display: block;
     object-fit: contain;
+}
+
+.topnav-brand-link .app-sidebar-title {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 700;
 }
 
 .topnav-center {
@@ -904,6 +914,15 @@ table.data-table tr:last-child td {
     gap: 0.25rem;
     margin-bottom: 1rem;
     border-bottom: 1px solid var(--color-border);
+    /* Lista/Kanban/Backlog/Calendário/Gantt doesn't fit in a narrow viewport — scroll the tab
+       strip itself instead of letting it push the whole page into horizontal scroll. */
+    overflow-x: auto;
+    flex-wrap: nowrap;
+}
+
+.view-tabs a,
+.view-tabs button {
+    flex-shrink: 0;
 }
 
 .view-tabs a {
@@ -973,6 +992,41 @@ table.data-table tr:last-child td {
 
     .panel {
         width: 100%;
+    }
+}
+
+@media (max-width: 600px) {
+    /* Same content (search box, theme switch text, full name) that fits fine on desktop is too
+       much for a narrow topnav — trim it down to the icons/controls that actually matter, now
+       that the grid track fix above lets this row shrink instead of forcing page-wide scroll.
+       Also drop the middle "auto" track once topnav-center is hidden: an empty auto track still
+       reserves room sized off the (now absent) search form instead of collapsing to 0, which
+       squeezed topnav-left/topnav-links down to ~77px each and made them overlap. */
+    .topnav {
+        grid-template-columns: auto 1fr auto;
+    }
+
+    .topnav-center {
+        display: none;
+    }
+
+    .topnav-links {
+        gap: 0.5rem;
+    }
+
+    .theme-switch-label {
+        display: none;
+    }
+
+    .topnav-avatar-name {
+        display: none;
+    }
+
+    /* The "Nexus" wordmark next to the logo icon (reuses .app-sidebar-title, but only ever
+       appears here in the topnav brand link — see MainLayout.razor) — the icon alone is enough
+       to identify the brand once space is this tight. */
+    .topnav-left .app-sidebar-title {
+        display: none;
     }
 }
 
@@ -2141,12 +2195,15 @@ img.task-row-avatar {
     border-radius: var(--radius-lg);
     overflow: hidden;
     background: var(--color-surface);
-    min-height: 72vh;
+    /* Fixed height, not min-height: the layout box must never grow with message
+       count — only .chat-messages--embedded (and the sidebar list) scroll inside it. */
+    height: 72vh;
 }
 
 .chats-sidebar {
     width: 280px;
     flex-shrink: 0;
+    min-height: 0;
     border-right: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
@@ -2239,31 +2296,68 @@ img.task-row-avatar {
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0;
+    box-sizing: border-box;
     padding: 1rem;
 }
 
 .chat-embedded-header {
     display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
     padding-bottom: 0.75rem;
     margin-bottom: 0.75rem;
     border-bottom: 1px solid var(--color-border);
 }
 
+.chat-embedded-back {
+    display: none;
+}
+
 .chat-messages--embedded {
     flex: 1;
+    min-height: 0;
     max-height: none;
+}
+
+.chat-embedded .chat-compose {
+    flex-shrink: 0;
 }
 
 @media (max-width: 860px) {
     .chats-layout {
         flex-direction: column;
+        min-height: 0;
+        border: none;
+        border-radius: 0;
     }
 
     .chats-sidebar {
         width: 100%;
-        max-height: 40vh;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .chats-main {
+        display: none;
+    }
+
+    .chats-layout--chat-open .chats-sidebar {
+        display: none;
+    }
+
+    .chats-layout--chat-open .chats-main {
+        display: flex;
+        position: fixed;
+        inset: 0;
+        height: auto;
+        z-index: 70;
+        background: var(--color-surface);
+    }
+
+    .chat-embedded-back {
+        display: inline-flex;
     }
 }
 
@@ -3172,6 +3266,14 @@ img.topnav-avatar {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    /* Flex item next to the fixed-size avatar circle in .profile-avatar-row — without this it
+       won't shrink below the native file input's min-content width, pushing the page into
+       horizontal scroll on narrow viewports. */
+    min-width: 0;
+}
+
+.profile-avatar-actions input[type="file"] {
+    max-width: 100%;
 }
 
 .form-check {
@@ -4025,6 +4127,14 @@ img.topnav-avatar {
     grid-template-columns: 1fr 320px;
     gap: 1.5rem;
     align-items: start;
+}
+
+/* Grid items default to min-width: auto — without this, a wide child anywhere inside either
+   column (a flex-wrap row whose widest single card sets its min-content size, an unbroken
+   breadcrumb, etc.) stops the column from shrinking below that content and pushes the whole
+   page into horizontal scroll instead of wrapping/scrolling internally. */
+.dashboard-layout > * {
+    min-width: 0;
 }
 
 @media (max-width: 960px) {

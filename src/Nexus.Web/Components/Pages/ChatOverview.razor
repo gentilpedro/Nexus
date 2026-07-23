@@ -28,7 +28,7 @@
     }
     else
     {
-        <div class="chats-layout">
+        <div class="chats-layout @(WorkspaceId is not null ? "chats-layout--chat-open" : "")">
             <div class="chats-sidebar">
                 <div class="chats-sidebar-search">
                     <input type="search" placeholder="Buscar conversas..." @bind="filterText" @bind:event="oninput" />
