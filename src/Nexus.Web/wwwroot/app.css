@@ -312,6 +312,7 @@ a:hover {
 .topnav-brand-link {
     display: inline-flex;
     align-items: center;
+    gap: 0.6rem;
     line-height: 0;
 }
 
@@ -320,6 +321,12 @@ a:hover {
     width: auto;
     display: block;
     object-fit: contain;
+}
+
+.topnav-brand-link .app-sidebar-title {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 700;
 }
 
 .topnav-center {
