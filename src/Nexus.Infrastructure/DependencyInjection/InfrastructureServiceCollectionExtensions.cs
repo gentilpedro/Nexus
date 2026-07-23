@@ -24,7 +24,7 @@ public static class InfrastructureServiceCollectionExtensions
         // factory ends up depending on a Scoped options instance), which only surfaces under strict
         // DI validation (e.g. `dotnet ef`), not normal `dotnet run`. The fix is to register the
         // factory once and derive the scoped AppDbContext from it.
-        services.AddDbContextFactory<AppDbContext>(options => options.UseSqlServer(connectionString));
+        services.AddDbContextFactory<AppDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<AppDbContext>(sp => sp.GetRequiredService<IDbContextFactory<AppDbContext>>().CreateDbContext());
 
         // Persists the Data Protection key ring in the database rather than the container's
