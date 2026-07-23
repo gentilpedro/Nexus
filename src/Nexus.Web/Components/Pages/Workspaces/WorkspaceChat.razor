@@ -53,8 +53,11 @@
         else
         {
             <div class="chat-embedded-header">
-                <strong>#@workspace.Name</strong>
-                <span class="topnav-user">@memberCount membro@(memberCount == 1 ? "" : "s")</span>
+                <a href="/chats" class="chat-embedded-back topnav-icon-btn" title="Voltar para conversas">←</a>
+                <div>
+                    <strong>#@workspace.Name</strong>
+                    <span class="topnav-user">@memberCount membro@(memberCount == 1 ? "" : "s")</span>
+                </div>
             </div>
         }
 
