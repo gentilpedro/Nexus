@@ -17,7 +17,7 @@ public class SprintConfiguration : IEntityTypeConfiguration<Sprint>
         // could both pass that check before either commits.
         builder.HasIndex(s => s.TaskListId)
             .IsUnique()
-            .HasFilter("[Status] = 1")
+            .HasFilter("\"Status\" = 1")
             .HasDatabaseName("IX_Sprints_TaskListId_ActiveOnly");
 
         builder.HasMany(s => s.WorkItems)
