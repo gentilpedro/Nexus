@@ -16,9 +16,13 @@
                 <button type="button" class="app-sidebar-toggle" @onclick="ToggleSidebar" aria-label="Abrir menu">☰</button>
             </Authorized>
         </AuthorizeView>
-        <button type="button" class="topnav-icon-btn" title="Voltar" aria-label="Voltar" onclick="history.back()">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
-        </button>
+        <AuthorizeView>
+            <Authorized>
+                <button type="button" class="topnav-icon-btn" title="Voltar" aria-label="Voltar" onclick="history.back()">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+                </button>
+            </Authorized>
+        </AuthorizeView>
         <a class="topnav-brand-link" href="/">
             <img class="topnav-logo" src="@Assets["IconNexus.png"]" alt="Nexus" />
             <strong class="app-sidebar-title">Nexus</strong>

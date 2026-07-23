@@ -11,11 +11,11 @@ e ajuste a senha se quiser. Suba o app localmente (`docker compose up db
 -d` + `dotnet run --project src/Nexus.Web`) e faça login em
 `/Account/Login` com qualquer um dos e-mails abaixo.
 
-> A connection string local (com a senha do `sa`) fica nos User Secrets
-> do projeto, não no `appsettings.json` — se clonar em outra máquina,
-> rode `dotnet user-secrets set "ConnectionStrings:DefaultConnection"
-> "Server=localhost,1433;Database=Nexus;User Id=sa;Password=<a mesma do
-> seu .env>;TrustServerCertificate=True;MultipleActiveResultSets=true"
+> A connection string local (com a senha do Postgres) fica nos User
+> Secrets do projeto, não no `appsettings.json` — se clonar em outra
+> máquina, rode `dotnet user-secrets set
+> "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;
+> Database=Nexus;Username=postgres;Password=<a mesma do seu .env>"
 > --project src/Nexus.Web` primeiro.
 
 **Senha de todas as contas de demonstração:** `Demo@2026`
