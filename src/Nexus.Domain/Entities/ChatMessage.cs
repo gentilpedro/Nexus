@@ -17,4 +17,5 @@ public class ChatMessage
     public DocPage? ReferencedDocPage { get; set; }
 
     public ICollection<ChatMessageAttachment> Attachments { get; set; } = new List<ChatMessageAttachment>();
+    public ICollection<ChatMessageMention> Mentions { get; set; } = new List<ChatMessageMention>();
 }
