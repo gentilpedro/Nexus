@@ -1,11 +1,20 @@
-﻿@page "/Account/Lockout"
+@page "/Account/Lockout"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 
 <PageTitle>Conta bloqueada</PageTitle>
 
 <div class="auth-page">
     <div class="auth-card">
-        <h1>Conta bloqueada</h1>
-        <p class="auth-subtitle" role="alert">Esta conta foi temporariamente bloqueada. Tente novamente mais tarde.</p>
+        <h1>Conta temporariamente bloqueada</h1>
+        <p class="auth-subtitle" role="alert">
+            Muitas tentativas de senha incorreta. Por segurança, o acesso fica bloqueado
+            @(Minutes is > 0 ? $"por cerca de {Minutes} minuto{(Minutes == 1 ? "" : "s")}" : "por alguns minutos") antes de tentar de novo.
+        </p>
+        <a class="btn btn-secondary" href="Account/Login" data-enhance-nav="false">Voltar para o login</a>
     </div>
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "minutes")]
+    private int? Minutes { get; set; }
+}

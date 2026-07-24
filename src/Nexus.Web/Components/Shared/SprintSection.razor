@@ -96,8 +96,10 @@
     [Parameter]
     public EventCallback<WorkItem> OnCardClick { get; set; }
 
+    // Not an EventCallback — see BoardColumn.razor's identical OnCardMoved for why the return
+    // value needs to reach the shared board-interop.js onEnd handler.
     [Parameter]
-    public EventCallback<(Guid WorkItemId, Guid? NewSprintId, int NewIndex)> OnCardMoved { get; set; }
+    public Func<(Guid WorkItemId, Guid? NewSprintId, int NewIndex), Task<bool>>? OnCardMoved { get; set; }
 
     [Parameter]
     public EventCallback<Guid> OnStart { get; set; }
@@ -142,13 +144,15 @@
     }
 
     [JSInvokable]
-    public async Task OnCardDropped(Guid workItemId, string newSprintId, int newIndex)
+    public async Task<bool> OnCardDropped(Guid workItemId, string newSprintId, int newIndex)
     {
-        if (OnCardMoved.HasDelegate)
+        if (OnCardMoved is null)
         {
-            Guid? parsed = Guid.TryParse(newSprintId, out var id) ? id : null;
-            await OnCardMoved.InvokeAsync((workItemId, parsed, newIndex));
+            return true;
         }
+
+        Guid? parsed = Guid.TryParse(newSprintId, out var id) ? id : null;
+        return await OnCardMoved((workItemId, parsed, newIndex));
     }
 
     public async ValueTask DisposeAsync()
