@@ -34,7 +34,7 @@ public class WorkspaceInviteService(
             $"<p>Você agora faz parte do workspace <strong>{safeName}</strong> no Nexus.</p><p><a href='{workspaceUrl}'>Clique aqui para acessar</a>.</p>");
     }
 
-    public async Task CreateAndSendAsync(Guid workspaceId, string workspaceName, string email, WorkspaceRole role, string? invitedByUserId)
+    public async Task<bool> CreateAndSendAsync(Guid workspaceId, string workspaceName, string email, WorkspaceRole role, string? invitedByUserId)
     {
         var token = Guid.NewGuid().ToString("N");
 
@@ -57,7 +57,7 @@ public class WorkspaceInviteService(
         var acceptUrl = navigationManager.ToAbsoluteUri($"/convite/{token}").ToString();
         // Workspace name is user-controlled — encode before it goes into an HTML email body.
         var safeName = System.Net.WebUtility.HtmlEncode(workspaceName);
-        await mailer.SendAsync(
+        return await mailer.SendAsync(
             email,
             $"Você foi convidado para o workspace \"{safeName}\" no Nexus",
             $"<p>Você foi convidado para participar do workspace <strong>{safeName}</strong> no Nexus.</p>" +
@@ -85,7 +85,17 @@ public class WorkspaceInviteService(
             return InviteAcceptResult.NotFound;
         }
 
-        if (invite.AcceptedAtUtc is null && invite.ExpiresAtUtc <= DateTime.UtcNow)
+        // Once accepted, an invite is permanently spent — even if the caller (currently only
+        // WorkspaceInviteAccept.razor) already blocks revisiting an accepted invite before ever
+        // reaching here, the service shouldn't rely solely on that. Without this, someone removed
+        // from the workspace after accepting could theoretically be silently re-added via the
+        // same old token.
+        if (invite.AcceptedAtUtc is not null)
+        {
+            return InviteAcceptResult.Expired;
+        }
+
+        if (invite.ExpiresAtUtc <= DateTime.UtcNow)
         {
             return InviteAcceptResult.Expired;
         }

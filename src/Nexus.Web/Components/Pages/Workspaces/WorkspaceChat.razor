@@ -300,17 +300,31 @@
         }
     }
 
-    private async void OnMessagePosted(ChatMessage message)
+    private void OnMessagePosted(ChatMessage message)
     {
         if (message.WorkspaceId != WorkspaceId)
         {
             return;
         }
 
-        messages ??= [];
-        messages.Add(message);
-        await InvokeAsync(StateHasChanged);
-        await ScrollToBottomAsync();
+        // WorkspaceChatBroadcaster.Broadcast invokes subscribers synchronously on the sender's
+        // own thread — everything that touches this circuit's state (including the list
+        // mutation, not just the render) must be marshaled via InvokeAsync, or it races with
+        // this circuit's own renderer.
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                messages ??= [];
+                messages.Add(message);
+                StateHasChanged();
+                await ScrollToBottomAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone — nothing to update.
+            }
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -372,6 +386,15 @@
 
                 foreach (var file in pendingFiles)
                 {
+                    // Re-check here, not just at selection time in HandleFilesSelected — the
+                    // browser-reported ContentType is client input, and pendingFiles can sit
+                    // staged for a while before the user hits Enviar.
+                    if (!AttachmentStorageService.IsAllowedContentType(file.ContentType))
+                    {
+                        sendError = $"\"{file.Name}\" tem um tipo de arquivo não permitido e não foi enviado.";
+                        continue;
+                    }
+
                     var attachmentId = Guid.NewGuid();
                     string storagePath;
                     await using (var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes))
