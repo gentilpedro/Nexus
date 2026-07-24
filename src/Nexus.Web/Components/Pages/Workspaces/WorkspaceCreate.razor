@@ -221,7 +221,19 @@
 
         try
         {
-            await db.SaveChangesAsync();
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Lost a race: another workspace grabbed the same generated slug between our
+                // uniqueness check and this save. Regenerate against the now-current state and
+                // retry once instead of just showing a generic error and dropping the user back
+                // to a filled-in form.
+                workspace.Slug = await GenerateUniqueSlugAsync(db, model.Name);
+                await db.SaveChangesAsync();
+            }
 
             foreach (var email in addedDirectlyEmails)
             {
