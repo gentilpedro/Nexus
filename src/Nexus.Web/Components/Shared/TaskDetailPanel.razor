@@ -5,6 +5,7 @@
 @using Nexus.Web.Services
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject WorkItemQueryService QueryService
 @inject AttachmentStorageService Storage
 @inject BrevoMailer Mailer
 @inject NavigationManager NavigationManager
@@ -707,20 +708,12 @@
 
             var previousAssigneeId = workItem.AssigneeId;
 
-            if (isEditing && workItem.StatusId != model.StatusId)
+            if (isEditing && workItem.StatusId != model.StatusId
+                && !await QueryService.IsStatusTransitionAllowedAsync(db, workItem.TaskListId, workItem.StatusId, model.StatusId))
             {
-                var hasRules = await db.StatusTransitions.AnyAsync(t => t.FromStatusId == workItem.StatusId);
-                if (hasRules)
-                {
-                    var allowed = await db.StatusTransitions.AnyAsync(
-                        t => t.FromStatusId == workItem.StatusId && t.ToStatusId == model.StatusId);
-                    if (!allowed)
-                    {
-                        errorMessage = "Essa mudança de status não é permitida pelo workflow da lista.";
-                        isSaving = false;
-                        return;
-                    }
-                }
+                errorMessage = "Essa mudança de status não é permitida pelo workflow da lista.";
+                isSaving = false;
+                return;
             }
 
             workItem.Title = model.Title.Trim();

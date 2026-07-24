@@ -1,4 +1,3 @@
-using System.Data.Common;
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -75,18 +74,10 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             return false;
         }
 
-        if (workItem.StatusId != newStatusId)
+        if (workItem.StatusId != newStatusId
+            && !await IsStatusTransitionAllowedAsync(db, workItem.TaskListId, workItem.StatusId, newStatusId, ct))
         {
-            var hasRules = await db.StatusTransitions.AnyAsync(t => t.FromStatus.TaskListId == workItem.TaskListId, ct);
-            if (hasRules)
-            {
-                var allowed = await db.StatusTransitions.AnyAsync(
-                    t => t.FromStatusId == workItem.StatusId && t.ToStatusId == newStatusId, ct);
-                if (!allowed)
-                {
-                    return false;
-                }
-            }
+            return false;
         }
 
         workItem.StatusId = newStatusId;
@@ -94,6 +85,27 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         workItem.UpdatedAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    // Single source of truth for the workflow-rule check, shared by the drag-and-drop path
+    // above and TaskDetailPanel.razor's edit-panel save — the two used to compute "does this
+    // list restrict transitions?" differently (list-wide vs. per-current-status), which let a
+    // status with zero outgoing rules skip validation entirely through the edit panel even
+    // when the list had rules configured for its other statuses.
+    public async Task<bool> IsStatusTransitionAllowedAsync(AppDbContext db, Guid taskListId, Guid fromStatusId, Guid toStatusId, CancellationToken ct = default)
+    {
+        if (fromStatusId == toStatusId)
+        {
+            return true;
+        }
+
+        var hasRules = await db.StatusTransitions.AnyAsync(t => t.FromStatus.TaskListId == taskListId, ct);
+        if (!hasRules)
+        {
+            return true;
+        }
+
+        return await db.StatusTransitions.AnyAsync(t => t.FromStatusId == fromStatusId && t.ToStatusId == toStatusId, ct);
     }
 
     public async Task<List<StatusTransition>> GetStatusTransitionsForListAsync(Guid taskListId, CancellationToken ct = default)
@@ -278,22 +290,56 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbException)
+        catch (DbUpdateException)
         {
-            // Unique filtered index violation — another StartSprintAsync call for the same
-            // list committed first between our AnyAsync check and this SaveChangesAsync.
+            // Lost a race with another StartSprintAsync call for the same list — the unique
+            // filtered index on Sprints (SprintConfiguration) rejected our update between our
+            // AnyAsync check and this SaveChangesAsync. Re-verify before assuming that's what
+            // happened (same pattern as WorkspaceInviteService's double-accept race): a real
+            // infra failure (dropped connection, timeout) shouldn't be silently reinterpreted
+            // as "sprint already active".
+            var anotherSprintWon = await db.Sprints.AnyAsync(
+                s => s.TaskListId == sprint.TaskListId && s.Status == SprintStatus.Active && s.Id != sprintId, ct);
+            if (!anotherSprintWon)
+            {
+                throw;
+            }
             return false;
         }
 
         return true;
     }
 
+    // Returns any not-Done items to the backlog (SprintId = null) instead of leaving them
+    // stranded in a Completed sprint forever — GetSprintsForListAsync/GetBacklogItemsAsync both
+    // stop returning a Completed sprint's items, so without this they'd disappear from every
+    // sprint-planning surface with no way to reassign them. SortOrder is recomputed relative to
+    // the backlog's current max so returned items don't collide with existing backlog ordering.
     public async Task CompleteSprintAsync(Guid listId, Guid sprintId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        var maxBacklogSortOrder = await db.WorkItems
+            .Where(w => w.TaskListId == listId && w.SprintId == null)
+            .Select(w => (int?)w.SortOrder)
+            .MaxAsync(ct) ?? -1;
+
+        var unfinished = await db.WorkItems
+            .Where(w => w.SprintId == sprintId && w.Status.Category != StatusCategory.Done)
+            .OrderBy(w => w.SortOrder)
+            .ToListAsync(ct);
+
+        for (var i = 0; i < unfinished.Count; i++)
+        {
+            unfinished[i].SprintId = null;
+            unfinished[i].SortOrder = maxBacklogSortOrder + 1 + i;
+        }
+
         await db.Sprints.Where(s => s.Id == sprintId && s.TaskListId == listId).ExecuteUpdateAsync(s => s
             .SetProperty(x => x.Status, SprintStatus.Completed)
             .SetProperty(x => x.CompletedAtUtc, DateTime.UtcNow), ct);
+
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task UpsertSnapshotAsync(AppDbContext db, Guid sprintId, DateTime snapshotDateUtc, int totalCount, int remainingCount, CancellationToken ct)

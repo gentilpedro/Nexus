@@ -363,10 +363,11 @@
         }
     }
 
-    private async Task HandleCardMoved((Guid WorkItemId, Guid? NewSprintId, int NewIndex) move)
+    private async Task<bool> HandleCardMoved((Guid WorkItemId, Guid? NewSprintId, int NewIndex) move)
     {
-        await QueryService.UpdateWorkItemSprintAsync(ListId, move.WorkItemId, move.NewSprintId, move.NewIndex);
+        var allowed = await QueryService.UpdateWorkItemSprintAsync(ListId, move.WorkItemId, move.NewSprintId, move.NewIndex);
         await ReloadAsync();
+        return allowed;
     }
 
     private async Task HandleStart(Guid sprintId)
