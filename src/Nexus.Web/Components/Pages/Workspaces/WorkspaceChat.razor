@@ -74,6 +74,14 @@
             }
             else
             {
+                @if (hasMoreOlderMessages)
+                {
+                    <div class="chat-load-older-row">
+                        <button type="button" class="btn-link" @onclick="LoadOlderMessagesAsync" disabled="@isLoadingOlder">
+                            @(isLoadingOlder ? "Carregando..." : "Carregar mensagens anteriores")
+                        </button>
+                    </div>
+                }
                 @for (var i = 0; i < messages.Count; i++)
                 {
                     var message = messages[i];
@@ -179,9 +187,13 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
+    private const int MessagePageSize = 100;
+
     private Workspace? workspace;
     private int memberCount;
     private List<ChatMessage>? messages;
+    private bool hasMoreOlderMessages;
+    private bool isLoadingOlder;
     private List<DocPage> docPages = [];
     private List<IBrowserFile> pendingFiles = [];
     private string selectedDocId = "";
@@ -252,10 +264,47 @@
             .Include(m => m.ReferencedDocPage)
             .Include(m => m.Attachments)
             .OrderByDescending(m => m.CreatedAtUtc)
-            .Take(100)
+            .Take(MessagePageSize)
             .ToListAsync();
+        hasMoreOlderMessages = recent.Count == MessagePageSize;
         recent.Reverse();
         messages = recent;
+    }
+
+    private async Task LoadOlderMessagesAsync()
+    {
+        if (isLoadingOlder || !hasMoreOlderMessages || messages is null || messages.Count == 0 || module is null)
+        {
+            return;
+        }
+
+        isLoadingOlder = true;
+        var metrics = await module.InvokeAsync<ScrollMetrics?>("getScrollMetrics", messagesEl);
+
+        var oldestLoaded = messages[0].CreatedAtUtc;
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var older = await db.ChatMessages
+                .Where(m => m.WorkspaceId == WorkspaceId && m.CreatedAtUtc < oldestLoaded)
+                .Include(m => m.User)
+                .Include(m => m.ReferencedDocPage)
+                .Include(m => m.Attachments)
+                .OrderByDescending(m => m.CreatedAtUtc)
+                .Take(MessagePageSize)
+                .ToListAsync();
+
+            hasMoreOlderMessages = older.Count == MessagePageSize;
+            older.Reverse();
+            messages.InsertRange(0, older);
+        }
+
+        isLoadingOlder = false;
+        StateHasChanged();
+
+        if (metrics is not null)
+        {
+            await module.InvokeVoidAsync("restoreScrollAfterPrepend", messagesEl, metrics.ScrollHeight, metrics.ScrollTop);
+        }
     }
 
     private async Task LoadDocPagesAsync()
@@ -289,7 +338,9 @@
             accepted.Add(file);
         }
 
-        pendingFiles = accepted;
+        // Append, don't replace — re-opening the file picker to add more attachments used to
+        // silently discard whatever was already staged from a previous selection.
+        pendingFiles.AddRange(accepted);
     }
 
     private void RemovePendingFile(int index)
@@ -512,5 +563,11 @@
         // text. HandleSend does the "must have at least one of text/file/doc" check itself.
         [StringLength(2000, ErrorMessage = "Mensagem muito longa.")]
         public string Content { get; set; } = "";
+    }
+
+    private class ScrollMetrics
+    {
+        public double ScrollHeight { get; set; }
+        public double ScrollTop { get; set; }
     }
 }
