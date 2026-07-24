@@ -327,8 +327,10 @@
             {
                 // No account yet — send an invite email instead of adding a member row now;
                 // WorkspaceInviteAccept.razor adds the row once they register/log in.
-                await InviteService.CreateAndSendAsync(WorkspaceId, workspace!.Name, email, addModel.Role, currentUserId);
-                statusMessage = $"Convite enviado para {email}.";
+                var sent = await InviteService.CreateAndSendAsync(WorkspaceId, workspace!.Name, email, addModel.Role, currentUserId);
+                statusMessage = sent
+                    ? $"Convite enviado para {email}."
+                    : $"Convite criado para {email}, mas não conseguimos enviar o e-mail — avise a pessoa por outro canal.";
                 addModel.Email = "";
                 addModel.Role = WorkspaceRole.Member;
                 isSaving = false;
@@ -363,10 +365,27 @@
         await LoadMembersAsync();
     }
 
+    private async Task<bool> RevalidateCanManageAsync()
+    {
+        var authState = await AuthStateTask!;
+        var adminResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+        return adminResult.Succeeded;
+    }
+
     private async Task HandleRoleChange(Guid memberId, object? value)
     {
         if (!Enum.TryParse<WorkspaceRole>(value?.ToString(), out var newRole))
         {
+            return;
+        }
+
+        // canManage only reflects permissions as of page load — re-check now in case the
+        // current user was demoted since then, rather than trusting the cached flag that only
+        // gates whether the UI shows these controls.
+        if (!await RevalidateCanManageAsync())
+        {
+            errorMessage = "Você não tem mais permissão para gerenciar membros deste workspace.";
             return;
         }
 
@@ -388,8 +407,18 @@
         errorMessage = null;
         openMenuId = null;
 
+        if (!await RevalidateCanManageAsync())
+        {
+            errorMessage = "Você não tem mais permissão para gerenciar membros deste workspace.";
+            return;
+        }
+
         await using var db = await DbFactory.CreateDbContextAsync();
-        var member = await db.WorkspaceMembers.FirstAsync(m => m.Id == memberId);
+        var member = await db.WorkspaceMembers.FirstOrDefaultAsync(m => m.Id == memberId && m.WorkspaceId == WorkspaceId);
+        if (member is null)
+        {
+            return;
+        }
 
         if (member.Role == WorkspaceRole.Owner)
         {
@@ -401,7 +430,7 @@
             }
         }
 
-        await db.WorkspaceMembers.Where(m => m.Id == memberId).ExecuteDeleteAsync();
+        await db.WorkspaceMembers.Where(m => m.Id == memberId && m.WorkspaceId == WorkspaceId).ExecuteDeleteAsync();
         await AuditLog.LogAsync(currentUserId, AuditAction.WorkspaceMemberRemoved, targetId: memberId.ToString(), detail: $"workspace={WorkspaceId};removedUserId={member.UserId}");
         await LoadMembersAsync();
     }

@@ -10,6 +10,12 @@ public class WorkItemConfiguration : IEntityTypeConfiguration<WorkItem>
     {
         builder.Property(w => w.Title).HasMaxLength(500).IsRequired();
 
+        // Optimistic concurrency via Postgres's built-in xmin system column — no new physical
+        // column needed (every Postgres row already has one). Without this, two people editing
+        // the same WorkItem concurrently would have the second SaveChangesAsync silently
+        // overwrite the first's changes with no conflict detected.
+        builder.Property<uint>("Version").IsRowVersion();
+
         // Restrict, not cascade: deleting a status must not silently delete the work items in it.
         builder.HasOne(w => w.Status)
             .WithMany()
