@@ -355,7 +355,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
             unfinished[i].SortOrder = maxBacklogSortOrder + 1 + i;
         }
 
-        await db.Sprints.Where(s => s.Id == sprintId && s.TaskListId == listId).ExecuteUpdateAsync(s => s
+        await db.Sprints.Where(s => s.Id == sprintId && s.TaskListId == listId && s.Status == SprintStatus.Active).ExecuteUpdateAsync(s => s
             .SetProperty(x => x.Status, SprintStatus.Completed)
             .SetProperty(x => x.CompletedAtUtc, DateTime.UtcNow), ct);
 
