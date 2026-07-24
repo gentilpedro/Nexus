@@ -340,11 +340,12 @@
         await ReloadWorkItemsAsync();
     }
 
-    private async Task HandleCardMoved((Guid WorkItemId, Guid NewStatusId, int NewIndex) move)
+    private async Task<bool> HandleCardMoved((Guid WorkItemId, Guid NewStatusId, int NewIndex) move)
     {
         var allowed = await QueryService.UpdateWorkItemStatusAsync(ListId, move.WorkItemId, move.NewStatusId, move.NewIndex);
         errorMessage = allowed ? null : "Essa mudança de status não é permitida pelo workflow da lista.";
         await ReloadWorkItemsAsync();
         StateHasChanged();
+        return allowed;
     }
 }

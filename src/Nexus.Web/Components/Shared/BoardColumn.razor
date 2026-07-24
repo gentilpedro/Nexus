@@ -54,8 +54,11 @@
     [Parameter]
     public EventCallback<WorkItem> OnCardClick { get; set; }
 
+    // Not an EventCallback: the caller's result (was the move allowed?) needs to travel back
+    // to the JS interop layer via OnCardDropped's return value so it can undo Sortable's DOM
+    // move on rejection — EventCallback.InvokeAsync doesn't surface a return value.
     [Parameter]
-    public EventCallback<(Guid WorkItemId, Guid NewStatusId, int NewIndex)> OnCardMoved { get; set; }
+    public Func<(Guid WorkItemId, Guid NewStatusId, int NewIndex), Task<bool>>? OnCardMoved { get; set; }
 
     [Parameter]
     public bool CanManage { get; set; }
@@ -85,12 +88,9 @@
     }
 
     [JSInvokable]
-    public async Task OnCardDropped(Guid workItemId, Guid newStatusId, int newIndex)
+    public async Task<bool> OnCardDropped(Guid workItemId, Guid newStatusId, int newIndex)
     {
-        if (OnCardMoved.HasDelegate)
-        {
-            await OnCardMoved.InvokeAsync((workItemId, newStatusId, newIndex));
-        }
+        return OnCardMoved is null || await OnCardMoved((workItemId, newStatusId, newIndex));
     }
 
     private void ToggleMenu() => menuOpen = !menuOpen;
