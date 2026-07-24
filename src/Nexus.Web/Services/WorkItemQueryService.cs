@@ -83,7 +83,18 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         workItem.StatusId = newStatusId;
         workItem.SortOrder = newSortOrder;
         workItem.UpdatedAtUtc = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Someone else changed this WorkItem between our read and this save — treat it the
+            // same as any other "not allowed" outcome; the caller reloads and shows a message.
+            return false;
+        }
+
         return true;
     }
 
@@ -240,7 +251,16 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         workItem.SprintId = sprintId;
         workItem.SortOrder = newSortOrder;
         workItem.UpdatedAtUtc = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return false;
+        }
+
         return true;
     }
 

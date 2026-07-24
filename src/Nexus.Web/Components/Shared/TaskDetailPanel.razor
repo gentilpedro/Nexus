@@ -766,7 +766,16 @@
                 }
             }
 
-            await db.SaveChangesAsync();
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                errorMessage = "Essa tarefa foi alterada por outra pessoa enquanto você editava. Recarregue a página e tente novamente.";
+                isSaving = false;
+                return;
+            }
 
             var existingValues = await db.CustomFieldValues
                 .Where(v => v.WorkItemId == workItem.Id)

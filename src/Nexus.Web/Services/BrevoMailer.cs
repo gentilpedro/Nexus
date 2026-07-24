@@ -22,7 +22,7 @@ public class BrevoMailer(IOptions<BrevoOptions> options, ILogger<BrevoMailer> lo
 {
     private readonly BrevoOptions options = options.Value;
 
-    public async Task SendAsync(string toEmail, string subject, string htmlBody)
+    public async Task<bool> SendAsync(string toEmail, string subject, string htmlBody)
     {
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(options.SenderName, options.SenderEmail));
@@ -37,10 +37,12 @@ public class BrevoMailer(IOptions<BrevoOptions> options, ILogger<BrevoMailer> lo
             await client.AuthenticateAsync(options.Login, options.SmtpKey);
             await client.SendAsync(message);
             await client.DisconnectAsync(quit: true);
+            return true;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to send email to {ToEmail} via Brevo.", toEmail);
+            return false;
         }
     }
 }
