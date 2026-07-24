@@ -342,80 +342,114 @@
 
         isSending = true;
         sendError = null;
+        var savedStoragePaths = new List<string>();
 
-        ChatMessage message;
-        await using (var db = await DbFactory.CreateDbContextAsync())
+        try
         {
-            message = new ChatMessage
+            ChatMessage message;
+            await using (var db = await DbFactory.CreateDbContextAsync())
             {
-                Id = Guid.NewGuid(),
-                WorkspaceId = WorkspaceId,
-                UserId = currentUserId,
-                Content = sendModel.Content?.Trim() ?? "",
-                ReferencedDocPageId = hasDocRef ? referencedDocPageId : null,
-                CreatedAtUtc = DateTime.UtcNow
-            };
-            db.ChatMessages.Add(message);
-            await db.SaveChangesAsync();
-
-            foreach (var file in pendingFiles)
-            {
-                var attachmentId = Guid.NewGuid();
-                string storagePath;
-                await using (var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes))
+                // selectedDocId only ever gets set from docPages (already filtered by
+                // WorkspaceId), but that's client-reported component state over the SignalR
+                // circuit — re-check server-side so a tampered client can't reference (and
+                // leak the title of) a doc from a workspace it isn't even a member of.
+                if (hasDocRef)
                 {
-                    storagePath = await Storage.SaveAsync(message.Id, attachmentId, file.Name, stream);
+                    hasDocRef = await db.DocPages.AnyAsync(d => d.Id == referencedDocPageId && d.WorkspaceId == WorkspaceId);
                 }
 
-                db.ChatMessageAttachments.Add(new ChatMessageAttachment
-                {
-                    Id = attachmentId,
-                    ChatMessageId = message.Id,
-                    FileName = file.Name,
-                    ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-                    SizeBytes = file.Size,
-                    StoragePath = storagePath
-                });
-            }
-            await db.SaveChangesAsync();
-
-            // Reload with everything included so the broadcast carries a display-ready message.
-            message = await db.ChatMessages
-                .Include(m => m.User)
-                .Include(m => m.ReferencedDocPage)
-                .Include(m => m.Attachments)
-                .FirstAsync(m => m.Id == message.Id);
-
-            // Notify every other workspace member — WorkspaceChatBroadcaster only reaches
-            // circuits with this chat page currently open, so this is what tells someone who
-            // isn't looking at the chat right now that a message is waiting.
-            var senderName = string.IsNullOrEmpty(message.User!.DisplayName) ? (message.User.Email ?? "Alguém") : message.User.DisplayName;
-            var recipientIds = await db.WorkspaceMembers
-                .Where(m => m.WorkspaceId == WorkspaceId && m.UserId != currentUserId)
-                .Select(m => m.UserId)
-                .ToListAsync();
-
-            foreach (var recipientId in recipientIds)
-            {
-                db.Notifications.Add(new Notification
+                message = new ChatMessage
                 {
                     Id = Guid.NewGuid(),
-                    UserId = recipientId,
-                    Type = NotificationType.ChatMessage,
-                    Message = Notification.TruncateMessage($"{senderName} enviou uma mensagem no chat de \"{workspace!.Name}\"."),
                     WorkspaceId = WorkspaceId,
-                    IsRead = false,
+                    UserId = currentUserId,
+                    Content = sendModel.Content?.Trim() ?? "",
+                    ReferencedDocPageId = hasDocRef ? referencedDocPageId : null,
                     CreatedAtUtc = DateTime.UtcNow
-                });
-            }
-            await db.SaveChangesAsync();
-        }
+                };
+                db.ChatMessages.Add(message);
+                await db.SaveChangesAsync();
 
-        sendModel.Content = "";
-        selectedDocId = "";
-        pendingFiles = [];
-        isSending = false;
-        Broadcaster.Broadcast(message);
+                foreach (var file in pendingFiles)
+                {
+                    var attachmentId = Guid.NewGuid();
+                    string storagePath;
+                    await using (var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes))
+                    {
+                        storagePath = await Storage.SaveAsync(message.Id, attachmentId, file.Name, stream);
+                    }
+                    savedStoragePaths.Add(storagePath);
+
+                    db.ChatMessageAttachments.Add(new ChatMessageAttachment
+                    {
+                        Id = attachmentId,
+                        ChatMessageId = message.Id,
+                        FileName = file.Name,
+                        ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                        SizeBytes = file.Size,
+                        StoragePath = storagePath
+                    });
+                }
+                await db.SaveChangesAsync();
+
+                // Reload with everything included so the broadcast carries a display-ready message.
+                message = await db.ChatMessages
+                    .Include(m => m.User)
+                    .Include(m => m.ReferencedDocPage)
+                    .Include(m => m.Attachments)
+                    .FirstAsync(m => m.Id == message.Id);
+
+                // Notify every other workspace member — WorkspaceChatBroadcaster only reaches
+                // circuits with this chat page currently open, so this is what tells someone who
+                // isn't looking at the chat right now that a message is waiting.
+                var senderName = string.IsNullOrEmpty(message.User!.DisplayName) ? (message.User.Email ?? "Alguém") : message.User.DisplayName;
+                var recipientIds = await db.WorkspaceMembers
+                    .Where(m => m.WorkspaceId == WorkspaceId && m.UserId != currentUserId)
+                    .Select(m => m.UserId)
+                    .ToListAsync();
+
+                foreach (var recipientId in recipientIds)
+                {
+                    db.Notifications.Add(new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = recipientId,
+                        Type = NotificationType.ChatMessage,
+                        Message = Notification.TruncateMessage($"{senderName} enviou uma mensagem no chat de \"{workspace!.Name}\"."),
+                        WorkspaceId = WorkspaceId,
+                        IsRead = false,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+                await db.SaveChangesAsync();
+            }
+
+            sendModel.Content = "";
+            selectedDocId = "";
+            pendingFiles = [];
+            Broadcaster.Broadcast(message);
+        }
+        catch (Exception)
+        {
+            sendError = "Não foi possível enviar a mensagem. Tente novamente.";
+
+            // Best-effort cleanup of files already written to disk this attempt — a failed
+            // delete here shouldn't hide the real error from the user.
+            try
+            {
+                foreach (var path in savedStoragePaths)
+                {
+                    Storage.Delete(path);
+                }
+            }
+            catch
+            {
+            }
+        }
+        finally
+        {
+            isSending = false;
+        }
     }
 
     private static string FormatSize(long bytes)
