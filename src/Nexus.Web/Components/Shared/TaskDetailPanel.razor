@@ -1,14 +1,17 @@
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
 @using Nexus.Web.Extensions
 @using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
 @inject AttachmentStorageService Storage
 @inject BrevoMailer Mailer
 @inject NavigationManager NavigationManager
+@inject IAuthorizationService AuthorizationService
 
 @if (isOpen)
 {
@@ -270,7 +273,10 @@
                                 <div class="attachment-item">
                                     <a href="@($"/attachments/{attachment.Id}/download")" target="_blank">@attachment.FileName</a>
                                     <span class="attachment-meta">@FormatSize(attachment.SizeBytes)</span>
-                                    <button type="button" class="btn-link" @onclick="() => HandleDeleteAttachment(attachment.Id)">Excluir</button>
+                                    @if (attachment.UploadedByUserId == currentUserId || canManageAttachments)
+                                    {
+                                        <button type="button" class="btn-link" @onclick="() => HandleDeleteAttachment(attachment.Id)">Excluir</button>
+                                    }
                                 </div>
                             }
                         </div>
@@ -323,6 +329,8 @@
     private DateTime? editingCreatedAtUtc;
     private DateTime? editingUpdatedAtUtc;
     private WorkItem? editingItem;
+    private string? currentUserId;
+    private bool canManageAttachments;
     private readonly WorkItemFormModel model = new();
     private readonly Dictionary<Guid, string> customFieldValues = new();
     private readonly Dictionary<Guid, string> originalCustomFieldValues = new();
@@ -394,6 +402,12 @@
         editingUpdatedAtUtc = item.UpdatedAtUtc;
         errorMessage = null;
         PopulateModelFrom(item);
+
+        var authState = await AuthStateTask!;
+        currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var workspaceId = await QueryService.GetWorkspaceIdForListAsync(TaskListId);
+        canManageAttachments = workspaceId is not null && (await AuthorizationService.AuthorizeAsync(
+            authState.User, workspaceId.Value, new WorkspaceAccessRequirement(WorkspaceRole.Admin))).Succeeded;
 
         ResetCustomFieldValues();
         selectedLabelIds.Clear();
@@ -607,18 +621,25 @@
     private async Task HandleDeleteAttachment(Guid attachmentId)
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        var storagePath = await db.WorkItemAttachments
+        var attachment = await db.WorkItemAttachments
             .Where(a => a.Id == attachmentId)
-            .Select(a => a.StoragePath)
+            .Select(a => new { a.StoragePath, a.UploadedByUserId })
             .FirstOrDefaultAsync();
 
-        if (storagePath is null)
+        if (attachment is null)
+        {
+            return;
+        }
+
+        // Re-check server-side, not just the button's visibility — the UI hides the button for
+        // other members' attachments, but that alone doesn't stop a request crafted otherwise.
+        if (attachment.UploadedByUserId != currentUserId && !canManageAttachments)
         {
             return;
         }
 
         await db.WorkItemAttachments.Where(a => a.Id == attachmentId).ExecuteDeleteAsync();
-        Storage.Delete(storagePath);
+        Storage.Delete(attachment.StoragePath);
         await LoadAttachmentsAsync();
     }
 

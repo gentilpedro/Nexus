@@ -1971,6 +1971,12 @@ img.task-row-avatar {
     margin-bottom: 1rem;
 }
 
+.chat-load-older-row {
+    display: flex;
+    justify-content: center;
+    padding-bottom: 0.25rem;
+}
+
 .chat-message {
     display: flex;
     gap: 0.6rem;
