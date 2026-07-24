@@ -109,7 +109,19 @@
                             }
                             @if (!string.IsNullOrEmpty(message.Content))
                             {
-                                <div class="chat-message-content">@message.Content</div>
+                                <div class="chat-message-content">
+                                    @foreach (var (text, isMention) in SplitContentForMentions(message))
+                                    {
+                                        @if (isMention)
+                                        {
+                                            <span class="chat-mention">@text</span>
+                                        }
+                                        else
+                                        {
+                                            @text
+                                        }
+                                    }
+                                </div>
                             }
                             @if (message.ReferencedDocPage is not null)
                             {
@@ -151,7 +163,26 @@
                     }
                 </select>
             </div>
-            <InputTextArea @bind-Value="sendModel.Content" rows="2" placeholder="Escreva uma mensagem..." />
+            <div class="chat-compose-textarea-wrap">
+                <textarea @ref="composeTextareaEl" value="@sendModel.Content" rows="2" placeholder="Escreva uma mensagem... use @@ para mencionar alguém"></textarea>
+                @if (showMentionDropdown)
+                {
+                    <div class="chat-mention-dropdown">
+                        @if (showEveryoneOption)
+                        {
+                            <button type="button" class="chat-mention-option chat-mention-option--everyone" @onclick="SelectEveryoneMention">
+                                📢 Todos (@@everyone)
+                            </button>
+                        }
+                        @foreach (var member in mentionSuggestions)
+                        {
+                            <button type="button" class="chat-mention-option" @onclick="() => SelectMention(member.UserId, member.DisplayName)">
+                                @member.DisplayName
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
             @if (pendingFiles.Count > 0)
             {
                 <div class="chat-compose-pending">
@@ -206,6 +237,16 @@
     private IJSObjectReference? module;
     private readonly SendMessageModel sendModel = new();
 
+    private ElementReference composeTextareaEl;
+    private DotNetObjectReference<WorkspaceChat>? selfRef;
+    private List<(string UserId, string DisplayName)> workspaceMembers = [];
+    private List<(string UserId, string DisplayName)> mentionSuggestions = [];
+    private bool showMentionDropdown;
+    private bool showEveryoneOption;
+    private bool mentionedEveryone;
+    private int mentionStartIndex;
+    private readonly HashSet<string> mentionedUserIds = [];
+
     protected override async Task OnParametersSetAsync()
     {
         if (loadedWorkspaceId == WorkspaceId)
@@ -234,6 +275,10 @@
         {
             workspace = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == WorkspaceId);
             memberCount = await db.WorkspaceMembers.CountAsync(m => m.WorkspaceId == WorkspaceId);
+            workspaceMembers = await db.WorkspaceMembers
+                .Where(m => m.WorkspaceId == WorkspaceId)
+                .Select(m => new ValueTuple<string, string>(m.UserId, m.User.DisplayName != "" ? m.User.DisplayName : (m.User.Email ?? "")))
+                .ToListAsync();
         }
 
         if (workspace is null)
@@ -263,6 +308,7 @@
             .Include(m => m.User)
             .Include(m => m.ReferencedDocPage)
             .Include(m => m.Attachments)
+            .Include(m => m.Mentions).ThenInclude(x => x.User)
             .OrderByDescending(m => m.CreatedAtUtc)
             .Take(MessagePageSize)
             .ToListAsync();
@@ -289,6 +335,7 @@
                 .Include(m => m.User)
                 .Include(m => m.ReferencedDocPage)
                 .Include(m => m.Attachments)
+                .Include(m => m.Mentions).ThenInclude(x => x.User)
                 .OrderByDescending(m => m.CreatedAtUtc)
                 .Take(MessagePageSize)
                 .ToListAsync();
@@ -383,8 +430,93 @@
         if (firstRender)
         {
             module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/chat-interop.js");
+            selfRef = DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("initComposeMentions", composeTextareaEl, selfRef);
             await ScrollToBottomAsync();
         }
+    }
+
+    [JSInvokable]
+    public void OnComposeInput(string value, int caret)
+    {
+        sendModel.Content = value;
+        UpdateMentionState(caret);
+        StateHasChanged();
+    }
+
+    private void UpdateMentionState(int caret)
+    {
+        var text = sendModel.Content;
+        caret = Math.Clamp(caret, 0, text.Length);
+
+        var atIndex = text.LastIndexOf('@', Math.Max(0, caret - 1));
+        if (atIndex == -1 || (atIndex > 0 && !char.IsWhiteSpace(text[atIndex - 1])))
+        {
+            showMentionDropdown = false;
+            showEveryoneOption = false;
+            return;
+        }
+
+        var query = text[(atIndex + 1)..caret];
+        if (query.Contains(' ') || query.Contains('\n'))
+        {
+            showMentionDropdown = false;
+            showEveryoneOption = false;
+            return;
+        }
+
+        mentionStartIndex = atIndex;
+        showEveryoneOption = "everyone".Contains(query, StringComparison.OrdinalIgnoreCase);
+        mentionSuggestions = workspaceMembers
+            .Where(m => m.UserId != currentUserId && m.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(6)
+            .ToList();
+        showMentionDropdown = showEveryoneOption || mentionSuggestions.Count > 0;
+    }
+
+    private Task SelectMention(string userId, string displayName)
+    {
+        mentionedUserIds.Add(userId);
+        return InsertMentionTokenAsync($"@{displayName} ");
+    }
+
+    private Task SelectEveryoneMention()
+    {
+        mentionedEveryone = true;
+        return InsertMentionTokenAsync("@everyone ");
+    }
+
+    private async Task InsertMentionTokenAsync(string inserted)
+    {
+        if (module is null)
+        {
+            return;
+        }
+
+        // The caret sits right after whatever was typed following "@" — no need for a fresh JS
+        // round trip, the dropdown only shows options for the query currently in sendModel.Content.
+        var before = sendModel.Content[..mentionStartIndex];
+        var caret = mentionStartIndex + QueryLengthAt(mentionStartIndex);
+        var after = sendModel.Content[caret..];
+        var newValue = before + inserted + after;
+        var newCaret = before.Length + inserted.Length;
+
+        sendModel.Content = newValue;
+        showMentionDropdown = false;
+        StateHasChanged();
+
+        await module.InvokeVoidAsync("insertMentionText", composeTextareaEl, newValue, newCaret);
+    }
+
+    private int QueryLengthAt(int atIndex)
+    {
+        var text = sendModel.Content;
+        var i = atIndex + 1;
+        while (i < text.Length && !char.IsWhiteSpace(text[i]))
+        {
+            i++;
+        }
+        return i - atIndex;
     }
 
     private async Task ScrollToBottomAsync()
@@ -433,6 +565,39 @@
                     CreatedAtUtc = DateTime.UtcNow
                 };
                 db.ChatMessages.Add(message);
+
+                // Every other workspace member — needed both to resolve "@everyone" and, later,
+                // as the recipient list for the generic "new message" notification.
+                var recipientIds = await db.WorkspaceMembers
+                    .Where(m => m.WorkspaceId == WorkspaceId && m.UserId != currentUserId)
+                    .Select(m => m.UserId)
+                    .ToListAsync();
+
+                // "@everyone " still has to be present in the final text (same reasoning as
+                // individual mentions below) — covers picking it from the dropdown and then
+                // deleting that text before hitting Enviar.
+                var mentionedEveryoneValid = mentionedEveryone && message.Content.Contains("@everyone ", StringComparison.Ordinal);
+
+                // Only keep mentions whose exact inserted text is still present — covers
+                // someone picking a mention from the dropdown and then deleting that text
+                // before hitting Enviar. "@everyone" makes every other member mentioned,
+                // regardless of whether they were also picked individually.
+                var validMentionedUserIds = mentionedEveryoneValid
+                    ? recipientIds
+                    : mentionedUserIds
+                        .Where(id => workspaceMembers.Any(m => m.UserId == id
+                            && message.Content.Contains($"@{m.DisplayName} ", StringComparison.Ordinal)))
+                        .ToList();
+                foreach (var mentionedUserId in validMentionedUserIds)
+                {
+                    db.ChatMessageMentions.Add(new ChatMessageMention
+                    {
+                        Id = Guid.NewGuid(),
+                        ChatMessageId = message.Id,
+                        UserId = mentionedUserId
+                    });
+                }
+
                 await db.SaveChangesAsync();
 
                 foreach (var file in pendingFiles)
@@ -471,18 +636,16 @@
                     .Include(m => m.User)
                     .Include(m => m.ReferencedDocPage)
                     .Include(m => m.Attachments)
+                    .Include(m => m.Mentions).ThenInclude(x => x.User)
                     .FirstAsync(m => m.Id == message.Id);
 
                 // Notify every other workspace member — WorkspaceChatBroadcaster only reaches
                 // circuits with this chat page currently open, so this is what tells someone who
-                // isn't looking at the chat right now that a message is waiting.
+                // isn't looking at the chat right now that a message is waiting. Mentioned
+                // members get a more specific notification instead (below), not this one too.
                 var senderName = string.IsNullOrEmpty(message.User!.DisplayName) ? (message.User.Email ?? "Alguém") : message.User.DisplayName;
-                var recipientIds = await db.WorkspaceMembers
-                    .Where(m => m.WorkspaceId == WorkspaceId && m.UserId != currentUserId)
-                    .Select(m => m.UserId)
-                    .ToListAsync();
 
-                foreach (var recipientId in recipientIds)
+                foreach (var recipientId in recipientIds.Except(validMentionedUserIds))
                 {
                     db.Notifications.Add(new Notification
                     {
@@ -495,12 +658,29 @@
                         CreatedAtUtc = DateTime.UtcNow
                     });
                 }
+
+                foreach (var mentionedUserId in validMentionedUserIds.Where(id => id != currentUserId))
+                {
+                    db.Notifications.Add(new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = mentionedUserId,
+                        Type = NotificationType.ChatMention,
+                        Message = Notification.TruncateMessage($"{senderName} mencionou você no chat de \"{workspace!.Name}\"."),
+                        WorkspaceId = WorkspaceId,
+                        IsRead = false,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+
                 await db.SaveChangesAsync();
             }
 
             sendModel.Content = "";
             selectedDocId = "";
             pendingFiles = [];
+            mentionedUserIds.Clear();
+            mentionedEveryone = false;
             Broadcaster.Broadcast(message);
         }
         catch (Exception)
@@ -524,6 +704,65 @@
         {
             isSending = false;
         }
+    }
+
+    // Splits message.Content into plain-text / mention segments for rendering — never builds
+    // raw HTML/MarkupString from user content (XSS risk), each segment still goes through
+    // Blazor's normal @text interpolation, which escapes it automatically.
+    private static List<(string Text, bool IsMention)> SplitContentForMentions(ChatMessage message)
+    {
+        var segments = new List<(string, bool)>();
+        if (message.Mentions.Count == 0 && !message.Content.Contains("@everyone", StringComparison.Ordinal))
+        {
+            segments.Add((message.Content, false));
+            return segments;
+        }
+
+        var mentionTokens = message.Mentions
+            .Select(m => $"@{(string.IsNullOrEmpty(m.User.DisplayName) ? m.User.Email : m.User.DisplayName)}")
+            .Where(t => t.Length > 1)
+            .Distinct()
+            .ToList();
+
+        // "@everyone" doesn't map to any single ChatMessageMention.User, so it never shows up
+        // in the list above — recognize it directly whenever it's literally in the text.
+        if (message.Content.Contains("@everyone", StringComparison.Ordinal))
+        {
+            mentionTokens.Add("@everyone");
+        }
+
+        mentionTokens = mentionTokens.OrderByDescending(t => t.Length).ToList();
+
+        var remaining = message.Content;
+        while (remaining.Length > 0)
+        {
+            var earliestIndex = -1;
+            string? matchedToken = null;
+            foreach (var token in mentionTokens)
+            {
+                var idx = remaining.IndexOf(token, StringComparison.Ordinal);
+                if (idx != -1 && (earliestIndex == -1 || idx < earliestIndex))
+                {
+                    earliestIndex = idx;
+                    matchedToken = token;
+                }
+            }
+
+            if (earliestIndex == -1)
+            {
+                segments.Add((remaining, false));
+                break;
+            }
+
+            if (earliestIndex > 0)
+            {
+                segments.Add((remaining[..earliestIndex], false));
+            }
+            segments.Add((matchedToken!, true));
+            remaining = remaining[(earliestIndex + matchedToken!.Length)..];
+        }
+
+        return segments;
     }
 
     private static string FormatSize(long bytes)
@@ -555,6 +794,7 @@
     public void Dispose()
     {
         Broadcaster.MessagePosted -= OnMessagePosted;
+        selfRef?.Dispose();
     }
 
     private class SendMessageModel
