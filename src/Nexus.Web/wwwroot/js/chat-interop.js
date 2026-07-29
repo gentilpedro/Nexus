@@ -23,7 +23,11 @@ export function restoreScrollAfterPrepend(element, previousScrollHeight, previou
 // (a second round trip) — same "JS owns the event, calls back into .NET" shape as
 // board-interop.js's Sortable integration.
 export function initComposeMentions(element, dotNetRef) {
-    if (!element || element._mentionsInitialized) {
+    // An @ref whose element hasn't rendered yet still arrives here as a truthy object, so a
+    // plain null check isn't enough — without the addEventListener probe that case throws,
+    // killing the circuit and leaving mentions dead. Returning quietly instead lets the
+    // caller retry on a later render, once the compose box actually exists.
+    if (!element || typeof element.addEventListener !== 'function' || element._mentionsInitialized) {
         return;
     }
     element._mentionsInitialized = true;

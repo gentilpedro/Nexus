@@ -171,13 +171,24 @@
                         @if (showEveryoneOption)
                         {
                             <button type="button" class="chat-mention-option chat-mention-option--everyone" @onclick="SelectEveryoneMention">
-                                📢 Todos (@@everyone)
+                                <span class="chat-mention-avatar chat-mention-avatar--everyone">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                                </span>
+                                <span class="chat-mention-name">Todos (@@everyone)</span>
                             </button>
                         }
                         @foreach (var member in mentionSuggestions)
                         {
                             <button type="button" class="chat-mention-option" @onclick="() => SelectMention(member.UserId, member.DisplayName)">
-                                @member.DisplayName
+                                @if (!string.IsNullOrEmpty(member.AvatarPath))
+                                {
+                                    <img class="chat-mention-avatar" src="@MentionAvatarUrl(member.UserId, member.AvatarPath)" alt="" />
+                                }
+                                else
+                                {
+                                    <span class="chat-mention-avatar">@MentionInitial(member.DisplayName)</span>
+                                }
+                                <span class="chat-mention-name">@member.DisplayName</span>
                             </button>
                         }
                     </div>
@@ -239,8 +250,8 @@
 
     private ElementReference composeTextareaEl;
     private DotNetObjectReference<WorkspaceChat>? selfRef;
-    private List<(string UserId, string DisplayName)> workspaceMembers = [];
-    private List<(string UserId, string DisplayName)> mentionSuggestions = [];
+    private List<(string UserId, string DisplayName, string? AvatarPath)> workspaceMembers = [];
+    private List<(string UserId, string DisplayName, string? AvatarPath)> mentionSuggestions = [];
     private bool showMentionDropdown;
     private bool showEveryoneOption;
     private bool mentionedEveryone;
@@ -277,8 +288,15 @@
             memberCount = await db.WorkspaceMembers.CountAsync(m => m.WorkspaceId == WorkspaceId);
             workspaceMembers = await db.WorkspaceMembers
                 .Where(m => m.WorkspaceId == WorkspaceId)
-                .Select(m => new ValueTuple<string, string>(m.UserId, m.User.DisplayName != "" ? m.User.DisplayName : (m.User.Email ?? "")))
+                .Select(m => new ValueTuple<string, string, string?>(m.UserId, m.User.DisplayName != "" ? m.User.DisplayName : (m.User.Email ?? ""), m.User.AvatarStoragePath))
                 .ToListAsync();
+
+            // Sorted here rather than in SQL: Postgres orders by the database collation, which
+            // puts accented names (Mônica, Ântonio) after plain-ASCII ones instead of alongside
+            // them. Also makes the Take(6) cut of the suggestion list predictable.
+            workspaceMembers = workspaceMembers
+                .OrderBy(m => m.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
         }
 
         if (workspace is null)
@@ -431,8 +449,16 @@
         {
             module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/chat-interop.js");
             selfRef = DotNetObjectReference.Create(this);
-            await module.InvokeVoidAsync("initComposeMentions", composeTextareaEl, selfRef);
             await ScrollToBottomAsync();
+        }
+
+        // The compose box only exists once the workspace has loaded, which happens after the
+        // first render — binding on firstRender alone handed JS an unset ElementReference, which
+        // threw and left "@" mentions dead for the rest of the page's life. initComposeMentions
+        // is idempotent, so retrying on later renders costs nothing once it has taken.
+        if (module is not null && selfRef is not null && workspace is not null && !notFound)
+        {
+            await module.InvokeVoidAsync("initComposeMentions", composeTextareaEl, selfRef);
         }
     }
 
@@ -573,20 +599,28 @@
                     .Select(m => m.UserId)
                     .ToListAsync();
 
-                // "@everyone " still has to be present in the final text (same reasoning as
-                // individual mentions below) — covers picking it from the dropdown and then
-                // deleting that text before hitting Enviar.
-                var mentionedEveryoneValid = mentionedEveryone && message.Content.Contains("@everyone ", StringComparison.Ordinal);
+                // The dropdown always inserts a mention with a trailing space, but Content was
+                // trimmed above — so a mention that ends the message ("@everyone" on its own,
+                // "bom dia @Ana") loses that space and needs EndsWith too. Matching only
+                // "@Name " silently dropped exactly those, the most natural way to mention
+                // someone: no record, no highlight, no notification. The trailing space still
+                // matters mid-text, to keep "@Ana" from matching a longer "@Anabela".
+                bool StillMentioned(string token) =>
+                    message.Content.Contains(token + " ", StringComparison.Ordinal)
+                    || message.Content.EndsWith(token, StringComparison.Ordinal);
 
-                // Only keep mentions whose exact inserted text is still present — covers
-                // someone picking a mention from the dropdown and then deleting that text
-                // before hitting Enviar. "@everyone" makes every other member mentioned,
-                // regardless of whether they were also picked individually.
+                // Covers picking "@everyone" from the dropdown and then deleting that text
+                // before hitting Enviar.
+                var mentionedEveryoneValid = mentionedEveryone && StillMentioned("@everyone");
+
+                // Only keep mentions whose inserted text is still present — covers someone
+                // picking a mention from the dropdown and then deleting that text before
+                // hitting Enviar. "@everyone" makes every other member mentioned, regardless
+                // of whether they were also picked individually.
                 var validMentionedUserIds = mentionedEveryoneValid
                     ? recipientIds
                     : mentionedUserIds
-                        .Where(id => workspaceMembers.Any(m => m.UserId == id
-                            && message.Content.Contains($"@{m.DisplayName} ", StringComparison.Ordinal)))
+                        .Where(id => workspaceMembers.Any(m => m.UserId == id && StillMentioned($"@{m.DisplayName}")))
                         .ToList();
                 foreach (var mentionedUserId in validMentionedUserIds)
                 {
@@ -790,6 +824,12 @@
         var label = AuthorLabel(message);
         return string.IsNullOrWhiteSpace(label) || label == "Usuário removido" ? "?" : label.Trim()[0].ToString().ToUpperInvariant();
     }
+
+    private static string MentionInitial(string displayName) =>
+        string.IsNullOrWhiteSpace(displayName) ? "?" : displayName.Trim()[0].ToString().ToUpperInvariant();
+
+    private static string MentionAvatarUrl(string userId, string avatarPath) =>
+        $"/avatars/{userId}/download?v={Uri.EscapeDataString(System.IO.Path.GetFileNameWithoutExtension(avatarPath))}";
 
     public void Dispose()
     {
