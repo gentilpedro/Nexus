@@ -64,6 +64,8 @@
     --alert-warning-bg: #fffbeb;
     --alert-warning-fg: #92400e;
     --alert-warning-border: #fde68a;
+
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: dark) {
@@ -128,6 +130,8 @@
         --alert-warning-bg: rgba(250, 204, 21, 0.12);
         --alert-warning-fg: #fde68a;
         --alert-warning-border: rgba(250, 204, 21, 0.35);
+
+        --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     }
 }
 
@@ -192,6 +196,8 @@
     --alert-warning-bg: rgba(250, 204, 21, 0.12);
     --alert-warning-fg: #fde68a;
     --alert-warning-border: rgba(250, 204, 21, 0.35);
+
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }
 
 :root[data-theme="light"] {
@@ -255,6 +261,8 @@
     --alert-warning-bg: #fffbeb;
     --alert-warning-fg: #92400e;
     --alert-warning-border: #fde68a;
+
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }
 
 html {
@@ -285,6 +293,44 @@ a:hover {
 :focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
+}
+
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding: 0.5rem 2rem 0.5rem 0.65rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background-color: var(--color-surface);
+    background-image: var(--select-chevron);
+    background-repeat: no-repeat;
+    background-position: right 0.65rem center;
+    background-size: 0.85rem;
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+}
+
+select:hover {
+    border-color: var(--color-text-muted);
+}
+
+select:focus {
+    border-color: var(--color-primary);
+}
+
+select:disabled {
+    cursor: not-allowed;
+    color: var(--color-text-disabled);
+    background-color: var(--color-bg);
+}
+
+select option {
+    color: var(--color-text);
+    background-color: var(--color-surface);
 }
 
 .topnav {
@@ -660,8 +706,12 @@ a:hover {
     border-radius: var(--radius);
     font-size: 0.95rem;
     font-family: inherit;
-    background: var(--color-surface);
+    background-color: var(--color-surface);
     color: var(--color-text);
+}
+
+.form-field select {
+    padding-right: 2.25rem;
 }
 
 .form-field input:focus,
@@ -1179,8 +1229,12 @@ table.data-table tr:last-child td {
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     font-size: 0.85rem;
-    background: var(--color-surface);
+    background-color: var(--color-surface);
     color: var(--color-text);
+}
+
+.board-add-column-form select {
+    padding-right: 2rem;
 }
 
 .board-column-body {
@@ -2088,10 +2142,12 @@ img.task-row-avatar {
 
 .chat-docref-select {
     font-size: 0.8rem;
-    padding: 0.35rem 0.5rem;
+    padding: 0.35rem 1.9rem 0.35rem 0.5rem;
     border-radius: var(--radius);
     border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    background-color: var(--color-surface);
+    background-size: 0.75rem;
+    background-position: right 0.5rem center;
     color: var(--color-text);
 }
 
@@ -2546,11 +2602,13 @@ img.task-row-avatar {
 }
 
 .gantt-group-select select {
-    padding: 0.3rem 0.5rem;
+    padding: 0.3rem 1.9rem 0.3rem 0.5rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
     font-size: 0.85rem;
-    background: var(--color-surface);
+    background-color: var(--color-surface);
+    background-size: 0.75rem;
+    background-position: right 0.5rem center;
     color: var(--color-text);
 }
 
