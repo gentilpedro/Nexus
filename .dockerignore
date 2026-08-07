@@ -6,3 +6,21 @@
 .gitignore
 Dockerfile
 .dockerignore
+
+# Locally uploaded task/chat attachments and avatars. These are REAL user files: the Dockerfile
+# does `COPY src/ src/`, so without this line they are baked into every image built from a
+# developer machine and travel wherever that image goes. .gitignore already excludes them from
+# the repository — this is the equivalent protection for the build context.
+src/Nexus.Web/App_Data/uploads/
+
+# Local docker-compose secrets. Never COPYed today, but it has no business being in the build
+# context at all — a future `COPY . .` would silently put the Postgres password in a layer.
+.env
+
+# Design reference screenshots dropped in the project root; nothing to do with the image.
+*.PNG
+*.png
+*.jpg
+*.jpeg
+Wireframes/
+docs/

@@ -11,6 +11,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthorizationService AuthorizationService
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 @inject NavigationManager NavigationManager
 
@@ -294,10 +295,27 @@
             return;
         }
 
+        // Re-check membership at write time: this circuit may have been open since before the
+        // user was removed from (or demoted in) the workspace. See WorkspaceAccessGuard.
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member))
+        {
+            errorMessage = "Você não tem mais acesso a este workspace.";
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
 
         var gridJson = JsonSerializer.Serialize(grid);
+
+        // Row and column counts are already capped by the UI, but individual cell contents were
+        // not bounded at all, so the serialized payload could still grow without limit.
+        if (gridJson.Length > DocPage.MaxGridDataJsonLength)
+        {
+            errorMessage = $"A planilha excede o limite de {DocPage.MaxGridDataJsonLength:N0} caracteres.";
+            isSaving = false;
+            return;
+        }
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
@@ -320,8 +338,10 @@
             return;
         }
 
+        // WorkspaceId is part of the predicate as well as the Id: the authorization above is
+        // scoped to this workspace, so the row being written must be too.
         await db.DocPages
-            .Where(d => d.Id == doc!.Id)
+            .Where(d => d.Id == doc!.Id && d.WorkspaceId == WorkspaceId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(d => d.Title, titleInput.Trim())
                 .SetProperty(d => d.GridDataJson, gridJson)

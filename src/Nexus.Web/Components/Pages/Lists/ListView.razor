@@ -63,6 +63,13 @@
         }
         else
         {
+            @if (itemsTruncated)
+            {
+                <div class="empty-state">
+                    <p>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tasks. Mostrando as @WorkItemQueryService.MaxItemsPerView primeiras — use os filtros ou divida a lista.</p>
+                </div>
+            }
+
             <div class="pill-tabs">
                 <button type="button" class="@(rowFilter == "all" ? "active" : "")" @onclick='() => rowFilter = "all"'>Todas <span class="tab-count">@workItems.Count</span></button>
                 <button type="button" class="@(rowFilter == "mine" ? "active" : "")" @onclick='() => rowFilter = "mine"'>Minhas <span class="tab-count">@workItems.Count(w => w.AssigneeId == currentUserId)</span></button>
@@ -83,8 +90,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in FilteredWorkItems)
-                        {
+                        @* Virtualize instead of a plain foreach: rendering every row put 10.3 MB of
+                           HTML on the wire for a large list and kept the entire DOM alive in the
+                           circuit. Virtualize renders only the rows in view. ItemSize matches the
+                           row height in app.css so the scrollbar is proportioned correctly. *@
+                        <Virtualize Items="FilteredWorkItems" Context="item" ItemSize="48">
                             <tr class="data-table-row" @onclick="() => OpenEdit(item)">
                                 <td><WorkItemTypeIcon Type="item.Type" /></td>
                                 <td>@item.Title</td>
@@ -93,7 +103,7 @@
                                 <td>@(item.Assignee?.DisplayName is { Length: > 0 } dn ? dn : (item.Assignee?.Email ?? "—"))</td>
                                 <td>@(item.DueDateUtc?.ToString("dd/MM/yyyy") ?? "—")</td>
                             </tr>
-                        }
+                        </Virtualize>
                     </tbody>
                 </table>
             </div>
@@ -153,6 +163,9 @@
     private string spaceName = "";
     private Guid workspaceId;
     private List<WorkItem>? workItems;
+    // True when the list holds more work items than WorkItemQueryService.MaxItemsPerView, so the
+    // user is told they are looking at a partial list instead of silently seeing the first N.
+    private bool itemsTruncated;
     private List<TaskStatusDefinition>? statuses;
     private List<(string UserId, string DisplayName)>? assigneeOptions;
     private List<WorkItem>? epics;
@@ -243,7 +256,9 @@
 
     private async Task ReloadWorkItemsAsync()
     {
-        workItems = await QueryService.GetWorkItemsForListAsync(ListId);
+        var itemsPage = await QueryService.GetWorkItemsForListAsync(ListId);
+        workItems = itemsPage.Items;
+        itemsTruncated = itemsPage.IsTruncated;
         // Refresh in case a new Epic was just created via the panel — it should be
         // selectable immediately, not only after a full page reload.
         epics = await QueryService.GetEpicsForListAsync(ListId);

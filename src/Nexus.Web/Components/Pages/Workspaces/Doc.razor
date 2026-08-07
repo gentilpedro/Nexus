@@ -11,6 +11,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthorizationService AuthorizationService
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
@@ -289,11 +290,29 @@
             return;
         }
 
+        // Re-check membership at write time: this circuit may have been open since before the
+        // user was removed from (or demoted in) the workspace. See WorkspaceAccessGuard.
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member))
+        {
+            errorMessage = "Você não tem mais acesso a este workspace.";
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
 
         var rawHtml = module is null ? "" : await module.InvokeAsync<string>("getContent", editorElementId);
         var sanitized = HtmlContentSanitizer.Sanitize(rawHtml);
+
+        // Checked server-side: the editor is a contenteditable surface with no maxlength, and the
+        // content arrives over the SignalR circuit, which accepts messages up to 11 MB. Without
+        // this the only limit was the database column, which had none either.
+        if (sanitized.Length > DocPage.MaxContentHtmlLength)
+        {
+            errorMessage = $"O conteúdo excede o limite de {DocPage.MaxContentHtmlLength:N0} caracteres.";
+            isSaving = false;
+            return;
+        }
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
@@ -316,8 +335,10 @@
             return;
         }
 
+        // WorkspaceId is part of the predicate as well as the Id: the authorization above is
+        // scoped to this workspace, so the row being written must be too.
         await db.DocPages
-            .Where(d => d.Id == doc!.Id)
+            .Where(d => d.Id == doc!.Id && d.WorkspaceId == WorkspaceId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(d => d.Title, titleInput.Trim())
                 .SetProperty(d => d.ContentHtml, sanitized)

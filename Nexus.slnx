@@ -7,5 +7,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/Nexus.Domain.Tests/Nexus.Domain.Tests.csproj" />
     <Project Path="tests/Nexus.Infrastructure.Tests/Nexus.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Nexus.Web.Tests/Nexus.Web.Tests.csproj" />
   </Folder>
 </Solution>

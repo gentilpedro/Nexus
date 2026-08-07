@@ -158,9 +158,19 @@
             }
 
             var oldPath = user.AvatarStoragePath;
-            await using (var stream = AvatarFile.OpenReadStream())
+            try
             {
-                user.AvatarStoragePath = await Storage.SaveAsync(Guid.Parse(user.Id), Guid.NewGuid(), AvatarFile.FileName, stream);
+                await using var stream = AvatarFile.OpenReadStream();
+                user.AvatarStoragePath = await Storage.SaveAsync(
+                    Guid.Parse(user.Id), Guid.NewGuid(), AvatarFile.FileName, stream, AvatarFile.ContentType);
+            }
+            catch (InvalidDataException)
+            {
+                // Avatars are the one upload served back inline rather than as an attachment, so
+                // the bytes must actually be the image type the browser claimed.
+                avatarErrorMessage = "O arquivo enviado não é uma imagem JPG, PNG ou WEBP válida.";
+                RefreshAvatarState();
+                return;
             }
             user.AvatarContentType = AvatarFile.ContentType;
             await UserManager.UpdateAsync(user);

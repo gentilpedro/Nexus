@@ -1,7 +1,11 @@
-@* Purely client-side (plain onclick + CSS driven by :root[data-theme]) — no Blazor state,
-   no JS interop round-trip. Works identically on interactive pages and on static SSR pages
-   (Login/Register/Manage), which have no SignalR circuit for IJSRuntime to call back through. *@
-<button type="button" class="theme-switch" onclick="window.nexusToggleTheme()" aria-label="Alternar tema">
+@* Purely client-side (CSS driven by :root[data-theme]) — no Blazor state, no JS interop
+   round-trip. Works identically on interactive pages and on static SSR pages
+   (Login/Register/Manage), which have no SignalR circuit for IJSRuntime to call back through.
+
+   data-nexus-action instead of an inline onclick: the CSP sets script-src 'self' with no
+   'unsafe-inline', which blocks inline handlers. The delegated listener in theme-interop.js
+   picks this up. *@
+<button type="button" class="theme-switch" data-nexus-action="toggle-theme" aria-label="Alternar tema">
     <span class="theme-switch-label theme-switch-label--light">Light</span>
 
     <span class="theme-switch-track">

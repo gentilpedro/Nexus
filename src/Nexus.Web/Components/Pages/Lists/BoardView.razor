@@ -61,6 +61,13 @@
         }
         else
         {
+            @if (itemsTruncated)
+            {
+                <div class="empty-state">
+                    <p>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tasks. O board mostra as @WorkItemQueryService.MaxItemsPerView primeiras.</p>
+                </div>
+            }
+
             <div class="board">
                 @foreach (var status in statuses)
                 {
@@ -162,6 +169,9 @@
     private string spaceName = "";
     private Guid workspaceId;
     private List<WorkItem>? workItems;
+    // True when the list holds more work items than WorkItemQueryService.MaxItemsPerView, so the
+    // user is told they are looking at a partial list instead of silently seeing the first N.
+    private bool itemsTruncated;
     private List<TaskStatusDefinition>? statuses;
     private List<(string UserId, string DisplayName)>? assigneeOptions;
     private List<WorkItem>? epics;
@@ -246,7 +256,9 @@
 
     private async Task ReloadWorkItemsAsync()
     {
-        workItems = await QueryService.GetWorkItemsForListAsync(ListId);
+        var itemsPage = await QueryService.GetWorkItemsForListAsync(ListId);
+        workItems = itemsPage.Items;
+        itemsTruncated = itemsPage.IsTruncated;
         epics = await QueryService.GetEpicsForListAsync(ListId);
     }
 
