@@ -2,6 +2,12 @@ namespace Nexus.Domain.Entities;
 
 public class DocPage
 {
+    // Storage ceilings for the two user-authored payloads on this entity. Both columns were
+    // unbounded text; these values are enforced by the EF configuration and re-checked before
+    // saving, so the limit does not depend on the client behaving.
+    public const int MaxContentHtmlLength = 1_000_000;
+    public const int MaxGridDataJsonLength = 500_000;
+
     public Guid Id { get; set; }
 
     public Guid WorkspaceId { get; set; }

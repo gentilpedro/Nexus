@@ -22,6 +22,17 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # This compose file is a LOCAL DEVELOPMENT stack, not a production deployment: it builds
+      # from source, exposes Postgres on the host, and takes its database password from the
+      # untracked .env. Saying so explicitly matters — without it the app defaults to the
+      # Production environment and refuses to start here, because Data Protection keys cannot be
+      # encrypted on Linux without a certificate (DPAPI is Windows-only) and appsettings.
+      # Development.json is what carries the DataProtection:AllowUnprotectedKeys opt-in.
+      #
+      # A real container deployment must NOT copy this line. It has to supply
+      # DataProtection__CertificatePath (+ __CertificatePassword) instead, so the key ring is
+      # encrypted at rest — see InfrastructureServiceCollectionExtensions.
+      ASPNETCORE_ENVIRONMENT: Development
       APPLY_MIGRATIONS_ON_STARTUP: "true"
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=Nexus;Username=postgres;Password=${POSTGRES_PASSWORD}"
     depends_on:

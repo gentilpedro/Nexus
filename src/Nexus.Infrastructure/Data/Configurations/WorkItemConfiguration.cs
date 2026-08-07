@@ -10,6 +10,11 @@ public class WorkItemConfiguration : IEntityTypeConfiguration<WorkItem>
     {
         builder.Property(w => w.Title).HasMaxLength(500).IsRequired();
 
+        // Was unbounded `text`. Every other user-authored column in this schema carries a limit;
+        // this one did not, so a single user could store arbitrarily large descriptions — and the
+        // list views load Description along with the rest of the row.
+        builder.Property(w => w.Description).HasMaxLength(WorkItem.MaxDescriptionLength);
+
         // Optimistic concurrency via Postgres's built-in xmin system column — no new physical
         // column needed (every Postgres row already has one). Without this, two people editing
         // the same WorkItem concurrently would have the second SaveChangesAsync silently
@@ -44,5 +49,16 @@ public class WorkItemConfiguration : IEntityTypeConfiguration<WorkItem>
             .WithMany()
             .HasForeignKey(w => w.ParentEpicId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Supports DueDateNotificationHostedService, which runs hourly and filters WorkItems on
+        // DueDateUtc. There was no index on this column, so every pass scanned the entire
+        // WorkItems table — the cost of that grows with the whole product's data, forever.
+        //
+        // Partial (WHERE "DueDateUtc" IS NOT NULL): the service only ever looks at rows that have
+        // a due date, and most work items never get one. A plain btree also indexes every NULL,
+        // which made the index nearly as large as the table while being useless for this
+        // predicate — EXPLAIN showed the planner ignoring it in favour of a sequential scan.
+        builder.HasIndex(w => w.DueDateUtc)
+            .HasFilter("\"DueDateUtc\" IS NOT NULL");
     }
 }

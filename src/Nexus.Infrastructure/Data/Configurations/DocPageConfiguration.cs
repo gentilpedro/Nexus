@@ -10,6 +10,15 @@ public class DocPageConfiguration : IEntityTypeConfiguration<DocPage>
     {
         builder.Property(d => d.Title).HasMaxLength(200).IsRequired();
 
+        // Both were unbounded `text`. The SignalR hub accepts messages up to 11 MB (raised for
+        // file uploads), so without a limit here an authenticated user could persist multi-megabyte
+        // documents repeatedly — unbounded database growth, and every reader loads the whole value
+        // into the circuit and renders it as a MarkupString.
+        //
+        // Generous on purpose: these are rich-text and spreadsheet payloads, not short fields.
+        builder.Property(d => d.ContentHtml).HasMaxLength(DocPage.MaxContentHtmlLength);
+        builder.Property(d => d.GridDataJson).HasMaxLength(DocPage.MaxGridDataJsonLength);
+
         // Page belongs to the workspace's lifecycle — deleting the workspace deletes its pages.
         builder.HasOne(d => d.Workspace)
             .WithMany()

@@ -2,6 +2,9 @@ namespace Nexus.Domain.Entities;
 
 public class WorkItem
 {
+    // Ceiling for the free-text description. Was an unbounded text column.
+    public const int MaxDescriptionLength = 10_000;
+
     public Guid Id { get; set; }
 
     public Guid TaskListId { get; set; }

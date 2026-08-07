@@ -9,6 +9,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager NavigationManager
 @inject IAuthorizationService AuthorizationService
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 
 <PageTitle>Configurações — @(workspace?.Name ?? "Workspace")</PageTitle>
@@ -202,8 +203,28 @@
         }
     }
 
+    // Re-checks Admin at the moment of the write instead of trusting the decision made when the
+    // page loaded. This circuit stays alive for as long as the tab is open — long enough for an
+    // Owner to have demoted or removed this user — and archiving a workspace hides it from
+    // everyone who uses it. See WorkspaceAccessGuard.
+    private async Task<bool> StillAdminAsync()
+    {
+        if (await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin))
+        {
+            return true;
+        }
+
+        notFound = true;
+        return false;
+    }
+
     private async Task HandleSaveGeneral()
     {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
         statusMessage = null;
@@ -229,6 +250,11 @@
 
     private async Task HandleToggleArchive()
     {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
         var newValue = !workspace!.IsArchived;
 
         await using (var db = await DbFactory.CreateDbContextAsync())
