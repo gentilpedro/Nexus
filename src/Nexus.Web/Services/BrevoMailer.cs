@@ -22,6 +22,9 @@ public class BrevoMailer(IOptions<BrevoOptions> options, ILogger<BrevoMailer> lo
 {
     private readonly BrevoOptions options = options.Value;
 
+    // Wall-clock ceiling for one send attempt, covering connect + authenticate + send + quit.
+    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(15);
+
     public async Task<bool> SendAsync(string toEmail, string subject, string htmlBody)
     {
         var message = new MimeMessage();
@@ -33,11 +36,28 @@ public class BrevoMailer(IOptions<BrevoOptions> options, ILogger<BrevoMailer> lo
         try
         {
             using var client = new SmtpClient();
-            await client.ConnectAsync(options.Host, options.Port, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(options.Login, options.SmtpKey);
-            await client.SendAsync(message);
-            await client.DisconnectAsync(quit: true);
+
+            // Bounded end to end. MailKit's default Timeout is 2 minutes and applies per socket
+            // operation, so an unresponsive relay could stall a caller far longer than that —
+            // and several callers await this inline on a user-facing path (sending an invite,
+            // the chat/notification flows), meaning a hung SMTP connection blocks the user's
+            // interaction, not just the e-mail. The CancellationTokenSource covers the whole
+            // connect/authenticate/send sequence, which the per-operation timeout does not.
+            client.Timeout = (int)SendTimeout.TotalMilliseconds;
+            using var cts = new CancellationTokenSource(SendTimeout);
+
+            await client.ConnectAsync(options.Host, options.Port, SecureSocketOptions.StartTls, cts.Token);
+            await client.AuthenticateAsync(options.Login, options.SmtpKey, cts.Token);
+            await client.SendAsync(message, cts.Token);
+            await client.DisconnectAsync(quit: true, cts.Token);
             return true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Timed out rather than failed outright. Same contract as any other send failure:
+            // return false and let the caller carry on — e-mail is never the critical path here.
+            logger.LogError("Timed out sending email to {ToEmail} via Brevo after {Timeout}s.", toEmail, SendTimeout.TotalSeconds);
+            return false;
         }
         catch (Exception ex)
         {

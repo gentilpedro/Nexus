@@ -194,11 +194,24 @@
 
         var addedDirectlyEmails = new List<string>();
         var newInviteEmails = new List<string>();
+
+        // One query for all invited addresses instead of one per address. The loop below used to
+        // issue a separate FirstOrDefaultAsync per e-mail — a round trip each, on the critical
+        // path of creating a workspace.
+        var normalizedEmails = pendingInvites
+            .Select(e => e.Trim().ToUpperInvariant())
+            .Where(e => e.Length > 0)
+            .Distinct()
+            .ToList();
+
+        var existingUsers = await db.Users
+            .Where(u => u.NormalizedEmail != null && normalizedEmails.Contains(u.NormalizedEmail))
+            .ToDictionaryAsync(u => u.NormalizedEmail!, u => u);
+
         foreach (var email in pendingInvites)
         {
             var normalized = email.Trim().ToUpperInvariant();
-            var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalized);
-            if (user is null)
+            if (!existingUsers.TryGetValue(normalized, out var user))
             {
                 newInviteEmails.Add(email.Trim());
                 continue;

@@ -1,0 +1,127 @@
+name: Backup Nexus database
+
+# Automates the database half of docs/backup-restore.md, which until now was a manual runbook
+# nobody was scheduled to run.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# BEFORE ENABLING — read this. It is a data-protection decision, not just a config change.
+#
+# A dump of this database contains personal data of every user: names, e-mail addresses, phone
+# numbers, password hashes, avatars and the full contents of every workspace (LGPD art. 5, I —
+# see docs/lgpd/rot.md). Storing it as a GitHub Actions artifact makes GitHub an additional
+# operator for that data, which the ROT does not currently list.
+#
+# So this workflow is deliberately opt-in and does nothing until you set the repository variable
+# BACKUP_ENABLED to "true". Before you do, decide where dumps should live and update the ROT
+# accordingly. GitHub artifacts are the least-effort option and are private to the repository,
+# but an object-store bucket you control is the better answer for personal data — swap the upload
+# step for that if you go this route.
+#
+# NOTE: this also assumes the PostgreSQL host accepts connections from GitHub-hosted runners.
+# Managed/shared hosts frequently restrict access by IP, in which case this must run from a
+# machine that can reach the database instead. The connectivity step below fails loudly and
+# early rather than producing an empty backup, so a blocked runner is obvious on the first run.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # 03:00 UTC = midnight in America/Sao_Paulo (UTC-3), outside working hours.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    # Only needs to read the repo; no write permissions anywhere.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check that backups are enabled
+        run: |
+          if [ "${{ vars.BACKUP_ENABLED }}" != "true" ]; then
+            echo "::notice::Backups are not enabled. Set repository variable BACKUP_ENABLED=true after deciding where dumps should be stored — see the header of this workflow."
+            exit 1
+          fi
+
+      # pg_dump must match the server major version, so install PostgreSQL 16's client rather
+      # than whatever the runner image happens to ship.
+      - name: Install PostgreSQL 16 client
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+
+      # The connection string is an ADO.NET one (Host=...;Port=...;Database=...;Username=...;
+      # Password=...), not a libpq URI, so it is parsed into the standard PG* variables. Written
+      # to $GITHUB_ENV, never echoed — GitHub masks the secret itself, but values derived from it
+      # are not masked automatically.
+      - name: Parse connection string
+        env:
+          CONNECTION_STRING: ${{ secrets.PROD_SQL_CONNECTION_STRING }}
+        run: |
+          # Extracts one ADO.NET key. Tries the quoted form first, because a value containing ';'
+          # must be quoted (Password="a;b") and a naive split on ';' would truncate it — silently
+          # producing a wrong password. Falls back to the unquoted form. Case-insensitive and
+          # tolerant of spaces around '=', both of which ADO.NET permits.
+          field() {
+            local v
+            v=$(printf '%s' "$CONNECTION_STRING" | grep -oiP "(^|;)\s*$1\s*=\s*\"[^\"]*\"" | head -1 | sed -E 's/^[^"]*"//; s/"$//')
+            if [ -n "$v" ]; then printf '%s' "$v"; return; fi
+            printf '%s' "$CONNECTION_STRING" | grep -oiP "(^|;)\s*$1\s*=\s*[^;]*" | head -1 | sed -E 's/^;?\s*[^=]*=\s*//; s/\s+$//'
+          }
+          {
+            echo "PGHOST=$(field Host)"
+            echo "PGPORT=$(field Port)"
+            echo "PGDATABASE=$(field Database)"
+            echo "PGUSER=$(field Username)"
+            echo "PGPASSWORD=$(field Password)"
+          } >> "$GITHUB_ENV"
+          echo "::add-mask::$(field Password)"
+
+      - name: Verify connectivity
+        run: |
+          if ! pg_isready -h "$PGHOST" -p "${PGPORT:-5432}" -U "$PGUSER" -t 15; then
+            echo "::error::Cannot reach the database from this runner. If the host restricts access by IP, run this job from a machine that is allowed instead — see the workflow header."
+            exit 1
+          fi
+
+      - name: Dump database
+        run: |
+          STAMP="$(date -u +%Y%m%d-%H%M%S)"
+          echo "BACKUP_FILE=nexus-$STAMP.dump" >> "$GITHUB_ENV"
+          pg_dump --format=custom --compress=9 --no-owner --file="nexus-$STAMP.dump"
+
+      # A dump that restores to an empty database is the only kind worth keeping. This catches the
+      # common silent failure — a dump that completed but is truncated or corrupt — before the
+      # artifact is uploaded and treated as a real backup.
+      - name: Verify the dump is restorable
+        run: |
+          pg_restore --list "$BACKUP_FILE" > /dev/null
+          SIZE=$(stat -c%s "$BACKUP_FILE")
+          echo "Dump is readable by pg_restore; $SIZE bytes."
+          if [ "$SIZE" -lt 10240 ]; then
+            echo "::error::Dump is suspiciously small ($SIZE bytes) — treating as a failed backup."
+            exit 1
+          fi
+
+      - name: Upload backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_FILE }}
+          path: ${{ env.BACKUP_FILE }}
+          # Matches the 7-daily/4-weekly guidance in docs/backup-restore.md. Note this is NOT the
+          # 730-day audit-log retention: that governs rows inside the database, not backup copies.
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Summary
+        run: |
+          echo "### Backup concluído" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Arquivo: \`$BACKUP_FILE\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tamanho: $(stat -c%s "$BACKUP_FILE") bytes" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Verificado com \`pg_restore --list\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Restauração: ver \`docs/backup-restore.md\` seção 3. Um backup nunca restaurado deve ser tratado como inexistente." >> "$GITHUB_STEP_SUMMARY"

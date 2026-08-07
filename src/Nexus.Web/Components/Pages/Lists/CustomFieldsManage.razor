@@ -11,6 +11,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
 @inject IAuthorizationService AuthorizationService
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 
 <PageTitle>Campos customizados</PageTitle>
@@ -211,8 +212,28 @@
         definitions = await QueryService.GetCustomFieldDefinitionsForListAsync(ListId);
     }
 
+    // Re-checks Admin at the moment of the write instead of trusting the decision made when the
+    // page loaded. This circuit stays alive for as long as the tab is open — long enough for an
+    // Owner to have demoted or removed this user — and every handler below performs a privileged
+    // write, most of them destructive. See WorkspaceAccessGuard.
+    private async Task<bool> StillAdminAsync()
+    {
+        if (await AccessGuard.HasAccessAsync(AuthStateTask, workspaceId, WorkspaceRole.Admin))
+        {
+            return true;
+        }
+
+        notFound = true;
+        return false;
+    }
+
     private async Task HandleCreate()
     {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
 
@@ -264,6 +285,11 @@
 
     private async Task HandleDelete(Guid definitionId)
     {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
         await using var db = await DbFactory.CreateDbContextAsync();
         await db.CustomFieldValues.Where(v => v.CustomFieldDefinitionId == definitionId).ExecuteDeleteAsync();
         await db.CustomFieldDefinitions.Where(f => f.Id == definitionId).ExecuteDeleteAsync();

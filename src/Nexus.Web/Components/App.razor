@@ -7,27 +7,10 @@
     <link rel="shortcut icon" href="@Assets["IconNexus.png"]" type="image/x-icon">
     <base href="/" />
     <ResourcePreloader />
-    <script>
-        (function () {
-            var saved = localStorage.getItem('theme');
-            if (saved === 'dark' || saved === 'light') {
-                document.documentElement.setAttribute('data-theme', saved);
-            }
-
-            // Plain JS, no Blazor circuit involved — the theme toggle needs to work
-            // identically on static SSR pages (Login/Register, which have no SignalR
-            // circuit for IJSRuntime to call back through) and on interactive pages.
-            window.nexusToggleTheme = function () {
-                var current = document.documentElement.getAttribute('data-theme');
-                if (current !== 'dark' && current !== 'light') {
-                    current = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-                }
-                var next = current === 'dark' ? 'light' : 'dark';
-                document.documentElement.setAttribute('data-theme', next);
-                localStorage.setItem('theme', next);
-            };
-        })();
-    </script>
+    <!-- External, not inline: the Content-Security-Policy set in Program.cs forbids inline
+         script. Still loaded synchronously in <head> so the saved theme is applied before the
+         first paint. -->
+    <script src="@Assets["js/theme-interop.js"]"></script>
     <link rel="stylesheet" href="@Assets["lib/quill/quill.snow.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Nexus.Web.styles.css"]" />

@@ -101,6 +101,13 @@
         }
         else
         {
+            @if (itemsTruncated)
+            {
+                <div class="empty-state">
+                    <p>O backlog tem mais de @WorkItemQueryService.MaxItemsPerView tarefas. Mostrando as @WorkItemQueryService.MaxItemsPerView primeiras.</p>
+                </div>
+            }
+
             <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
                 <div class="form-field" style="flex:1;min-width:200px;margin-bottom:0;">
                     <input type="search" placeholder="Filtrar tarefas..." @bind="filterText" @bind:event="oninput" />
@@ -209,6 +216,8 @@
     private List<Sprint>? sprints;
     private List<Sprint>? completedSprints;
     private List<WorkItem>? backlogItems;
+    // True when the backlog holds more items than WorkItemQueryService.MaxItemsPerView.
+    private bool itemsTruncated;
     private List<TaskStatusDefinition>? statuses;
     private List<(string UserId, string DisplayName)>? assigneeOptions;
     private List<WorkItem>? epics;
@@ -348,7 +357,9 @@
     {
         sprints = await QueryService.GetSprintsForListAsync(ListId);
         completedSprints = await QueryService.GetCompletedSprintsForListAsync(ListId);
-        backlogItems = await QueryService.GetBacklogItemsAsync(ListId);
+        var backlogPage = await QueryService.GetBacklogItemsAsync(ListId);
+        backlogItems = backlogPage.Items;
+        itemsTruncated = backlogPage.IsTruncated;
         epics = await QueryService.GetEpicsForListAsync(ListId);
         StateHasChanged();
     }

@@ -32,5 +32,10 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(n => new { n.UserId, n.IsRead });
+
+        // Supports DataRetentionHostedService's daily sweep, which deletes by CreatedAtUtc alone.
+        // Without this the sweep is a full table scan of the largest table in the schema
+        // (Notifications grows with every chat message x every workspace member).
+        builder.HasIndex(n => n.CreatedAtUtc);
     }
 }

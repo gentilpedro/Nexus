@@ -12,6 +12,7 @@
 @inject BrevoMailer Mailer
 @inject NavigationManager NavigationManager
 @inject IAuthorizationService AuthorizationService
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 
 @if (isOpen)
 {
@@ -89,6 +90,10 @@
 
                 <div class="task-view-comments">
                     <h3>Comentários (@(comments?.Count ?? 0))</h3>
+                    @if (commentsTruncated)
+                    {
+                        <p class="task-view-description">Mostrando os @MaxComments comentários mais recentes.</p>
+                    }
                     @if (comments is null)
                     {
                         <p class="topnav-user">Carregando...</p>
@@ -110,7 +115,7 @@
                         }
                     }
                     <div class="task-comment-compose">
-                        <textarea rows="2" placeholder="Escreva um comentário..." @bind="newCommentText"></textarea>
+                        <textarea rows="2" placeholder="Escreva um comentário..." @bind="newCommentText" maxlength="4000"></textarea>
                         <button type="button" class="btn" disabled="@isSavingComment" @onclick="HandleAddComment">Comentar</button>
                     </div>
                 </div>
@@ -135,7 +140,7 @@
                     </div>
                     <div class="form-field">
                         <label for="task-description">Descrição</label>
-                        <InputTextArea id="task-description" @bind-Value="model.Description" rows="4" />
+                        <InputTextArea id="task-description" @bind-Value="model.Description" rows="4" maxlength="@WorkItem.MaxDescriptionLength" />
                     </div>
                     <div class="form-row">
                         <div class="form-field">
@@ -338,7 +343,11 @@
     private readonly HashSet<Guid> originalLabelIds = new();
     private List<WorkItemAttachment> attachments = [];
     private string? uploadError;
+    // Ceiling on how many comments one task's thread loads into the circuit at once.
+    private const int MaxComments = 200;
+
     private List<WorkItemComment>? comments;
+    private bool commentsTruncated;
     private string newCommentText = "";
     private bool isSavingComment;
 
@@ -504,11 +513,25 @@
         }
 
         await using var db = await DbFactory.CreateDbContextAsync();
-        comments = await db.WorkItemComments
+
+        // Capped: a long-running task can accumulate an unbounded comment thread, and this loaded
+        // all of it every time the panel opened. Takes the most recent MaxComments and reverses
+        // them back into chronological order, so the newest are the ones guaranteed to be shown.
+        var recent = await db.WorkItemComments
             .Where(c => c.WorkItemId == editingId.Value)
             .Include(c => c.User)
-            .OrderBy(c => c.CreatedAtUtc)
+            .OrderByDescending(c => c.CreatedAtUtc)
+            .Take(MaxComments + 1)
             .ToListAsync();
+
+        commentsTruncated = recent.Count > MaxComments;
+        if (commentsTruncated)
+        {
+            recent.RemoveAt(recent.Count - 1);
+        }
+
+        recent.Reverse();
+        comments = recent;
     }
 
     private async Task HandleAddComment()
@@ -595,9 +618,16 @@
 
             var attachmentId = Guid.NewGuid();
             string storagePath;
-            await using (var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes))
+            try
             {
-                storagePath = await Storage.SaveAsync(editingId.Value, attachmentId, file.Name, stream);
+                await using var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes);
+                storagePath = await Storage.SaveAsync(editingId.Value, attachmentId, file.Name, stream, file.ContentType);
+            }
+            catch (InvalidDataException)
+            {
+                // File's actual bytes contradict the content type the browser reported.
+                errorMessage = $"\"{file.Name}\" não corresponde ao tipo de arquivo informado e não foi enviado.";
+                continue;
             }
 
             await using var db = await DbFactory.CreateDbContextAsync();
@@ -690,8 +720,28 @@
         isOpen = false;
     }
 
+    // Resolves this panel's workspace from the list it is showing and asks for a fresh
+    // authorization decision. WorkspaceAuthorizationHandler hits the database every call and
+    // caches nothing, so the answer always reflects the user's current role.
+    private async Task<bool> HasCurrentWorkspaceAccessAsync(WorkspaceRole minimumRole)
+    {
+        var workspaceId = await QueryService.GetWorkspaceIdForListAsync(TaskListId);
+        return workspaceId is not null
+            && await AccessGuard.HasAccessAsync(AuthStateTask, workspaceId.Value, minimumRole);
+    }
+
     private async Task HandleSave()
     {
+        // Re-check membership at write time. The parent page authorized once when it loaded, but
+        // this panel lives inside a circuit that can stay open for hours — long enough for the
+        // user to have been removed from the workspace in the meantime. See WorkspaceAccessGuard.
+        if (!await HasCurrentWorkspaceAccessAsync(WorkspaceRole.Member))
+        {
+            errorMessage = "Você não tem mais acesso a este workspace.";
+            isSaving = false;
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
 

@@ -6,7 +6,10 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  # Quality gate. Everything that can reject a bad change runs here, before any job that can
+  # touch production exists. Previously build/publish/deploy were a single job with no test or
+  # vulnerability step at all, so any commit pushed to main shipped straight to users.
+  verify:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,18 +21,78 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # The whole solution, not just Nexus.Web — the test projects are part of it, and a
+      # compilation break in one of them must fail the gate too.
       - name: Restore
-        run: dotnet restore src/Nexus.Web/Nexus.Web.csproj
+        run: dotnet restore Nexus.slnx
 
       - name: Build
-        run: dotnet build src/Nexus.Web/Nexus.Web.csproj --configuration Release --no-restore
+        run: dotnet build Nexus.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Nexus.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./test-results
+
+      # Fails the build on any *known-vulnerable* package. `dotnet list package --vulnerable`
+      # always exits 0, so the severity has to be detected in its output.
+      #
+      # AngleSharp 0.17.1 (moderate, GHSA-pgww-w46g-26qg) is a known and documented exception —
+      # see the comment on its PackageReference in Nexus.Web.csproj. Only High/Critical block the
+      # deploy; anything moderate is reported and left visible in the log.
+      - name: Check for vulnerable dependencies
+        run: |
+          dotnet list Nexus.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          if grep -qiE '\|\s*(High|Critical)\s*\|' vuln.txt; then
+            echo "::error::High or Critical severity vulnerability found in dependencies."
+            exit 1
+          fi
+          echo "No High/Critical vulnerabilities found."
+
+      # Static analysis: fail on any compiler warning treated across the solution, and verify
+      # formatting has not drifted. Kept as a separate non-fatal report for whitespace so a
+      # formatting nit never blocks a security fix, while real analyzer findings do.
+      - name: Static analysis (analyzers as errors)
+        run: dotnet build Nexus.slnx --configuration Release --no-incremental /p:TreatWarningsAsErrors=true /p:WarningsNotAsErrors=NU1902
 
       - name: Publish
-        run: dotnet publish src/Nexus.Web/Nexus.Web.csproj -c Release -o publish
+        run: dotnet publish src/Nexus.Web/Nexus.Web.csproj -c Release -o publish --no-restore
+
+      - name: Upload publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish
+          path: ./publish
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    # Bind to a GitHub Environment so branch restrictions and (optionally) a required reviewer
+    # can be enforced on the production deploy itself, in the repo settings, without editing this
+    # file. Also scopes the FTP/DB secrets to this job only.
+    environment:
+      name: production
+      url: https://usenexus.runasp.net
+
+    steps:
+      - name: Download publish artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: publish
+          path: ./publish
 
       # Nexus applies EF Core migrations on startup (see APPLY_MIGRATIONS_ON_STARTUP in
       # Program.cs) — no separate "dotnet ef database update" step here, so there's only
       # one place responsible for keeping the schema in sync.
+      #
+      # NOTE: migrations run unattended against production on the next app start. Take a database
+      # backup before merging a release that contains a destructive migration — see
+      # docs/backup-restore.md.
       - name: Inject production connection string
         run: |
           jq --arg cs "${{ secrets.PROD_SQL_CONNECTION_STRING }}" \
@@ -46,10 +109,14 @@ jobs:
              publish/appsettings.Production.json > publish/appsettings.Production.json.tmp
           mv publish/appsettings.Production.json.tmp publish/appsettings.Production.json
 
+      # --ssl-reqd aborts rather than silently downgrading if the server will not negotiate TLS.
+      # Plain FTP sent the credentials AND appsettings.Production.json — which by this point
+      # contains the live database connection string and the Brevo SMTP key — in cleartext over
+      # the public internet.
       - name: Take app offline (release IIS file locks)
         run: |
           echo "App temporarily offline for deployment." > app_offline.htm
-          curl --ftp-pasv -T app_offline.htm --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" "ftp://${{ secrets.FTP_SERVER }}/wwwroot/app_offline.htm"
+          curl --ssl-reqd --ftp-pasv -T app_offline.htm --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" "ftp://${{ secrets.FTP_SERVER }}/wwwroot/app_offline.htm"
 
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -57,6 +124,9 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          # Explicit FTPS (AUTH TLS on the standard port). Without this the action defaults to
+          # plain "ftp" and the entire deployment travels unencrypted.
+          protocol: ftps
           local-dir: ./publish/
           server-dir: /wwwroot/
           # Uploaded task/chat attachments live on the server under App_Data/uploads —
@@ -66,5 +136,8 @@ jobs:
             **/App_Data/uploads/**
 
       - name: Bring app back online
+        # Runs even if the deploy step failed: leaving app_offline.htm behind would keep the site
+        # down indefinitely on a partial failure.
+        if: always()
         run: |
-          curl --ftp-pasv --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" -Q "DELE /wwwroot/app_offline.htm" "ftp://${{ secrets.FTP_SERVER }}/"
+          curl --ssl-reqd --ftp-pasv --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" -Q "DELE /wwwroot/app_offline.htm" "ftp://${{ secrets.FTP_SERVER }}/"

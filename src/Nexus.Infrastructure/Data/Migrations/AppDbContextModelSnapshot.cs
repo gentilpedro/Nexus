@@ -484,7 +484,8 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("ContentHtml")
-                        .HasColumnType("text");
+                        .HasMaxLength(1000000)
+                        .HasColumnType("character varying(1000000)");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -493,7 +494,8 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("GridDataJson")
-                        .HasColumnType("text");
+                        .HasMaxLength(500000)
+                        .HasColumnType("character varying(500000)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -586,6 +588,8 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
 
                     b.HasIndex("WorkItemId");
 
@@ -796,7 +800,8 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text");
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
 
                     b.Property<DateTime?>("DueDateUtc")
                         .HasColumnType("timestamp with time zone");
@@ -844,6 +849,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("AssigneeId");
 
                     b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DueDateUtc")
+                        .HasFilter("\"DueDateUtc\" IS NOT NULL");
 
                     b.HasIndex("ParentEpicId");
 

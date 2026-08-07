@@ -19,13 +19,16 @@ public enum InviteAcceptResult
 public class WorkspaceInviteService(
     IDbContextFactory<AppDbContext> dbFactory,
     BrevoMailer mailer,
-    NavigationManager navigationManager)
+    PublicUrlBuilder publicUrl)
 {
     private static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(7);
 
     public async Task NotifyAddedAsync(string toEmail, string workspaceName, Guid workspaceId)
     {
-        var workspaceUrl = navigationManager.ToAbsoluteUri($"/workspaces/{workspaceId}").ToString();
+        // PublicUrlBuilder, not NavigationManager.ToAbsoluteUri — these URLs are e-mailed, so
+        // deriving them from the request's Host header would let an attacker point them at a
+        // domain they control. See PublicUrlBuilder.
+        var workspaceUrl = publicUrl.BuildUrl($"workspaces/{workspaceId}", new Dictionary<string, object?>());
         // Workspace name is user-controlled — encode before it goes into an HTML email body.
         var safeName = System.Net.WebUtility.HtmlEncode(workspaceName);
         await mailer.SendAsync(
@@ -54,7 +57,7 @@ public class WorkspaceInviteService(
             await db.SaveChangesAsync();
         }
 
-        var acceptUrl = navigationManager.ToAbsoluteUri($"/convite/{token}").ToString();
+        var acceptUrl = publicUrl.BuildUrl($"convite/{token}", new Dictionary<string, object?>());
         // Workspace name is user-controlled — encode before it goes into an HTML email body.
         var safeName = System.Net.WebUtility.HtmlEncode(workspaceName);
         return await mailer.SendAsync(

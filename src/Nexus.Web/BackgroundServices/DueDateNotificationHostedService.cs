@@ -11,6 +11,16 @@ namespace Nexus.Web.BackgroundServices;
 /// at most one DueDateApproaching notification ever (not per day), so repeated checks are
 /// harmless — same "write once, safe to re-run" shape as SprintSnapshotHostedService.
 /// </summary>
+/// <remarks>
+/// DEPLOYMENT LIMITATION: this runs in-process. On the current IIS shared host the application
+/// pool is recycled and idled out when there is no traffic, which stops this service — due-date
+/// notifications are only sent while someone happens to be using the app, and the hourly cadence
+/// is not guaranteed. The same applies to <see cref="DataRetentionHostedService"/>, where a
+/// missed pass means LGPD retention limits are not enforced on schedule. Making this reliable
+/// means either an always-on host (`Application Initialization` / `AlwaysRunning` start mode) or
+/// moving these passes to an external scheduler that calls in. Tracked as M13 in the
+/// pre-production audit.
+/// </remarks>
 public class DueDateNotificationHostedService(
     IDbContextFactory<AppDbContext> dbFactory,
     BrevoMailer mailer,
