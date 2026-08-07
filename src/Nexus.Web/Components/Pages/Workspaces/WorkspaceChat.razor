@@ -11,6 +11,8 @@
 @implements IDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthorizationService AuthorizationService
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
+@inject CircuitActionRateLimiter ChatRateLimiter
 @inject NavigationContextService NavContext
 @inject WorkspaceChatBroadcaster Broadcaster
 @inject AttachmentStorageService Storage
@@ -563,6 +565,26 @@
             return;
         }
 
+        // Membership is re-checked here, not just in OnParametersSetAsync. This circuit can stay
+        // open for hours; without this, someone removed from the workspace keeps posting to its
+        // chat until they happen to navigate. See WorkspaceAccessGuard.
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member))
+        {
+            sendError = "Você não tem mais acesso a este workspace.";
+            notFound = true;
+            return;
+        }
+
+        // Nothing else throttles this path: the HTTP rate limiter only sees discrete requests, and
+        // sends travel over the persistent circuit. Each message also writes one Notification row
+        // per workspace member, so an unthrottled loop is a cheap way to flood the database.
+        if (currentUserId is not null
+            && !ChatRateLimiter.TryAcquire($"chat-send:{currentUserId}", permitLimit: 20, window: TimeSpan.FromMinutes(1)))
+        {
+            sendError = "Você está enviando mensagens rápido demais. Aguarde alguns segundos.";
+            return;
+        }
+
         isSending = true;
         sendError = null;
         var savedStoragePaths = new List<string>();
@@ -647,9 +669,16 @@
 
                     var attachmentId = Guid.NewGuid();
                     string storagePath;
-                    await using (var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes))
+                    try
                     {
-                        storagePath = await Storage.SaveAsync(message.Id, attachmentId, file.Name, stream);
+                        await using var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes);
+                        storagePath = await Storage.SaveAsync(message.Id, attachmentId, file.Name, stream, file.ContentType);
+                    }
+                    catch (InvalidDataException)
+                    {
+                        // File's actual bytes contradict the content type the browser reported.
+                        sendError = $"\"{file.Name}\" não corresponde ao tipo de arquivo informado e não foi enviado.";
+                        continue;
                     }
                     savedStoragePaths.Add(storagePath);
 

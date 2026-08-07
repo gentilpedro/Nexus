@@ -22,12 +22,21 @@
     <PackageReference Include="MailKit" Version="4.17.0" />
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" PrivateAssets="all" />
+    <!-- Backs the /health/ready endpoint's database probe (AddDbContextCheck). -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Nexus.Domain\Nexus.Domain.csproj" />
     <ProjectReference Include="..\Nexus.Infrastructure\Nexus.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- IdentityRedirectManager (and its open-redirect guard) is internal by design; exposed to
+         the test project rather than made public so the fix can be pinned by tests without
+         widening the app's public surface. -->
+    <InternalsVisibleTo Include="Nexus.Web.Tests" />
   </ItemGroup>
 
 </Project>

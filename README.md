@@ -18,7 +18,14 @@ e ajuste a senha se quiser. Suba o app localmente (`docker compose up db
 > Database=Nexus;Username=postgres;Password=<a mesma do seu .env>"
 > --project src/Nexus.Web` primeiro.
 
-**Senha de todas as contas de demonstração:** `Demo@2026`
+**Senha das contas de demonstração:** não versionada. Defina a sua ao criar os
+usuários locais (`dotnet user-secrets`, ou direto pela tela de cadastro) e
+guarde-a fora do repositório.
+
+> A senha de demonstração ficava escrita aqui em texto claro. Mesmo valendo só
+> para o banco local, uma senha versionada tende a ser reaproveitada — e este
+> arquivo também identifica uma conta real. A política de senha exige no mínimo
+> 10 caracteres com maiúscula, minúscula, dígito e símbolo.
 
 > Essas contas existem só no banco de desenvolvimento local — não fazem
 > parte de nenhuma migration, então não aparecem automaticamente em um

@@ -12,6 +12,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthorizationService AuthorizationService
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 @inject Nexus.Web.Services.AuditLogService AuditLog
 @inject WorkspaceInviteService InviteService
@@ -311,8 +312,32 @@
             .ToListAsync();
     }
 
+    // Re-checks that the current user still holds Admin in this workspace, at the moment of the
+    // write. Every mutation on this page authorized once in OnParametersSetAsync and never again,
+    // but the circuit stays alive for as long as the tab is open — long enough for an Owner to
+    // have demoted or removed this admin in the meantime. These are the most privileged
+    // operations in the product (changing roles, removing people), so a stale decision here is
+    // the most damaging kind. See WorkspaceAccessGuard.
+    private async Task<bool> StillAdminAsync()
+    {
+        if (await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin))
+        {
+            return true;
+        }
+
+        errorMessage = "Você não tem mais permissão de administrador neste workspace.";
+        canManage = false;
+        isSaving = false;
+        return false;
+    }
+
     private async Task HandleAddMember()
     {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
         isSaving = true;
         errorMessage = null;
         statusMessage = null;

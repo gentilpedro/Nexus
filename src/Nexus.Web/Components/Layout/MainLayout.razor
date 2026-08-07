@@ -18,7 +18,9 @@
         </AuthorizeView>
         <AuthorizeView>
             <Authorized>
-                <button type="button" class="topnav-icon-btn" title="Voltar" aria-label="Voltar" onclick="history.back()">
+                @* data-nexus-action instead of an inline onclick: blocked by script-src 'self'.
+                   Handled by the delegated listener in theme-interop.js. *@
+                <button type="button" class="topnav-icon-btn" title="Voltar" aria-label="Voltar" data-nexus-action="history-back">
                     <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
                 </button>
             </Authorized>

@@ -110,7 +110,13 @@
         if (!notification.IsRead)
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            await db.Notifications.Where(n => n.Id == notification.Id).ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRead, true));
+            // Scoped by UserId as well as Id. The notification here comes from an
+            // already-user-filtered list, so this is not currently exploitable — but an ownership
+            // check that lives only in the caller is one refactor away from being lost, and this
+            // is the statement that actually writes.
+            await db.Notifications
+                .Where(n => n.Id == notification.Id && n.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsRead, true));
             notification.IsRead = true;
             Badge.SetUnreadCount(notifications!.Count(n => !n.IsRead));
         }
