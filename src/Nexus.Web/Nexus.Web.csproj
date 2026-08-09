@@ -8,6 +8,21 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
+  <!-- Identificação da build, exposta em /version e no rodapé (ver Services/AppVersion.cs).
+
+       A CI passa -p:Version, -p:SourceRevisionId e -p:BuildTimestamp; o SDK junta os dois
+       primeiros em AssemblyInformationalVersion como "1.4.0+<sha>". Nenhum default é definido
+       aqui de propósito: uma build local fica sem esses valores e se identifica como
+       "0.0.0-local", em vez de se passar por uma release. -->
+  <ItemGroup>
+    <!-- Não existe atributo padrão para o horário da compilação, então vai como metadado. A
+         condição evita gravar um atributo vazio na build local — e, mais importante, evita que um
+         timestamp recalculado a cada avaliação do projeto invalide a build incremental. -->
+    <AssemblyMetadata Include="BuildTimestamp"
+                      Value="$(BuildTimestamp)"
+                      Condition="'$(BuildTimestamp)' != ''" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <!-- NOT overriding AngleSharp's transitive 0.17.1 here (GHSA-pgww-w46g-26qg, moderate

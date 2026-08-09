@@ -1,0 +1,9 @@
+# Scripts de shell sempre com fim de linha LF, independente do core.autocrlf de quem commitou.
+#
+# O desenvolvimento é em Windows e a CI roda em Linux. Um .sh que chegue ao runner com CRLF falha
+# com "bad interpreter: /bin/bash^M" — um erro que não acontece em nenhuma máquina local e só
+# aparece na pipeline.
+#
+# Escopo deliberadamente restrito aos .sh: um "* text=auto" abrangente renormalizaria o
+# repositório inteiro num commit gigante, sem necessidade.
+*.sh text eol=lf
