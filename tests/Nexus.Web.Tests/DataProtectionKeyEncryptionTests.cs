@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
@@ -20,10 +22,48 @@ namespace Nexus.Web.Tests;
 /// </remarks>
 public class DataProtectionKeyEncryptionTests
 {
+    private const string ConnectionString = "Host=localhost;Database=nexus_test;Username=u;Password=p";
+
     private static IConfiguration Config(params (string Key, string Value)[] values) =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(values.ToDictionary(v => v.Key, v => (string?)v.Value))
             .Build();
+
+    /// <summary>
+    /// A throwaway self-signed PKCS#12 on disk, so the certificate branch of the guard can be
+    /// exercised on any OS. The alternative — relying on the DPAPI branch — only works on a
+    /// Windows agent, and CI runs on ubuntu-latest.
+    /// </summary>
+    private sealed class TemporaryCertificate : IDisposable
+    {
+        public string PfxPath { get; }
+        public string Password => "nexus-test";
+
+        public TemporaryCertificate()
+        {
+            using var rsa = RSA.Create(2048);
+            var request = new CertificateRequest(
+                "CN=Nexus Data Protection Test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            using var certificate = request.CreateSelfSigned(
+                DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+
+            PfxPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"nexus-dp-test-{Guid.NewGuid():N}.pfx");
+            File.WriteAllBytes(PfxPath, certificate.Export(X509ContentType.Pkcs12, Password));
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                File.Delete(PfxPath);
+            }
+            catch (IOException)
+            {
+                // A leftover file in the temp directory is not worth failing a test over.
+            }
+        }
+    }
 
     /// <summary>
     /// Demonstrates the defect this fix addresses: calling PersistKeysToDbContext on its own —
@@ -46,16 +86,24 @@ public class DataProtectionKeyEncryptionTests
     }
 
     /// <summary>
-    /// The fix: AddInfrastructure must always end up with an encryptor configured. On this
-    /// (Windows) build agent that is the DPAPI branch; on Linux the certificate branch or the
-    /// explicit development opt-out applies.
+    /// The fix: given a certificate, AddInfrastructure ends up with an encryptor configured.
     /// </summary>
+    /// <remarks>
+    /// Deliberately exercises the certificate branch rather than DPAPI. DPAPI is Windows-only, so
+    /// a test that leaned on it passed locally and threw on the Linux CI agent — which is exactly
+    /// how this suite broke. The certificate branch is also the one a non-Windows deployment
+    /// would actually use.
+    /// </remarks>
     [Fact]
     public void AddInfrastructure_ConfiguresAKeyEncryptor()
     {
+        using var certificate = new TemporaryCertificate();
+
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddInfrastructure("Host=localhost;Database=nexus_test;Username=u;Password=p", Config());
+        services.AddInfrastructure(ConnectionString, Config(
+            ("DataProtection:CertificatePath", certificate.PfxPath),
+            ("DataProtection:CertificatePassword", certificate.Password)));
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<KeyManagementOptions>>().Value;
@@ -64,12 +112,36 @@ public class DataProtectionKeyEncryptionTests
         Assert.NotNull(options.XmlEncryptor);
     }
 
+    /// <summary>
+    /// The guard is a security control, so assert it actually fires. Off Windows, no certificate
+    /// and no opt-in must be refused outright; on Windows the DPAPI branch legitimately covers
+    /// the same case, so there is nothing to throw.
+    /// </summary>
+    [Fact]
+    public void NoCertificateAndNoOptIn_RefusesToStartWithoutDpapi()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var ex = Record.Exception(() => services.AddInfrastructure(ConnectionString, Config()));
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Null(ex);
+        }
+        else
+        {
+            Assert.IsType<InvalidOperationException>(ex);
+        }
+    }
+
     [Fact]
     public void AddInfrastructure_PinsTheApplicationName()
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddInfrastructure("Host=localhost;Database=nexus_test;Username=u;Password=p", Config());
+        services.AddInfrastructure(
+            ConnectionString, Config(("DataProtection:AllowUnprotectedKeys", "true")));
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<DataProtectionOptions>>().Value;
@@ -81,9 +153,8 @@ public class DataProtectionKeyEncryptionTests
     }
 
     /// <summary>
-    /// The development escape hatch must be explicit. This asserts the flag is read at all; the
-    /// throwing branch itself is only reachable on a non-Windows host with no certificate
-    /// configured, which this Windows agent cannot exercise.
+    /// The development escape hatch must be explicit: setting the flag is what turns the refusal
+    /// above into a successful (plaintext-keys) startup.
     /// </summary>
     [Fact]
     public void AllowUnprotectedKeys_IsAnExplicitOptIn()
@@ -92,7 +163,7 @@ public class DataProtectionKeyEncryptionTests
         services.AddLogging();
 
         var ex = Record.Exception(() => services.AddInfrastructure(
-            "Host=localhost;Database=nexus_test;Username=u;Password=p",
+            ConnectionString,
             Config(("DataProtection:AllowUnprotectedKeys", "true"))));
 
         Assert.Null(ex);
