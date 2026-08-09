@@ -11,13 +11,27 @@ namespace Nexus.Web.Tests;
 /// </summary>
 public class IdentityPolicyTests
 {
+    /// <summary>
+    /// These tests only care about <see cref="IdentityOptions"/>, but they have to go through
+    /// AddInfrastructure to get them, which also wires up Data Protection. That path refuses to
+    /// start when it would write an unencrypted key ring — on Linux (the CI agent) there is no
+    /// DPAPI to fall back to, so the opt-in has to be explicit or every test here throws.
+    /// </summary>
+    private static IConfiguration UnprotectedKeysConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DataProtection:AllowUnprotectedKeys"] = "true"
+            })
+            .Build();
+
     private static IdentityOptions Resolve()
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddInfrastructure(
             "Host=localhost;Database=nexus_test;Username=u;Password=p",
-            new ConfigurationBuilder().Build());
+            UnprotectedKeysConfig());
 
         using var provider = services.BuildServiceProvider();
         return provider.GetRequiredService<IOptions<IdentityOptions>>().Value;
@@ -72,7 +86,7 @@ public class IdentityPolicyTests
         services.AddLogging();
         services.AddInfrastructure(
             "Host=localhost;Database=nexus_test;Username=u;Password=p",
-            new ConfigurationBuilder().Build());
+            UnprotectedKeysConfig());
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
