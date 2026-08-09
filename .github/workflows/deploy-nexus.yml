@@ -4,13 +4,92 @@ on:
   push:
     branches:
       - main
+  # O quality gate abaixo só valia depois do merge: a workflow rodava exclusivamente em push na
+  # main, então um PR quebrado entrava e só ficava vermelho depois — foi exatamente o que
+  # aconteceu no PR #17. Com o gatilho de pull_request, verify roda antes do merge; o job de
+  # deploy é que fica restrito a push (veja o `if` nele).
+  pull_request:
+    branches:
+      - main
+
+# Token restrito por padrão. Só o job de release amplia para contents: write, que é o mínimo para
+# criar a tag e a release.
+permissions:
+  contents: read
+
+# Um push novo no mesmo PR torna a execução anterior irrelevante — cancelar economiza minutos de
+# runner. Nunca cancela execuções da main: interromper um deploy pela metade deixaria o
+# app_offline.htm no servidor e o site fora do ar.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decide o número da próxima versão a partir dos commits desde a última tag (Conventional
+  # Commits — veja .github/scripts/next-version.sh). Roda antes de tudo porque a versão precisa
+  # ser carimbada no binário que o verify compila, não aplicada depois.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+      previous_tag: ${{ steps.compute.outputs.previous_tag }}
+      bump: ${{ steps.compute.outputs.bump }}
+      has_changes: ${{ steps.compute.outputs.has_changes }}
+      build_timestamp: ${{ steps.compute.outputs.build_timestamp }}
+
+    steps:
+      # fetch-depth: 0 traz histórico e tags completos — sem isso não há como saber qual foi a
+      # última release nem quais commits vieram depois dela.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # A lógica de versionamento decide o número que vai para a tag e para produção. Se ela
+      # errar em silêncio o estrago só aparece depois de publicado, então é testada aqui, antes
+      # de ser usada.
+      - name: Testar os scripts de release
+        run: bash .github/scripts/test-release-scripts.sh
+
+      - name: Calcular a próxima versão
+        id: compute
+        run: |
+          bash .github/scripts/next-version.sh | tee -a "$GITHUB_OUTPUT"
+          echo "build_timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$GITHUB_OUTPUT"
+
+      # Deixa o resultado visível na página da execução — num PR, mostra qual versão aquele merge
+      # produziria.
+      - name: Resumo da versão
+        run: |
+          {
+            echo "### Versão desta build"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Versão | \`${{ steps.compute.outputs.version }}\` |"
+            echo "| Release anterior | \`${{ steps.compute.outputs.previous_tag || 'nenhuma' }}\` |"
+            echo "| Tipo de incremento | \`${{ steps.compute.outputs.bump }}\` |"
+            echo "| Commit | \`${GITHUB_SHA:0:7}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Quality gate. Everything that can reject a bad change runs here, before any job that can
   # touch production exists. Previously build/publish/deploy were a single job with no test or
   # vulnerability step at all, so any commit pushed to main shipped straight to users.
   verify:
+    needs: version
     runs-on: ubuntu-latest
+
+    # Carimba a identificação da build no assembly: o SDK junta Version e SourceRevisionId em
+    # AssemblyInformationalVersion ("1.4.0+<sha>") e BuildTimestamp vira um AssemblyMetadata.
+    # É isso que /version e o rodapé do app leem em tempo de execução.
+    #
+    # Passado em toda invocação do MSBuild abaixo, não só no publish: a análise estática
+    # recompila com --no-incremental e sobrescreveria os assemblies carimbados.
+    env:
+      VERSION_PROPS: >-
+        -p:Version=${{ needs.version.outputs.version }}
+        -p:SourceRevisionId=${{ github.sha }}
+        -p:BuildTimestamp=${{ needs.version.outputs.build_timestamp }}
 
     steps:
       - name: Checkout
@@ -27,7 +106,9 @@ jobs:
         run: dotnet restore Nexus.slnx
 
       - name: Build
-        run: dotnet build Nexus.slnx --configuration Release --no-restore
+        run: |
+          # shellcheck disable=SC2086  # VERSION_PROPS são vários argumentos: o split é proposital.
+          dotnet build Nexus.slnx --configuration Release --no-restore $VERSION_PROPS
 
       - name: Test
         run: dotnet test Nexus.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
@@ -58,10 +139,29 @@ jobs:
       # formatting has not drifted. Kept as a separate non-fatal report for whitespace so a
       # formatting nit never blocks a security fix, while real analyzer findings do.
       - name: Static analysis (analyzers as errors)
-        run: dotnet build Nexus.slnx --configuration Release --no-incremental /p:TreatWarningsAsErrors=true /p:WarningsNotAsErrors=NU1902
+        run: |
+          # shellcheck disable=SC2086  # VERSION_PROPS são vários argumentos: o split é proposital.
+          dotnet build Nexus.slnx --configuration Release --no-incremental $VERSION_PROPS /p:TreatWarningsAsErrors=true /p:WarningsNotAsErrors=NU1902
 
       - name: Publish
-        run: dotnet publish src/Nexus.Web/Nexus.Web.csproj -c Release -o publish --no-restore
+        run: |
+          # shellcheck disable=SC2086  # VERSION_PROPS são vários argumentos: o split é proposital.
+          dotnet publish src/Nexus.Web/Nexus.Web.csproj -c Release -o publish --no-restore $VERSION_PROPS
+
+      # Falha cedo e com mensagem clara se o carimbo não chegou ao binário. Sem esta conferência
+      # um erro nas propriedades do MSBuild passaria despercebido e o app publicado se
+      # identificaria como "0.0.0-local" em produção.
+      - name: Conferir a versão carimbada
+        run: |
+          expected="${{ needs.version.outputs.version }}"
+          # -a trata o .dll como texto: o valor do atributo fica em UTF-8 nos metadados do
+          # assembly. Evita depender de `strings` (binutils) estar instalado no runner.
+          found="$(grep -aoE "${expected}\+[0-9a-f]{40}" publish/Nexus.Web.dll | head -n 1 || true)"
+          if [ -z "$found" ]; then
+            echo "::error::O binário publicado não foi carimbado com a versão ${expected}."
+            exit 1
+          fi
+          echo "Versão carimbada: ${found}"
 
       - name: Upload publish artifact
         uses: actions/upload-artifact@v4
@@ -70,7 +170,10 @@ jobs:
           path: ./publish
 
   deploy:
-    needs: verify
+    needs: [version, verify]
+    # O gate acima roda em PR também; este job, não. Sem esta condição, abrir um PR publicaria em
+    # produção — e os secrets de FTP/banco ficariam expostos a qualquer execução de PR.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     # Bind to a GitHub Environment so branch restrictions and (optionally) a required reviewer
     # can be enforced on the production deploy itself, in the repo settings, without editing this
@@ -141,3 +244,43 @@ jobs:
         if: always()
         run: |
           curl --ssl-reqd --ftp-pasv --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" -Q "DELE /wwwroot/app_offline.htm" "ftp://${{ secrets.FTP_SERVER }}/"
+
+  # Cria a tag e a GitHub Release com as notas do que mudou.
+  #
+  # Depois do deploy, de propósito: a tag passa a significar "esta versão está no ar", não "esta
+  # versão compilou". Se o deploy falhar, nenhuma tag é criada e o mesmo número é recalculado na
+  # próxima tentativa.
+  release:
+    needs: [version, deploy]
+    if: github.event_name == 'push' && needs.version.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      # Necessário para criar a tag e publicar a release.
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gerar as notas da release
+        env:
+          PREVIOUS_TAG: ${{ needs.version.outputs.previous_tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          bash .github/scripts/release-notes.sh "$PREVIOUS_TAG" "$VERSION" "$GITHUB_REPOSITORY" \
+            > release-notes.md
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      # gh release create cria a tag em --target junto com a release, então não há push de tag
+      # separado que pudesse divergir do que foi publicado.
+      - name: Publicar a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file release-notes.md \
+            --target "$GITHUB_SHA"

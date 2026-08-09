@@ -113,6 +113,10 @@
 
 <footer class="app-footer" style="text-align:center;padding:1rem;font-size:0.8rem;color:var(--color-text-muted);">
     <a href="/privacidade" data-enhance-nav="false">Política de Privacidade</a>
+    <span aria-hidden="true"> · </span>
+    @* O title carrega o commit e a data da build: basta passar o mouse para saber exatamente o
+       que está no ar, sem abrir /version. *@
+    <span title="@AppVersion.Current.DetailedLabel">Nexus @AppVersion.Current.Version</span>
 </footer>
 
 <div id="blazor-error-ui" data-nosnippet>
