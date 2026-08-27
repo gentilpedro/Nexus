@@ -117,6 +117,10 @@ builder.Services.AddHealthChecks()
         tags: ["ready"]);
 
 builder.Services.Configure<BrevoOptions>(builder.Configuration.GetSection("Brevo"));
+// Named client rather than a typed one: BrevoMailer is a singleton, and a singleton typed
+// client pins one HttpMessageHandler for the life of the process, so it never picks up DNS
+// changes. The factory rotates handlers underneath.
+builder.Services.AddHttpClient(BrevoMailer.HttpClientName);
 builder.Services.AddSingleton<BrevoMailer>();
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, BrevoEmailSender>();
 builder.Services.AddScoped<PublicUrlBuilder>();
