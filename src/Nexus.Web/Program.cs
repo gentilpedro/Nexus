@@ -319,6 +319,20 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
     Predicate = check => check.Tags.Contains("ready")
 }).AllowAnonymous().RequireRateLimiting("health");
 
+// Qual build está no ar. Responde a pergunta "o deploy realmente subiu?" sem depender de olhar o
+// log do Actions, e serve de âncora ao investigar um bug: o commit exato que gerou este binário.
+//
+// Anônimo e sem rate limit, ao contrário de /health/ready: os valores são constantes lidas de
+// atributos do assembly na inicialização, então a resposta é mais barata que servir o favicon —
+// não há pool de conexões nem nada a proteger. A versão também já aparece no rodapé de qualquer
+// página pública, então o endpoint não revela nada novo.
+app.MapGet("/version", () => Results.Json(new
+{
+    version = AppVersion.Current.Version,
+    commit = AppVersion.Current.Commit,
+    builtAt = AppVersion.Current.BuiltAt
+})).AllowAnonymous();
+
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
 
