@@ -1,6 +1,9 @@
 name: FTPS chain check (temporary)
 
 on:
+  push:
+    branches:
+      - fix/deploy-ftps-cadeia
   workflow_dispatch:
 
 jobs:
