@@ -1,67 +1,103 @@
-using MailKit.Net.Smtp;
-using MailKit.Security;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
-using MimeKit;
 
 namespace Nexus.Web.Services;
 
 public class BrevoOptions
 {
-    public string Host { get; set; } = "smtp-relay.brevo.com";
-    public int Port { get; set; } = 587;
-    public string Login { get; set; } = "";
-    public string SmtpKey { get; set; } = "";
+    // Brevo's transactional-email endpoint. Configurable so a staging environment can point
+    // somewhere else without a code change.
+    public string ApiUrl { get; set; } = "https://api.brevo.com/v3/smtp/email";
+
+    // Brevo API key (starts with "xkeysib-"). NOT the SMTP key — they are different credentials
+    // issued from different pages of the Brevo dashboard.
+    public string ApiKey { get; set; } = "";
+
     public string SenderEmail { get; set; } = "";
     public string SenderName { get; set; } = "Nexus";
 }
 
-// Raw SMTP send through Brevo's relay, shared by BrevoEmailSender (Identity's confirmation/reset
-// emails) and WorkspaceInviteService (invite/added-to-workspace emails) — one place owning the
-// SmtpClient lifecycle and the "an email hiccup shouldn't break the page that triggered it" policy.
-public class BrevoMailer(IOptions<BrevoOptions> options, ILogger<BrevoMailer> logger)
+// Transactional e-mail through Brevo's HTTP API, shared by BrevoEmailSender (Identity's
+// confirmation/reset emails), WorkspaceInviteService and DueDateNotificationHostedService — one
+// place owning the "an email hiccup shouldn't break the page that triggered it" policy.
+//
+// This used to talk SMTP to smtp-relay.brevo.com:587 via MailKit. It sends over HTTPS instead
+// because the production host (MonsterASP, free plan) does not allow outbound SMTP from hosted
+// applications — "Outgoing SMTP for sending emails from hosted applications is only available for
+// Premium plans". Every send failed there while working from any other machine, so nothing ever
+// reached a user: invites, and also the account-confirmation e-mail that registration depends on.
+// Port 443 carries no such restriction.
+public class BrevoMailer(IOptions<BrevoOptions> options, IHttpClientFactory httpClientFactory, ILogger<BrevoMailer> logger)
 {
-    private readonly BrevoOptions options = options.Value;
+    public const string HttpClientName = "brevo";
 
-    // Wall-clock ceiling for one send attempt, covering connect + authenticate + send + quit.
+    // Wall-clock ceiling for one send attempt.
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(15);
 
-    // virtual so tests can substitute a recording double: the real implementation opens an SMTP
-    // connection, which no unit test should be doing.
+    private readonly BrevoOptions options = options.Value;
+
+    // The request body Brevo expects. Property names are lowerCamelCase on the wire.
+    private sealed record Sender([property: JsonPropertyName("name")] string Name,
+                                 [property: JsonPropertyName("email")] string Email);
+
+    private sealed record Recipient([property: JsonPropertyName("email")] string Email);
+
+    private sealed record SendRequest(
+        [property: JsonPropertyName("sender")] Sender Sender,
+        [property: JsonPropertyName("to")] Recipient[] To,
+        [property: JsonPropertyName("subject")] string Subject,
+        [property: JsonPropertyName("htmlContent")] string HtmlContent);
+
+    // virtual so tests can substitute a recording double: the real implementation makes a network
+    // call, which no unit test should be doing.
     public virtual async Task<bool> SendAsync(string toEmail, string subject, string htmlBody)
     {
-        // No relay configured (local dev, tests): fail fast instead of spending the full 15s
-        // timeout dialling a host we have no credentials for. Callers already treat false as
-        // "recorded but not delivered" and tell the user to reach the person another way.
-        if (string.IsNullOrWhiteSpace(options.SmtpKey) || string.IsNullOrWhiteSpace(options.SenderEmail))
+        // Not configured (local dev, tests): fail fast instead of spending the full timeout on a
+        // call we know will be rejected. Callers already treat false as "recorded but not
+        // delivered" and tell the user to reach the person another way.
+        if (string.IsNullOrWhiteSpace(options.ApiKey) || string.IsNullOrWhiteSpace(options.SenderEmail))
         {
-            logger.LogWarning("Skipped sending email to {ToEmail}: Brevo SMTP is not configured.", toEmail);
+            logger.LogWarning("Skipped sending email to {ToEmail}: Brevo is not configured.", toEmail);
             return false;
         }
 
-        var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(options.SenderName, options.SenderEmail));
-        message.To.Add(MailboxAddress.Parse(toEmail));
-        message.Subject = subject;
-        message.Body = new BodyBuilder { HtmlBody = htmlBody }.ToMessageBody();
+        var payload = new SendRequest(
+            new Sender(options.SenderName, options.SenderEmail),
+            [new Recipient(toEmail)],
+            subject,
+            htmlBody);
 
         try
         {
-            using var client = new SmtpClient();
-
-            // Bounded end to end. MailKit's default Timeout is 2 minutes and applies per socket
-            // operation, so an unresponsive relay could stall a caller far longer than that —
-            // and several callers await this inline on a user-facing path (sending an invite,
-            // the chat/notification flows), meaning a hung SMTP connection blocks the user's
-            // interaction, not just the e-mail. The CancellationTokenSource covers the whole
-            // connect/authenticate/send sequence, which the per-operation timeout does not.
-            client.Timeout = (int)SendTimeout.TotalMilliseconds;
             using var cts = new CancellationTokenSource(SendTimeout);
+            var client = httpClientFactory.CreateClient(HttpClientName);
 
-            await client.ConnectAsync(options.Host, options.Port, SecureSocketOptions.StartTls, cts.Token);
-            await client.AuthenticateAsync(options.Login, options.SmtpKey, cts.Token);
-            await client.SendAsync(message, cts.Token);
-            await client.DisconnectAsync(quit: true, cts.Token);
-            return true;
+            using var request = new HttpRequestMessage(HttpMethod.Post, options.ApiUrl)
+            {
+                Content = JsonContent.Create(payload),
+            };
+            // Brevo authenticates on its own header, not Authorization.
+            request.Headers.Add("api-key", options.ApiKey);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            using var response = await client.SendAsync(request, cts.Token);
+            if (response.IsSuccessStatusCode)
+            {
+                return true;
+            }
+
+            // Brevo answers a rejection with a JSON body naming the reason (unverified sender,
+            // quota exhausted, bad key). Worth logging verbatim — it is the difference between
+            // "fix the account" and "fix the code" — but truncated, and it never echoes the key.
+            var body = await response.Content.ReadAsStringAsync(cts.Token);
+            logger.LogError(
+                "Brevo rejected the email to {ToEmail}: HTTP {StatusCode}. {Body}",
+                toEmail,
+                (int)response.StatusCode,
+                body.Length > 500 ? body[..500] : body);
+            return false;
         }
         catch (OperationCanceledException)
         {

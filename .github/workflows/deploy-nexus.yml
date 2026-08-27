@@ -102,12 +102,22 @@ jobs:
              publish/appsettings.Production.json > publish/appsettings.Production.json.tmp
           mv publish/appsettings.Production.json.tmp publish/appsettings.Production.json
 
-      - name: Inject Brevo SMTP credentials
+      # BREVO_API_KEY is the HTTP API key ("xkeysib-..."), not the old SMTP key. The mailer moved
+      # off SMTP because this host blocks outbound SMTP on the free plan — see BrevoMailer.cs.
+      - name: Inject Brevo credentials
+        env:
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
         run: |
-          jq --arg login "${{ secrets.BREVO_SMTP_LOGIN }}" \
-             --arg key "${{ secrets.BREVO_SMTP_KEY }}" \
-             --arg sender "${{ secrets.BREVO_SENDER_EMAIL }}" \
-             '.Brevo.Login = $login | .Brevo.SmtpKey = $key | .Brevo.SenderEmail = $sender' \
+          # Shipping without these produces an app that cannot send e-mail and says nothing about
+          # it — which is precisely how the SMTP outage stayed invisible for weeks. Registration
+          # depends on the confirmation e-mail, so this is a broken deploy, not a degraded one.
+          if [ -z "$BREVO_API_KEY" ] || [ -z "$BREVO_SENDER_EMAIL" ]; then
+            echo "::error::BREVO_API_KEY or BREVO_SENDER_EMAIL is not set. Account confirmation and workspace invites cannot work without them."
+            exit 1
+          fi
+          jq --arg key "$BREVO_API_KEY" --arg sender "$BREVO_SENDER_EMAIL" \
+             '.Brevo.ApiKey = $key | .Brevo.SenderEmail = $sender' \
              publish/appsettings.Production.json > publish/appsettings.Production.json.tmp
           mv publish/appsettings.Production.json.tmp publish/appsettings.Production.json
 
