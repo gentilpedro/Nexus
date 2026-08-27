@@ -192,45 +192,15 @@
 
         db.Workspaces.Add(workspace);
 
-        var addedDirectlyEmails = new List<string>();
-        var newInviteEmails = new List<string>();
-
-        // One query for all invited addresses instead of one per address. The loop below used to
-        // issue a separate FirstOrDefaultAsync per e-mail — a round trip each, on the critical
-        // path of creating a workspace.
-        var normalizedEmails = pendingInvites
-            .Select(e => e.Trim().ToUpperInvariant())
-            .Where(e => e.Length > 0)
-            .Distinct()
+        // Everyone listed here gets a pending invite, whether or not the address already has an
+        // account — the only member created up front is the owner above. WorkspaceInviteService
+        // writes the WorkspaceMember row only when the person accepts.
+        var currentUserEmail = authState.User.FindFirstValue(ClaimTypes.Email);
+        var inviteEmails = pendingInvites
+            .Select(e => e.Trim())
+            .Where(e => e.Length > 0 && !string.Equals(e, currentUserEmail, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-
-        var existingUsers = await db.Users
-            .Where(u => u.NormalizedEmail != null && normalizedEmails.Contains(u.NormalizedEmail))
-            .ToDictionaryAsync(u => u.NormalizedEmail!, u => u);
-
-        foreach (var email in pendingInvites)
-        {
-            var normalized = email.Trim().ToUpperInvariant();
-            if (!existingUsers.TryGetValue(normalized, out var user))
-            {
-                newInviteEmails.Add(email.Trim());
-                continue;
-            }
-            if (user.Id == currentUserId)
-            {
-                continue;
-            }
-
-            workspace.Members.Add(new WorkspaceMember
-            {
-                Id = Guid.NewGuid(),
-                WorkspaceId = workspace.Id,
-                UserId = user.Id,
-                Role = WorkspaceRole.Member,
-                JoinedAtUtc = DateTime.UtcNow
-            });
-            addedDirectlyEmails.Add(user.Email!);
-        }
 
         try
         {
@@ -248,11 +218,7 @@
                 await db.SaveChangesAsync();
             }
 
-            foreach (var email in addedDirectlyEmails)
-            {
-                await InviteService.NotifyAddedAsync(email, workspace.Name, workspace.Id);
-            }
-            foreach (var email in newInviteEmails)
+            foreach (var email in inviteEmails)
             {
                 await InviteService.CreateAndSendAsync(workspace.Id, workspace.Name, email, WorkspaceRole.Member, currentUserId);
             }

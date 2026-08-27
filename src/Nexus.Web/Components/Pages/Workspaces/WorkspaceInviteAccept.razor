@@ -39,10 +39,28 @@
         <div class="card">
             <h2>Convite para workspace</h2>
             <p>Você foi convidado para participar do workspace <strong>@invite.Workspace.Name</strong> no Nexus.</p>
-            <div class="form-actions">
-                <a class="btn" href="@LoginUrl" data-enhance-nav="false">Já tenho conta — Entrar</a>
-                <a class="btn btn-secondary" href="@RegisterUrl" data-enhance-nav="false">Criar conta</a>
-            </div>
+            <p class="topnav-user">Convite enviado para <strong>@invite.Email</strong>.</p>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+
+            @if (isAuthenticated)
+            {
+                <p>Você só entra no workspace depois de aceitar este convite.</p>
+                <div class="form-actions">
+                    <button type="button" class="btn" disabled="@isAccepting" @onclick="HandleAccept">Aceitar convite</button>
+                    <a class="btn btn-secondary" href="/workspaces">Agora não</a>
+                </div>
+            }
+            else
+            {
+                <div class="form-actions">
+                    <a class="btn btn-secondary" href="@LoginUrl" data-enhance-nav="false">Já tenho conta — Entrar</a>
+                    <a class="btn" href="@RegisterUrl" data-enhance-nav="false">Criar conta</a>
+                </div>
+            }
         </div>
     }
 </div>
@@ -56,10 +74,15 @@
 
     private WorkspaceInvite? invite;
     private string? emailMismatch;
+    private string? errorMessage;
+    private bool isAuthenticated;
+    private bool isAccepting;
 
     private string ReturnUrl => $"/convite/{Token}";
     private string LoginUrl => NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl });
-    private string RegisterUrl => NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl });
+    // InviteToken (not the e-mail itself) so Register resolves the address server-side: a plain
+    // ?email= parameter would let anyone sign up under an address they were never invited to.
+    private string RegisterUrl => NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl, ["InviteToken"] = Token });
 
     protected override async Task OnInitializedAsync()
     {
@@ -75,17 +98,49 @@
             return;
         }
 
+        isAuthenticated = true;
+
+        // Being logged in is not consent — the membership is only created by HandleAccept below.
+        // The mismatch check runs on load anyway so the person is told immediately that they are
+        // signed in as the wrong account, instead of only after clicking Accept.
+        var userEmail = authState.User.FindFirstValue(ClaimTypes.Email) ?? "";
+        if (!string.Equals(invite.Email, userEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            emailMismatch = userEmail;
+        }
+    }
+
+    private async Task HandleAccept()
+    {
+        if (isAccepting)
+        {
+            return;
+        }
+
+        isAccepting = true;
+        errorMessage = null;
+
+        var authState = await AuthStateTask!;
         var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var userEmail = authState.User.FindFirstValue(ClaimTypes.Email) ?? "";
 
         var result = await InviteService.AcceptAsync(Token, userId, userEmail);
-        if (result == InviteAcceptResult.Accepted)
+        switch (result)
         {
-            NavigationManager.NavigateTo($"/workspaces/{invite.WorkspaceId}");
+            case InviteAcceptResult.Accepted:
+                NavigationManager.NavigateTo($"/workspaces/{invite!.WorkspaceId}");
+                return;
+            case InviteAcceptResult.EmailMismatch:
+                emailMismatch = userEmail;
+                break;
+            case InviteAcceptResult.Expired:
+                errorMessage = "Este convite não é mais válido. Peça um novo para quem te convidou.";
+                break;
+            case InviteAcceptResult.NotFound:
+                errorMessage = "Convite não encontrado.";
+                break;
         }
-        else if (result == InviteAcceptResult.EmailMismatch)
-        {
-            emailMismatch = userEmail;
-        }
+
+        isAccepting = false;
     }
 }

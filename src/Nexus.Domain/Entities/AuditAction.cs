@@ -6,4 +6,6 @@ public enum AuditAction
     PersonalDataAnonymized,
     WorkspaceMemberRoleChanged,
     WorkspaceMemberRemoved,
+    WorkspaceInviteSent,
+    WorkspaceInviteCanceled,
 }
