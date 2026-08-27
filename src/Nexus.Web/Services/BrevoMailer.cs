@@ -25,8 +25,19 @@ public class BrevoMailer(IOptions<BrevoOptions> options, ILogger<BrevoMailer> lo
     // Wall-clock ceiling for one send attempt, covering connect + authenticate + send + quit.
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(15);
 
-    public async Task<bool> SendAsync(string toEmail, string subject, string htmlBody)
+    // virtual so tests can substitute a recording double: the real implementation opens an SMTP
+    // connection, which no unit test should be doing.
+    public virtual async Task<bool> SendAsync(string toEmail, string subject, string htmlBody)
     {
+        // No relay configured (local dev, tests): fail fast instead of spending the full 15s
+        // timeout dialling a host we have no credentials for. Callers already treat false as
+        // "recorded but not delivered" and tell the user to reach the person another way.
+        if (string.IsNullOrWhiteSpace(options.SmtpKey) || string.IsNullOrWhiteSpace(options.SenderEmail))
+        {
+            logger.LogWarning("Skipped sending email to {ToEmail}: Brevo SMTP is not configured.", toEmail);
+            return false;
+        }
+
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(options.SenderName, options.SenderEmail));
         message.To.Add(MailboxAddress.Parse(toEmail));

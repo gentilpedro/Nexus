@@ -75,6 +75,15 @@
                         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>
                     </span>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-card-body">
+                        <span class="stat-card-label">Convites pendentes</span>
+                        <span class="stat-card-value">@(pendingInvites?.Count ?? 0)</span>
+                    </div>
+                    <span class="stat-card-icon">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" /><polyline points="4 6 12 13 20 6" /></svg>
+                    </span>
+                </div>
             </div>
         }
 
@@ -138,6 +147,45 @@
                         </tr>
                     </thead>
                     <tbody>
+                        @foreach (var inv in FilteredPendingInvites)
+                        {
+                            var expired = inv.ExpiresAtUtc <= DateTime.UtcNow;
+                            <tr>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                                        <span class="chat-message-avatar">@Initial(null, inv.Email)</span>
+                                        <div>
+                                            <div style="font-weight:600;">@inv.Email</div>
+                                            <div class="topnav-user">Aguardando aceite do convite</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="tab-count">@inv.Role.ToDisplayLabel()</span></td>
+                                <td>
+                                    <span style="display:inline-flex;align-items:center;gap:0.4rem;">
+                                        <span style="width:0.5rem;height:0.5rem;border-radius:50%;background:@(expired ? "var(--color-danger)" : "var(--color-warning)");display:inline-block;"></span>
+                                        @(expired ? "Convite expirado" : "Pendente")
+                                    </span>
+                                </td>
+                                <td>Convidado em @inv.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                @if (canManage)
+                                {
+                                    <td style="position:relative;">
+                                        <div class="board-column-menu">
+                                            <button type="button" class="board-column-menu-btn" @onclick="() => openInviteMenuId = openInviteMenuId == inv.Id ? null : inv.Id" aria-label="Ações do convite">⋯</button>
+                                            @if (openInviteMenuId == inv.Id)
+                                            {
+                                                <div class="board-column-menu-backdrop" @onclick="() => openInviteMenuId = null"></div>
+                                                <div class="board-column-menu-dropdown">
+                                                    <button type="button" @onclick="() => HandleResendInvite(inv)">Reenviar convite</button>
+                                                    <button type="button" @onclick="() => HandleCancelInvite(inv.Id)">Cancelar convite</button>
+                                                </div>
+                                            }
+                                        </div>
+                                    </td>
+                                }
+                            </tr>
+                        }
                         @foreach (var member in PagedMembers)
                         {
                             <tr>
@@ -233,7 +281,9 @@
     private string memberFilter = "";
     private int currentPage = 1;
     private Guid? openMenuId;
+    private Guid? openInviteMenuId;
     private string? currentUserId;
+    private List<WorkspaceInvite>? pendingInvites;
 
     private int OwnerCount => members?.Count(m => m.Role == WorkspaceRole.Owner) ?? 0;
 
@@ -242,6 +292,15 @@
         : members.Where(m => string.IsNullOrWhiteSpace(memberFilter)
             || (m.User.DisplayName?.Contains(memberFilter, StringComparison.OrdinalIgnoreCase) ?? false)
             || (m.User.Email?.Contains(memberFilter, StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+
+    // Not paginated alongside members: pending invites are a short, transient list, and burying
+    // them behind page 2 is exactly how an admin ends up re-inviting someone who was already
+    // invited. They stay pinned to the top of the table.
+    private List<WorkspaceInvite> FilteredPendingInvites => pendingInvites is null
+        ? []
+        : pendingInvites.Where(i => string.IsNullOrWhiteSpace(memberFilter)
+            || i.Email.Contains(memberFilter, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
     private int totalPages => Math.Max(1, (int)Math.Ceiling(FilteredMembers.Count / (double)PageSize));
@@ -267,6 +326,7 @@
         notFound = false;
         workspace = null;
         members = null;
+        pendingInvites = null;
         errorMessage = null;
 
         var authState = await AuthStateTask!;
@@ -303,13 +363,17 @@
 
     private async Task LoadMembersAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        members = await db.WorkspaceMembers
-            .Where(m => m.WorkspaceId == WorkspaceId)
-            .Include(m => m.User)
-            .OrderBy(m => m.Role)
-            .ThenBy(m => m.User.DisplayName)
-            .ToListAsync();
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            members = await db.WorkspaceMembers
+                .Where(m => m.WorkspaceId == WorkspaceId)
+                .Include(m => m.User)
+                .OrderBy(m => m.Role)
+                .ThenBy(m => m.User.DisplayName)
+                .ToListAsync();
+        }
+
+        pendingInvites = await InviteService.GetPendingAsync(WorkspaceId);
     }
 
     // Re-checks that the current user still holds Admin in this workspace, at the moment of the
@@ -343,50 +407,75 @@
         statusMessage = null;
 
         var email = addModel.Email.Trim();
-        var normalizedEmail = email.ToUpperInvariant();
 
-        await using (var db = await DbFactory.CreateDbContextAsync())
+        // Nobody is added straight to the workspace, not even an address that already has an
+        // account: the invite stays pending until the person accepts it at /convite/{token}.
+        var outcome = await InviteService.CreateAndSendAsync(WorkspaceId, workspace!.Name, email, addModel.Role, currentUserId);
+
+        if (outcome.Status == InviteSendStatus.AlreadyMember)
         {
-            var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail);
-            if (user is null)
-            {
-                // No account yet — send an invite email instead of adding a member row now;
-                // WorkspaceInviteAccept.razor adds the row once they register/log in.
-                var sent = await InviteService.CreateAndSendAsync(WorkspaceId, workspace!.Name, email, addModel.Role, currentUserId);
-                statusMessage = sent
-                    ? $"Convite enviado para {email}."
-                    : $"Convite criado para {email}, mas não conseguimos enviar o e-mail — avise a pessoa por outro canal.";
-                addModel.Email = "";
-                addModel.Role = WorkspaceRole.Member;
-                isSaving = false;
-                showAddForm = false;
-                return;
-            }
-
-            var alreadyMember = await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == WorkspaceId && m.UserId == user.Id);
-            if (alreadyMember)
-            {
-                errorMessage = "Essa pessoa já é membro deste workspace.";
-                isSaving = false;
-                return;
-            }
-
-            db.WorkspaceMembers.Add(new WorkspaceMember
-            {
-                Id = Guid.NewGuid(),
-                WorkspaceId = WorkspaceId,
-                UserId = user.Id,
-                Role = addModel.Role,
-                JoinedAtUtc = DateTime.UtcNow
-            });
-            await db.SaveChangesAsync();
-            await InviteService.NotifyAddedAsync(user.Email!, workspace!.Name, WorkspaceId);
+            errorMessage = "Essa pessoa já é membro deste workspace.";
+            isSaving = false;
+            return;
         }
+
+        statusMessage = outcome.Status switch
+        {
+            InviteSendStatus.SentWithoutEmail => $"Convite criado para {email}, mas não conseguimos enviar o e-mail — avise a pessoa por outro canal.",
+            InviteSendStatus.Resent => $"Já havia um convite pendente para {email}; reenviamos.",
+            _ => $"Convite enviado para {email}.",
+        };
+
+        if (outcome.NotifiedInApp && outcome.Status != InviteSendStatus.SentWithoutEmail)
+        {
+            statusMessage += " A pessoa também recebeu uma notificação dentro da plataforma.";
+        }
+
+        await AuditLog.LogAsync(currentUserId, AuditAction.WorkspaceInviteSent, targetId: email, detail: $"workspace={WorkspaceId};role={addModel.Role}");
 
         addModel.Email = "";
         addModel.Role = WorkspaceRole.Member;
         isSaving = false;
         showAddForm = false;
+        await LoadMembersAsync();
+    }
+
+    private async Task HandleResendInvite(WorkspaceInvite invite)
+    {
+        openInviteMenuId = null;
+        errorMessage = null;
+        statusMessage = null;
+
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        var outcome = await InviteService.CreateAndSendAsync(WorkspaceId, workspace!.Name, invite.Email, invite.Role, currentUserId);
+        statusMessage = outcome.Status == InviteSendStatus.SentWithoutEmail
+            ? $"Não conseguimos reenviar o e-mail para {invite.Email} — avise a pessoa por outro canal."
+            : $"Convite reenviado para {invite.Email}.";
+
+        await LoadMembersAsync();
+    }
+
+    private async Task HandleCancelInvite(Guid inviteId)
+    {
+        openInviteMenuId = null;
+        errorMessage = null;
+        statusMessage = null;
+
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        if (await InviteService.CancelAsync(inviteId, WorkspaceId))
+        {
+            statusMessage = "Convite cancelado.";
+            await AuditLog.LogAsync(currentUserId, AuditAction.WorkspaceInviteCanceled, targetId: inviteId.ToString(), detail: $"workspace={WorkspaceId}");
+        }
+
         await LoadMembersAsync();
     }
 

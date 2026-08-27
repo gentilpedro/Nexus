@@ -5,5 +5,6 @@ public enum NotificationType
     TaskAssigned,
     DueDateApproaching,
     ChatMessage,
-    ChatMention
+    ChatMention,
+    WorkspaceInvite
 }
