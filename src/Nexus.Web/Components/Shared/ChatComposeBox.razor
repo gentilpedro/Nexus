@@ -27,7 +27,7 @@
         </select>
     </div>
     <div class="chat-compose-textarea-wrap">
-        <textarea @ref="composeTextareaEl" value="@sendModel.Content" rows="2" placeholder="Escreva uma mensagem... use @@ para mencionar alguém"></textarea>
+        <textarea @ref="composeTextareaEl" value="@renderedContent" rows="2" placeholder="Escreva uma mensagem... use @@ para mencionar alguém"></textarea>
         @if (showMentionDropdown)
         {
             <div class="chat-mention-dropdown">
@@ -105,6 +105,15 @@
     public EventCallback OnAccessRevoked { get; set; }
 
     private readonly SendMessageModel sendModel = new();
+
+    // The textarea's rendered "value" is deliberately NOT bound to sendModel.Content, which
+    // changes on every keystroke. If it were, every OnComposeInput round trip would re-push
+    // that keystroke's value down to the DOM — and a round trip that resolves after the user
+    // has already typed further would stomp those newer characters, visibly "eating" input
+    // under fast typing. renderedContent only changes at the few moments we actually want to
+    // force the DOM: on mount, after a message is sent, and when a mention token is inserted.
+    // In between, the textarea is effectively uncontrolled and the browser owns its value.
+    private string renderedContent = "";
     private List<IBrowserFile> pendingFiles = [];
     private string selectedDocId = "";
     private string? sendError;
@@ -205,6 +214,7 @@
         var newCaret = before.Length + inserted.Length;
 
         sendModel.Content = newValue;
+        renderedContent = newValue;
         showMentionDropdown = false;
         StateHasChanged();
 
@@ -445,6 +455,7 @@
             }
 
             sendModel.Content = "";
+            renderedContent = "";
             selectedDocId = "";
             pendingFiles = [];
             mentionedUserIds.Clear();
