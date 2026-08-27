@@ -1,0 +1,51 @@
+name: FTPS chain check (temporary)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Baseline — how it fails today
+        continue-on-error: true
+        run: |
+          curl -sS --ssl-reqd --ftp-pasv --connect-timeout 20 "ftp://${{ secrets.FTP_SERVER }}/" >/dev/null
+          echo "exit=$?"
+
+      - name: Build a CA bundle by following the certificate's AIA chain
+        run: |
+          set -euo pipefail
+          HOST="${{ secrets.FTP_SERVER }}"
+          D=$(mktemp -d)
+          openssl s_client -connect "$HOST:21" -starttls ftp </dev/null 2>/dev/null | openssl x509 -out "$D/0.pem"
+          CUR="$D/0.pem"; : > "$D/extra.pem"
+          for i in 1 2 3 4; do
+            URI=$(openssl x509 -in "$CUR" -noout -text | grep -oP 'CA Issuers - URI:\K\S+' | head -1 || true)
+            [ -n "$URI" ] || break
+            echo "AIA hop $i: $URI"
+            curl -fsSL -o "$D/$i.bin" "$URI"
+            openssl x509 -inform DER -in "$D/$i.bin" -out "$D/$i.pem" 2>/dev/null || openssl x509 -in "$D/$i.bin" -out "$D/$i.pem"
+            openssl x509 -in "$D/$i.pem" -noout -subject
+            cat "$D/$i.pem" >> "$D/extra.pem"
+            CUR="$D/$i.pem"
+            if openssl verify -untrusted "$D/extra.pem" "$CUR" >/dev/null 2>&1; then
+              echo "reached a certificate the system store already trusts"; break
+            fi
+          done
+          openssl verify -untrusted "$D/extra.pem" "$D/0.pem"
+          cp "$D/extra.pem" ftps-ca.pem
+          cat /etc/ssl/certs/ca-certificates.crt ftps-ca.pem > ftps-ca-bundle.pem
+
+      - name: Retry with the completed chain
+        run: |
+          curl -sS --ssl-reqd --ftp-pasv --connect-timeout 20 --cacert ftps-ca-bundle.pem "ftp://${{ secrets.FTP_SERVER }}/" >/dev/null || rc=$?
+          if [ "${rc:-0}" = "67" ]; then
+            echo "TLS verified (530 = anonymous login refused, which is expected without credentials)"
+          elif [ "${rc:-0}" = "60" ]; then
+            echo "::error::still failing certificate verification"; exit 1
+          else
+            echo "curl exit=${rc:-0}"
+          fi
