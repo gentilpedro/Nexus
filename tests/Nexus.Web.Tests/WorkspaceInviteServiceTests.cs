@@ -24,9 +24,16 @@ public class WorkspaceInviteServiceTests
         public FakeNavigationManager() => Initialize("https://usenexus.runasp.net/", "https://usenexus.runasp.net/");
     }
 
-    /// <summary>Records what would have been e-mailed instead of opening an SMTP connection.</summary>
+    /// <summary>Never used: BrevoMailer's constructor needs one, but FakeMailer overrides the only
+    /// method that would call it.</summary>
+    private sealed class UnusedHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => throw new InvalidOperationException("A test must not make HTTP calls.");
+    }
+
+    /// <summary>Records what would have been e-mailed instead of calling Brevo.</summary>
     private sealed class FakeMailer(bool succeeds = true)
-        : BrevoMailer(Options.Create(new BrevoOptions()), NullLogger<BrevoMailer>.Instance)
+        : BrevoMailer(Options.Create(new BrevoOptions()), new UnusedHttpClientFactory(), NullLogger<BrevoMailer>.Instance)
     {
         public List<(string To, string Subject, string Body)> Sent { get; } = [];
 
