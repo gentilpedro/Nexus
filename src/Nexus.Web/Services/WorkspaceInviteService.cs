@@ -13,9 +13,33 @@ public enum InviteAcceptResult
     EmailMismatch,
 }
 
-// Handles the two shapes an invite can take: the invited email already has a Nexus account (added
-// as a member right away, just gets a notification email) or it doesn't (a WorkspaceInvite row is
-// created and the person accepts it by registering/logging in at /convite/{Token}).
+public enum InviteSendStatus
+{
+    /// <summary>Invite created (or refreshed) and the e-mail went out.</summary>
+    Sent,
+
+    /// <summary>Invite is recorded and pending, but the e-mail could not be delivered.</summary>
+    SentWithoutEmail,
+
+    /// <summary>An earlier invite for this address was still pending; it was refreshed and re-sent.</summary>
+    Resent,
+
+    /// <summary>The address already belongs to someone who is a member of the workspace.</summary>
+    AlreadyMember,
+}
+
+/// <param name="Status">What happened to the invite.</param>
+/// <param name="NotifiedInApp">
+/// True when the address matched an existing account, so an in-app notification was created
+/// alongside the e-mail.
+/// </param>
+public readonly record struct InviteSendOutcome(InviteSendStatus Status, bool NotifiedInApp);
+
+// Every invite — whether or not the address already has a Nexus account — is a pending
+// WorkspaceInvite row until the person explicitly accepts it at /convite/{Token}. Nobody is added
+// to a workspace on someone else's say-so: the WorkspaceMember row is only written by AcceptAsync.
+// Addresses that already have an account also get an in-app notification pointing at the same
+// accept page.
 public class WorkspaceInviteService(
     IDbContextFactory<AppDbContext> dbFactory,
     BrevoMailer mailer,
@@ -23,49 +47,143 @@ public class WorkspaceInviteService(
 {
     private static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(7);
 
-    public async Task NotifyAddedAsync(string toEmail, string workspaceName, Guid workspaceId)
+    public async Task<InviteSendOutcome> CreateAndSendAsync(Guid workspaceId, string workspaceName, string email, WorkspaceRole role, string? invitedByUserId)
     {
-        // PublicUrlBuilder, not NavigationManager.ToAbsoluteUri — these URLs are e-mailed, so
-        // deriving them from the request's Host header would let an attacker point them at a
-        // domain they control. See PublicUrlBuilder.
-        var workspaceUrl = publicUrl.BuildUrl($"workspaces/{workspaceId}", new Dictionary<string, object?>());
-        // Workspace name is user-controlled — encode before it goes into an HTML email body.
-        var safeName = System.Net.WebUtility.HtmlEncode(workspaceName);
-        await mailer.SendAsync(
-            toEmail,
-            $"Você foi adicionado ao workspace \"{safeName}\" no Nexus",
-            $"<p>Você agora faz parte do workspace <strong>{safeName}</strong> no Nexus.</p><p><a href='{workspaceUrl}'>Clique aqui para acessar</a>.</p>");
-    }
+        email = email.Trim();
+        var normalizedEmail = email.ToUpperInvariant();
 
-    public async Task<bool> CreateAndSendAsync(Guid workspaceId, string workspaceName, string email, WorkspaceRole role, string? invitedByUserId)
-    {
-        var token = Guid.NewGuid().ToString("N");
+        string token;
+        var resent = false;
+        ApplicationUser? existingUser;
+        string? inviterName = null;
 
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
-            db.WorkspaceInvites.Add(new WorkspaceInvite
+            existingUser = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail);
+
+            // Having an account is not the same as having accepted: only refuse when this person
+            // is actually a member already.
+            if (existingUser is not null
+                && await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == workspaceId && m.UserId == existingUser.Id))
             {
-                Id = Guid.NewGuid(),
-                WorkspaceId = workspaceId,
-                Email = email.Trim(),
-                Role = role,
-                Token = token,
-                InvitedByUserId = invitedByUserId,
-                CreatedAtUtc = DateTime.UtcNow,
-                ExpiresAtUtc = DateTime.UtcNow.Add(InviteLifetime),
-            });
+                return new InviteSendOutcome(InviteSendStatus.AlreadyMember, false);
+            }
+
+            // Re-inviting an address that is already pending refreshes the existing row instead of
+            // piling up rows: the members panel would otherwise show the same person as pending
+            // several times, and every old token would stay live.
+            var pending = await db.WorkspaceInvites
+                .Where(i => i.WorkspaceId == workspaceId && i.Email.ToUpper() == normalizedEmail && i.AcceptedAtUtc == null)
+                .OrderByDescending(i => i.CreatedAtUtc)
+                .FirstOrDefaultAsync();
+
+            if (pending is not null)
+            {
+                resent = true;
+                pending.Role = role;
+                pending.InvitedByUserId = invitedByUserId;
+                pending.CreatedAtUtc = DateTime.UtcNow;
+                pending.ExpiresAtUtc = DateTime.UtcNow.Add(InviteLifetime);
+                token = pending.Token;
+            }
+            else
+            {
+                token = Guid.NewGuid().ToString("N");
+                db.WorkspaceInvites.Add(new WorkspaceInvite
+                {
+                    Id = Guid.NewGuid(),
+                    WorkspaceId = workspaceId,
+                    Email = email,
+                    Role = role,
+                    Token = token,
+                    InvitedByUserId = invitedByUserId,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    ExpiresAtUtc = DateTime.UtcNow.Add(InviteLifetime),
+                });
+            }
+
+            if (existingUser is not null)
+            {
+                if (invitedByUserId is not null)
+                {
+                    inviterName = (await db.Users.FirstOrDefaultAsync(u => u.Id == invitedByUserId))?.DisplayName;
+                }
+
+                var message = string.IsNullOrWhiteSpace(inviterName)
+                    ? $"Você foi convidado para o workspace \"{workspaceName}\". Clique para aceitar."
+                    : $"{inviterName} convidou você para o workspace \"{workspaceName}\". Clique para aceitar.";
+
+                db.Notifications.Add(new Notification
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = existingUser.Id,
+                    Type = NotificationType.WorkspaceInvite,
+                    Message = Notification.TruncateMessage(message),
+                    // Deliberately not WorkspaceId: that would make Notifications.razor link into a
+                    // workspace this person is not a member of yet. The accept page is the target.
+                    LinkUrl = $"/convite/{token}",
+                    CreatedAtUtc = DateTime.UtcNow,
+                });
+            }
+
             await db.SaveChangesAsync();
         }
 
+        // PublicUrlBuilder, not NavigationManager.ToAbsoluteUri — these URLs are e-mailed, so
+        // deriving them from the request's Host header would let an attacker point them at a
+        // domain they control. See PublicUrlBuilder.
         var acceptUrl = publicUrl.BuildUrl($"convite/{token}", new Dictionary<string, object?>());
         // Workspace name is user-controlled — encode before it goes into an HTML email body.
         var safeName = System.Net.WebUtility.HtmlEncode(workspaceName);
-        return await mailer.SendAsync(
+        var body =
+            $"<p>Você foi convidado para participar do workspace <strong>{safeName}</strong> no Nexus.</p>" +
+            $"<p><a href='{acceptUrl}'>Clique aqui para aceitar o convite</a>";
+        body += existingUser is not null
+            ? " — entre com esta mesma conta para confirmar.</p>"
+            : " — você poderá criar sua conta na mesma página, com este mesmo e-mail.</p>";
+        body += "<p>Este convite expira em 7 dias.</p>";
+
+        var sent = await mailer.SendAsync(
             email,
             $"Você foi convidado para o workspace \"{safeName}\" no Nexus",
-            $"<p>Você foi convidado para participar do workspace <strong>{safeName}</strong> no Nexus.</p>" +
-            $"<p><a href='{acceptUrl}'>Clique aqui para aceitar o convite</a> — se ainda não tiver conta, você poderá criar uma na mesma página.</p>" +
-            "<p>Este convite expira em 7 dias.</p>");
+            body);
+
+        var status = sent
+            ? (resent ? InviteSendStatus.Resent : InviteSendStatus.Sent)
+            : InviteSendStatus.SentWithoutEmail;
+
+        return new InviteSendOutcome(status, existingUser is not null);
+    }
+
+    /// <summary>
+    /// Invites for this workspace that nobody has accepted yet — what the members panel shows as
+    /// "Pendente". Expired ones are included so an admin can see them and re-send.
+    /// </summary>
+    public async Task<List<WorkspaceInvite>> GetPendingAsync(Guid workspaceId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        return await db.WorkspaceInvites
+            .Where(i => i.WorkspaceId == workspaceId && i.AcceptedAtUtc == null)
+            .OrderBy(i => i.Email)
+            .ToListAsync();
+    }
+
+    /// <summary>Withdraws a pending invite. Scoped by workspace so an id alone is not enough.</summary>
+    public async Task<bool> CancelAsync(Guid inviteId, Guid workspaceId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        // Load-then-Remove rather than ExecuteDeleteAsync: it's a single row either way, and this
+        // works on the in-memory provider the service tests run against.
+        var invite = await db.WorkspaceInvites
+            .FirstOrDefaultAsync(i => i.Id == inviteId && i.WorkspaceId == workspaceId && i.AcceptedAtUtc == null);
+        if (invite is null)
+        {
+            return false;
+        }
+
+        db.WorkspaceInvites.Remove(invite);
+        await db.SaveChangesAsync();
+        return true;
     }
 
     // Raw lookup (ignores accepted/expired state) so the accept page can show a specific reason
