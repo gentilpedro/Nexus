@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  # Lets a failed or reverted release be re-run without pushing an empty commit.
+  workflow_dispatch:
 
 jobs:
   # Quality gate. Everything that can reject a bad change runs here, before any job that can
@@ -109,6 +111,45 @@ jobs:
              publish/appsettings.Production.json > publish/appsettings.Production.json.tmp
           mv publish/appsettings.Production.json.tmp publish/appsettings.Production.json
 
+      # The FTP server presents a perfectly valid Let's Encrypt certificate for *.siteasp.net, but
+      # sends ONLY the leaf — no intermediates. Browsers and Windows/schannel hide this by
+      # fetching the missing issuer from the certificate's AIA extension; OpenSSL does not, so
+      # every curl on a Linux runner failed with "unable to get local issuer certificate" (exit
+      # 60) and no deploy has reached production since 07/08/2026.
+      #
+      # The fix is to do the AIA walk ourselves and hand the completed chain to curl. This is NOT
+      # the same as --insecure: each fetched certificate must still chain up to a root already in
+      # the runner's trust store, and the final `openssl verify` fails the job if it does not.
+      # Following AIA rather than pinning a certificate means Let's Encrypt renewals and
+      # intermediate rotations do not silently break the deploy again.
+      #
+      # Today the walk takes two hops: leaf -> YR2 -> ISRG Root YR (cross-signed by ISRG Root X1,
+      # which every trust store has).
+      - name: Complete the FTP server's certificate chain
+        run: |
+          set -euo pipefail
+          HOST="${{ secrets.FTP_SERVER }}"
+          D=$(mktemp -d)
+          openssl s_client -connect "$HOST:21" -starttls ftp </dev/null 2>/dev/null | openssl x509 -out "$D/0.pem"
+          CUR="$D/0.pem"; : > "$D/extra.pem"
+          for i in 1 2 3 4; do
+            URI=$(openssl x509 -in "$CUR" -noout -text | grep -oP 'CA Issuers - URI:\K\S+' | head -1 || true)
+            [ -n "$URI" ] || break
+            echo "AIA hop $i: $URI"
+            curl -fsSL -o "$D/$i.bin" "$URI"
+            openssl x509 -inform DER -in "$D/$i.bin" -out "$D/$i.pem" 2>/dev/null || openssl x509 -in "$D/$i.bin" -out "$D/$i.pem"
+            openssl x509 -in "$D/$i.pem" -noout -subject
+            cat "$D/$i.pem" >> "$D/extra.pem"
+            CUR="$D/$i.pem"
+            openssl verify -untrusted "$D/extra.pem" "$CUR" >/dev/null 2>&1 && break
+          done
+          # Fails the job if the completed chain still does not verify against the system roots.
+          openssl verify -untrusted "$D/extra.pem" "$D/0.pem"
+          cp "$D/extra.pem" "$GITHUB_WORKSPACE/ftps-ca.pem"
+          cat /etc/ssl/certs/ca-certificates.crt "$GITHUB_WORKSPACE/ftps-ca.pem" > "$GITHUB_WORKSPACE/ftps-ca-bundle.pem"
+          echo "FTPS_CA=$GITHUB_WORKSPACE/ftps-ca.pem" >> "$GITHUB_ENV"
+          echo "FTPS_CA_BUNDLE=$GITHUB_WORKSPACE/ftps-ca-bundle.pem" >> "$GITHUB_ENV"
+
       # --ssl-reqd aborts rather than silently downgrading if the server will not negotiate TLS.
       # Plain FTP sent the credentials AND appsettings.Production.json — which by this point
       # contains the live database connection string and the Brevo SMTP key — in cleartext over
@@ -116,10 +157,14 @@ jobs:
       - name: Take app offline (release IIS file locks)
         run: |
           echo "App temporarily offline for deployment." > app_offline.htm
-          curl --ssl-reqd --ftp-pasv -T app_offline.htm --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" "ftp://${{ secrets.FTP_SERVER }}/wwwroot/app_offline.htm"
+          curl --ssl-reqd --ftp-pasv --cacert "$FTPS_CA_BUNDLE" -T app_offline.htm --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" "ftp://${{ secrets.FTP_SERVER }}/wwwroot/app_offline.htm"
 
       - name: FTP Deploy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        # Same missing-intermediate problem, different TLS stack: this action is Node, and
+        # NODE_EXTRA_CA_CERTS appends to (never replaces) Node's built-in roots.
+        env:
+          NODE_EXTRA_CA_CERTS: ${{ env.FTPS_CA }}
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
@@ -140,4 +185,6 @@ jobs:
         # down indefinitely on a partial failure.
         if: always()
         run: |
-          curl --ssl-reqd --ftp-pasv --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" -Q "DELE /wwwroot/app_offline.htm" "ftp://${{ secrets.FTP_SERVER }}/"
+          # Falls back to the bare system store if the chain step never ran — that call will fail,
+          # but with the real error rather than an empty --cacert argument.
+          curl --ssl-reqd --ftp-pasv --cacert "${FTPS_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}" --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" -Q "DELE /wwwroot/app_offline.htm" "ftp://${{ secrets.FTP_SERVER }}/"
