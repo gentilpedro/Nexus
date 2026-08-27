@@ -58,7 +58,13 @@ jobs:
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client
-          pg_dump --version
+          # /usr/bin/pg_dump is pg_wrapper, which picks a version from the *local* default
+          # cluster (16 on this image) and only falls back to the newest installed client because
+          # PGHOST points somewhere remote. Do not rely on that: put the newest client's bin
+          # directory first on PATH so the version used is explicit and shows up in the log.
+          PGBIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)
+          echo "$PGBIN" >> "$GITHUB_PATH"
+          "$PGBIN/pg_dump" --version
 
       # The connection string is an ADO.NET one (Host=...;Port=...;Database=...;Username=...;
       # Password=...), not a libpq URI, so it is parsed into the standard PG* variables. Written
