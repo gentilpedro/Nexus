@@ -3,6 +3,7 @@ namespace Nexus.Domain.Entities;
 public class Notification
 {
     public const int MaxMessageLength = 500;
+    public const int MaxLinkUrlLength = 512;
 
     public Guid Id { get; set; }
 
@@ -20,6 +21,12 @@ public class Notification
     // overflow the column — always run it through this before assigning Message.
     public static string TruncateMessage(string message) =>
         message.Length <= MaxMessageLength ? message : string.Concat(message.AsSpan(0, MaxMessageLength - 1), "…");
+
+    // Where clicking the notification should take the user, when that target isn't a WorkItem or
+    // a workspace chat — currently workspace invites, which point at /convite/{token} so the
+    // person can review and accept instead of being dropped into a workspace they haven't joined.
+    // Always an app-relative path built by us, never user input.
+    public string? LinkUrl { get; set; }
 
     public Guid? WorkItemId { get; set; }
     public WorkItem? WorkItem { get; set; }

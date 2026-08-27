@@ -11,16 +11,19 @@ name: Backup Nexus database
 # see docs/lgpd/rot.md). Storing it as a GitHub Actions artifact makes GitHub an additional
 # operator for that data, which the ROT does not currently list.
 #
-# So this workflow is deliberately opt-in and does nothing until you set the repository variable
-# BACKUP_ENABLED to "true". Before you do, decide where dumps should live and update the ROT
-# accordingly. GitHub artifacts are the least-effort option and are private to the repository,
-# but an object-store bucket you control is the better answer for personal data — swap the upload
-# step for that if you go this route.
+# DECISION (27/08/2026): dumps are stored as GitHub Actions artifacts, private to this
+# repository, retained 30 days. GitHub is therefore an operator for this data and is recorded as
+# such in docs/lgpd/rot.md section 8. An object-store bucket under our own control remains the
+# better answer if the user base grows — swapping the upload step is the only change needed.
+#
+# The workflow stays gated on the repository variable BACKUP_ENABLED being "true", so it can be
+# switched off without deleting the schedule.
 #
 # NOTE: this also assumes the PostgreSQL host accepts connections from GitHub-hosted runners.
 # Managed/shared hosts frequently restrict access by IP, in which case this must run from a
 # machine that can reach the database instead. The connectivity step below fails loudly and
 # early rather than producing an empty backup, so a blocked runner is obvious on the first run.
+# (Verified 27/08/2026: Neon accepts the runners.)
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -44,14 +47,24 @@ jobs:
             exit 1
           fi
 
-      # pg_dump must match the server major version, so install PostgreSQL 16's client rather
-      # than whatever the runner image happens to ship.
-      - name: Install PostgreSQL 16 client
+      # pg_dump refuses to dump a server NEWER than itself, but dumping an older server is
+      # supported. So the rule is "client >= server", not "client == server": install the newest
+      # client from the PGDG repository rather than pinning a major. The runner image ships 16,
+      # while the database (Neon) is on 18 — pinning 16 here failed with "aborting because of
+      # server version mismatch" on every run.
+      - name: Install PostgreSQL client
         run: |
           sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-16
+          sudo apt-get install -y -qq postgresql-client
+          # /usr/bin/pg_dump is pg_wrapper, which picks a version from the *local* default
+          # cluster (16 on this image) and only falls back to the newest installed client because
+          # PGHOST points somewhere remote. Do not rely on that: put the newest client's bin
+          # directory first on PATH so the version used is explicit and shows up in the log.
+          PGBIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)
+          echo "$PGBIN" >> "$GITHUB_PATH"
+          "$PGBIN/pg_dump" --version
 
       # The connection string is an ADO.NET one (Host=...;Port=...;Database=...;Username=...;
       # Password=...), not a libpq URI, so it is parsed into the standard PG* variables. Written
@@ -73,7 +86,7 @@ jobs:
           }
           {
             echo "PGHOST=$(field Host)"
-            echo "PGPORT=$(field Port)"
+            echo "PGPORT=$(field Port)"  # may be empty; libpq then uses the default 5432
             echo "PGDATABASE=$(field Database)"
             echo "PGUSER=$(field Username)"
             echo "PGPASSWORD=$(field Password)"

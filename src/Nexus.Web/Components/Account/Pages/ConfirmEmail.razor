@@ -1,4 +1,4 @@
-﻿@page "/Account/ConfirmEmail"
+@page "/Account/ConfirmEmail"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 
 @using System.Text
@@ -8,6 +8,7 @@
 
 @inject UserManager<ApplicationUser> UserManager
 @inject IdentityRedirectManager RedirectManager
+@inject NavigationManager NavigationManager
 
 <PageTitle>Confirmar email</PageTitle>
 
@@ -16,7 +17,7 @@
         <h1>Confirmar email</h1>
         <StatusMessage Message="@statusMessage" />
         <div class="auth-links">
-            <a href="Account/Login">Ir para o login</a>
+            <a href="@LoginUrl">Ir para o login</a>
         </div>
     </div>
 </div>
@@ -32,6 +33,16 @@
 
     [SupplyParameterFromQuery]
     private string? Code { get; set; }
+
+    // Register threads this through the confirmation link so someone who signed up from a workspace
+    // invite lands back on /convite/{token} after logging in, instead of on a bare dashboard with
+    // no idea what happened to the invite.
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    private string LoginUrl => IdentityRedirectManager.IsLocalUrl(ReturnUrl) && !string.IsNullOrEmpty(ReturnUrl)
+        ? NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl })
+        : "Account/Login";
 
     protected override async Task OnInitializedAsync()
     {
