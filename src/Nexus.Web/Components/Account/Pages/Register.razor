@@ -1,4 +1,4 @@
-﻿@page "/Account/Register"
+@page "/Account/Register"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth")]
 @layout AuthLayout
@@ -17,6 +17,7 @@
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject Nexus.Web.Services.PublicUrlBuilder PublicUrl
+@inject Nexus.Web.Services.WorkspaceInviteService InviteService
 @inject IdentityRedirectManager RedirectManager
 
 <PageTitle>Criar conta</PageTitle>
@@ -57,7 +58,18 @@
                 </div>
                 <div class="form-field">
                     <label for="Input.Email">Email</label>
-                    <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
+                    @if (invitedEmail is not null)
+                    {
+                        @* Locked to the address the invite was sent to: the account has to be the
+                           invited one, otherwise accepting at /convite/{token} would just fail with
+                           an e-mail mismatch. RegisterUser re-applies it server-side anyway. *@
+                        <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" readonly />
+                        <span style="color:var(--color-text-muted);font-size:0.8rem;">Você foi convidado com este e-mail, então a conta precisa usar ele.</span>
+                    }
+                    else
+                    {
+                        <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
+                    }
                     <ValidationMessage For="() => Input.Email" />
                 </div>
                 <div class="form-field">
@@ -100,15 +112,46 @@
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
+    // Set when arriving from an invite link. The token — never a raw ?email= — is what carries the
+    // address, so the e-mail is resolved from the invite row server-side and can't be forged.
+    [SupplyParameterFromQuery]
+    private string? InviteToken { get; set; }
+
+    private string? invitedEmail;
+
     private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Input ??= new();
+
+        if (string.IsNullOrWhiteSpace(InviteToken))
+        {
+            return;
+        }
+
+        var invite = await InviteService.GetAsync(InviteToken);
+        if (invite is null || invite.AcceptedAtUtc is not null || invite.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            return;
+        }
+
+        invitedEmail = invite.Email;
+        Input.Email = invitedEmail;
+
+        // Land back on the invite after signing in, so the person can accept it in the same go.
+        ReturnUrl ??= $"/convite/{InviteToken}";
     }
 
     public async Task RegisterUser(EditContext editContext)
     {
+        // The form field is read-only, but read-only is a UI affordance, not a guarantee — the
+        // posted value is replaced with the invited address regardless of what came back.
+        if (invitedEmail is not null)
+        {
+            Input.Email = invitedEmail;
+        }
+
         var user = CreateUser();
         user.DisplayName = Input.Name.Trim();
 

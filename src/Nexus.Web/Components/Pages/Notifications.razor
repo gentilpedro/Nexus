@@ -121,7 +121,13 @@
             Badge.SetUnreadCount(notifications!.Count(n => !n.IsRead));
         }
 
-        if (notification.WorkItem is not null)
+        // LinkUrl wins: a workspace-invite notification has to land on /convite/{token}, and its
+        // recipient is not a member of the workspace yet, so any workspace-derived link would 404.
+        if (!string.IsNullOrEmpty(notification.LinkUrl))
+        {
+            NavigationManager.NavigateTo(notification.LinkUrl);
+        }
+        else if (notification.WorkItem is not null)
         {
             NavigationManager.NavigateTo($"/lists/{notification.WorkItem.TaskListId}/list");
         }
