@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 
@@ -48,11 +49,20 @@ public class BrevoMailer(IOptions<BrevoOptions> options, IHttpClientFactory http
         [property: JsonPropertyName("sender")] Sender Sender,
         [property: JsonPropertyName("to")] Recipient[] To,
         [property: JsonPropertyName("subject")] string Subject,
-        [property: JsonPropertyName("htmlContent")] string HtmlContent);
+        [property: JsonPropertyName("htmlContent")] string HtmlContent,
+        [property: JsonPropertyName("textContent")] string? TextContent);
 
+    // Brevo rejects a null textContent, so the field has to disappear rather than be sent empty.
+    private static readonly JsonSerializerOptions JsonOptions =
+        new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
+    /// <param name="textBody">
+    /// Plain-text alternative. Optional, but worth passing: a multipart message reads correctly in
+    /// clients with HTML disabled and scores better with spam filters than HTML alone.
+    /// </param>
     // virtual so tests can substitute a recording double: the real implementation makes a network
     // call, which no unit test should be doing.
-    public virtual async Task<bool> SendAsync(string toEmail, string subject, string htmlBody)
+    public virtual async Task<bool> SendAsync(string toEmail, string subject, string htmlBody, string? textBody = null)
     {
         // Not configured (local dev, tests): fail fast instead of spending the full timeout on a
         // call we know will be rejected. Callers already treat false as "recorded but not
@@ -67,7 +77,8 @@ public class BrevoMailer(IOptions<BrevoOptions> options, IHttpClientFactory http
             new Sender(options.SenderName, options.SenderEmail),
             [new Recipient(toEmail)],
             subject,
-            htmlBody);
+            htmlBody,
+            textBody);
 
         try
         {
@@ -76,7 +87,7 @@ public class BrevoMailer(IOptions<BrevoOptions> options, IHttpClientFactory http
 
             using var request = new HttpRequestMessage(HttpMethod.Post, options.ApiUrl)
             {
-                Content = JsonContent.Create(payload),
+                Content = JsonContent.Create(payload, options: JsonOptions),
             };
             // Brevo authenticates on its own header, not Authorization.
             request.Headers.Add("api-key", options.ApiKey);
