@@ -133,20 +133,31 @@ public class WorkspaceInviteService(
         // deriving them from the request's Host header would let an attacker point them at a
         // domain they control. See PublicUrlBuilder.
         var acceptUrl = publicUrl.BuildUrl($"convite/{token}", new Dictionary<string, object?>());
-        // Workspace name is user-controlled — encode before it goes into an HTML email body.
-        var safeName = System.Net.WebUtility.HtmlEncode(workspaceName);
-        var body =
-            $"<p>Você foi convidado para participar do workspace <strong>{safeName}</strong> no Nexus.</p>" +
-            $"<p><a href='{acceptUrl}'>Clique aqui para aceitar o convite</a>";
-        body += existingUser is not null
-            ? " — entre com esta mesma conta para confirmar.</p>"
-            : " — você poderá criar sua conta na mesma página, com este mesmo e-mail.</p>";
-        body += "<p>Este convite expira em 7 dias.</p>";
+
+        var details = new List<EmailDetail> { new("Workspace", workspaceName) };
+        if (!string.IsNullOrWhiteSpace(inviterName))
+        {
+            details.Add(new EmailDetail("Convidado por", inviterName));
+        }
+
+        var content = EmailTemplate.Render(
+            title: "Você foi convidado para um workspace",
+            preview: $"Entre no workspace {workspaceName} no Nexus.",
+            paragraphs:
+            [
+                existingUser is not null
+                    ? "Aceite o convite para passar a fazer parte deste workspace. Entre com esta mesma conta para confirmar."
+                    : "Aceite o convite para passar a fazer parte deste workspace. Você poderá criar sua conta na mesma página, com este mesmo e-mail.",
+            ],
+            button: new EmailButton("Aceitar convite", acceptUrl),
+            details: details,
+            footnote: "Este convite expira em 7 dias.");
 
         var sent = await mailer.SendAsync(
             email,
-            $"Você foi convidado para o workspace \"{safeName}\" no Nexus",
-            body);
+            $"Você foi convidado para o workspace \"{workspaceName}\" no Nexus",
+            content.Html,
+            content.Text);
 
         var status = sent
             ? (resent ? InviteSendStatus.Resent : InviteSendStatus.Sent)

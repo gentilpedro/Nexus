@@ -35,11 +35,11 @@ public class WorkspaceInviteServiceTests
     private sealed class FakeMailer(bool succeeds = true)
         : BrevoMailer(Options.Create(new BrevoOptions()), new UnusedHttpClientFactory(), NullLogger<BrevoMailer>.Instance)
     {
-        public List<(string To, string Subject, string Body)> Sent { get; } = [];
+        public List<(string To, string Subject, string Body, string? Text)> Sent { get; } = [];
 
-        public override Task<bool> SendAsync(string toEmail, string subject, string htmlBody)
+        public override Task<bool> SendAsync(string toEmail, string subject, string htmlBody, string? textBody = null)
         {
-            Sent.Add((toEmail, subject, htmlBody));
+            Sent.Add((toEmail, subject, htmlBody, textBody));
             return Task.FromResult(succeeds);
         }
     }

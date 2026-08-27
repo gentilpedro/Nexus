@@ -90,12 +90,22 @@ public class DueDateNotificationHostedService(
 
                 if (!string.IsNullOrEmpty(item.AssigneeEmail))
                 {
-                    // Task title is user-controlled — encode before it goes into an HTML email body.
-                    var safeTitle = System.Net.WebUtility.HtmlEncode(item.Title);
+                    var content = EmailTemplate.Render(
+                        title: $"Uma tarefa sua vence {when}",
+                        preview: $"{item.Title} vence {when}.",
+                        paragraphs: ["Esta tarefa está atribuída a você e o prazo está chegando."],
+                        button: new EmailButton("Abrir a lista", $"{baseUrl}/lists/{item.TaskListId}/list"),
+                        details:
+                        [
+                            new EmailDetail("Tarefa", item.Title),
+                            new EmailDetail("Prazo", when),
+                        ]);
+
                     await mailer.SendAsync(
                         item.AssigneeEmail,
                         $"Tarefa vence {when} no Nexus",
-                        $"<p>A tarefa <strong>{safeTitle}</strong> vence {when}.</p><p><a href='{baseUrl}/lists/{item.TaskListId}/list'>Clique aqui para abrir</a>.</p>");
+                        content.Html,
+                        content.Text);
                 }
             }
         }
