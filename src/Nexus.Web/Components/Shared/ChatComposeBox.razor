@@ -1,0 +1,510 @@
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Services
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
+@inject CircuitActionRateLimiter ChatRateLimiter
+@inject WorkspaceChatBroadcaster Broadcaster
+@inject AttachmentStorageService Storage
+@inject IJSRuntime JS
+
+<EditForm Model="sendModel" OnValidSubmit="HandleSend" class="chat-compose">
+    <div class="chat-compose-toolbar">
+        <label for="chat-file-input" class="chat-toolbar-btn" title="Anexar arquivo">📎</label>
+        <InputFile id="chat-file-input" OnChange="HandleFilesSelected" multiple class="chat-file-input-hidden" />
+        <select @bind="selectedDocId" class="chat-docref-select">
+            <option value="">Referenciar doc...</option>
+            @foreach (var doc in DocPages)
+            {
+                <option value="@doc.Id">@doc.Title</option>
+            }
+        </select>
+    </div>
+    <div class="chat-compose-textarea-wrap">
+        <textarea @ref="composeTextareaEl" value="@sendModel.Content" rows="2" placeholder="Escreva uma mensagem... use @@ para mencionar alguém"></textarea>
+        @if (showMentionDropdown)
+        {
+            <div class="chat-mention-dropdown">
+                @if (showEveryoneOption)
+                {
+                    <button type="button" class="chat-mention-option chat-mention-option--everyone" @onclick="SelectEveryoneMention">
+                        <span class="chat-mention-avatar chat-mention-avatar--everyone">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                        </span>
+                        <span class="chat-mention-name">Todos (@@everyone)</span>
+                    </button>
+                }
+                @foreach (var member in mentionSuggestions)
+                {
+                    <button type="button" class="chat-mention-option" @onclick="() => SelectMention(member.UserId, member.DisplayName)">
+                        @if (!string.IsNullOrEmpty(member.AvatarPath))
+                        {
+                            <img class="chat-mention-avatar" src="@MentionAvatarUrl(member.UserId, member.AvatarPath)" alt="" />
+                        }
+                        else
+                        {
+                            <span class="chat-mention-avatar">@MentionInitial(member.DisplayName)</span>
+                        }
+                        <span class="chat-mention-name">@member.DisplayName</span>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+    @if (pendingFiles.Count > 0)
+    {
+        <div class="chat-compose-pending">
+            @for (var i = 0; i < pendingFiles.Count; i++)
+            {
+                var index = i;
+                var file = pendingFiles[i];
+                <span class="chat-compose-pending-file">
+                    @file.Name (@FormatSize(file.Size))
+                    <button type="button" class="chat-compose-pending-remove" @onclick="() => RemovePendingFile(index)">✕</button>
+                </span>
+            }
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(sendError))
+    {
+        <div class="alert alert-danger">@sendError</div>
+    }
+    <div class="chat-compose-actions">
+        <button type="submit" class="btn" disabled="@isSending">Enviar</button>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid WorkspaceId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Workspace Workspace { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public List<DocPage> DocPages { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public List<(string UserId, string DisplayName, string? AvatarPath)> WorkspaceMembers { get; set; } = [];
+
+    [Parameter]
+    public string? CurrentUserId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    // The parent hides the whole page once access is gone; it doesn't recheck access itself
+    // on every send, so a lost-access rejection here has to be reported back up to it.
+    [Parameter]
+    public EventCallback OnAccessRevoked { get; set; }
+
+    private readonly SendMessageModel sendModel = new();
+    private List<IBrowserFile> pendingFiles = [];
+    private string selectedDocId = "";
+    private string? sendError;
+    private bool isSending;
+
+    private ElementReference composeTextareaEl;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<ChatComposeBox>? selfRef;
+    private List<(string UserId, string DisplayName, string? AvatarPath)> mentionSuggestions = [];
+    private bool showMentionDropdown;
+    private bool showEveryoneOption;
+    private bool mentionedEveryone;
+    private int mentionStartIndex;
+    private readonly HashSet<string> mentionedUserIds = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/chat-interop.js");
+            selfRef = DotNetObjectReference.Create(this);
+        }
+
+        // The compose box element only exists once the parent has finished loading the
+        // workspace, which can land after this component's first render — binding on
+        // firstRender alone handed JS an unset ElementReference, which threw and left "@"
+        // mentions dead for the rest of the page's life. initComposeMentions is idempotent,
+        // so retrying on later renders costs nothing once it has taken.
+        if (module is not null && selfRef is not null)
+        {
+            await module.InvokeVoidAsync("initComposeMentions", composeTextareaEl, selfRef);
+        }
+    }
+
+    [JSInvokable]
+    public void OnComposeInput(string value, int caret)
+    {
+        sendModel.Content = value;
+        UpdateMentionState(caret);
+        StateHasChanged();
+    }
+
+    private void UpdateMentionState(int caret)
+    {
+        var text = sendModel.Content;
+        caret = Math.Clamp(caret, 0, text.Length);
+
+        var atIndex = text.LastIndexOf('@', Math.Max(0, caret - 1));
+        if (atIndex == -1 || (atIndex > 0 && !char.IsWhiteSpace(text[atIndex - 1])))
+        {
+            showMentionDropdown = false;
+            showEveryoneOption = false;
+            return;
+        }
+
+        var query = text[(atIndex + 1)..caret];
+        if (query.Contains(' ') || query.Contains('\n'))
+        {
+            showMentionDropdown = false;
+            showEveryoneOption = false;
+            return;
+        }
+
+        mentionStartIndex = atIndex;
+        showEveryoneOption = "everyone".Contains(query, StringComparison.OrdinalIgnoreCase);
+        mentionSuggestions = WorkspaceMembers
+            .Where(m => m.UserId != CurrentUserId && m.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(6)
+            .ToList();
+        showMentionDropdown = showEveryoneOption || mentionSuggestions.Count > 0;
+    }
+
+    private Task SelectMention(string userId, string displayName)
+    {
+        mentionedUserIds.Add(userId);
+        return InsertMentionTokenAsync($"@{displayName} ");
+    }
+
+    private Task SelectEveryoneMention()
+    {
+        mentionedEveryone = true;
+        return InsertMentionTokenAsync("@everyone ");
+    }
+
+    private async Task InsertMentionTokenAsync(string inserted)
+    {
+        if (module is null)
+        {
+            return;
+        }
+
+        // The caret sits right after whatever was typed following "@" — no need for a fresh JS
+        // round trip, the dropdown only shows options for the query currently in sendModel.Content.
+        var before = sendModel.Content[..mentionStartIndex];
+        var caret = mentionStartIndex + QueryLengthAt(mentionStartIndex);
+        var after = sendModel.Content[caret..];
+        var newValue = before + inserted + after;
+        var newCaret = before.Length + inserted.Length;
+
+        sendModel.Content = newValue;
+        showMentionDropdown = false;
+        StateHasChanged();
+
+        await module.InvokeVoidAsync("insertMentionText", composeTextareaEl, newValue, newCaret);
+    }
+
+    private int QueryLengthAt(int atIndex)
+    {
+        var text = sendModel.Content;
+        var i = atIndex + 1;
+        while (i < text.Length && !char.IsWhiteSpace(text[i]))
+        {
+            i++;
+        }
+        return i - atIndex;
+    }
+
+    private void HandleFilesSelected(InputFileChangeEventArgs e)
+    {
+        sendError = null;
+        var accepted = new List<IBrowserFile>();
+
+        foreach (var file in e.GetMultipleFiles(10))
+        {
+            if (file.Size > AttachmentStorageService.MaxSizeBytes)
+            {
+                sendError = $"\"{file.Name}\" excede o limite de 10 MB e não foi selecionado.";
+                continue;
+            }
+
+            if (!AttachmentStorageService.IsAllowedContentType(file.ContentType))
+            {
+                sendError = $"\"{file.Name}\" tem um tipo de arquivo não permitido.";
+                continue;
+            }
+
+            accepted.Add(file);
+        }
+
+        // Append, don't replace — re-opening the file picker to add more attachments used to
+        // silently discard whatever was already staged from a previous selection.
+        pendingFiles.AddRange(accepted);
+    }
+
+    private void RemovePendingFile(int index)
+    {
+        if (index >= 0 && index < pendingFiles.Count)
+        {
+            pendingFiles.RemoveAt(index);
+        }
+    }
+
+    private async Task HandleSend()
+    {
+        var hasDocRef = Guid.TryParse(selectedDocId, out var referencedDocPageId);
+
+        if (string.IsNullOrWhiteSpace(sendModel.Content) && pendingFiles.Count == 0 && !hasDocRef)
+        {
+            sendError = "Escreva algo, anexe um arquivo ou referencie um doc.";
+            return;
+        }
+
+        // Membership is re-checked here, not just when the parent first loaded the page. This
+        // circuit can stay open for hours; without this, someone removed from the workspace
+        // keeps posting to its chat until they happen to navigate. See WorkspaceAccessGuard.
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member))
+        {
+            sendError = "Você não tem mais acesso a este workspace.";
+            if (OnAccessRevoked.HasDelegate)
+            {
+                await OnAccessRevoked.InvokeAsync();
+            }
+            return;
+        }
+
+        // Nothing else throttles this path: the HTTP rate limiter only sees discrete requests, and
+        // sends travel over the persistent circuit. Each message also writes one Notification row
+        // per workspace member, so an unthrottled loop is a cheap way to flood the database.
+        if (CurrentUserId is not null
+            && !ChatRateLimiter.TryAcquire($"chat-send:{CurrentUserId}", permitLimit: 20, window: TimeSpan.FromMinutes(1)))
+        {
+            sendError = "Você está enviando mensagens rápido demais. Aguarde alguns segundos.";
+            return;
+        }
+
+        isSending = true;
+        sendError = null;
+        var savedStoragePaths = new List<string>();
+
+        try
+        {
+            ChatMessage message;
+            await using (var db = await DbFactory.CreateDbContextAsync())
+            {
+                // selectedDocId only ever gets set from DocPages (already filtered by
+                // WorkspaceId), but that's client-reported component state over the SignalR
+                // circuit — re-check server-side so a tampered client can't reference (and
+                // leak the title of) a doc from a workspace it isn't even a member of.
+                if (hasDocRef)
+                {
+                    hasDocRef = await db.DocPages.AnyAsync(d => d.Id == referencedDocPageId && d.WorkspaceId == WorkspaceId);
+                }
+
+                message = new ChatMessage
+                {
+                    Id = Guid.NewGuid(),
+                    WorkspaceId = WorkspaceId,
+                    UserId = CurrentUserId,
+                    Content = sendModel.Content?.Trim() ?? "",
+                    ReferencedDocPageId = hasDocRef ? referencedDocPageId : null,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+                db.ChatMessages.Add(message);
+
+                // Every other workspace member — needed both to resolve "@everyone" and, later,
+                // as the recipient list for the generic "new message" notification.
+                var recipientIds = await db.WorkspaceMembers
+                    .Where(m => m.WorkspaceId == WorkspaceId && m.UserId != CurrentUserId)
+                    .Select(m => m.UserId)
+                    .ToListAsync();
+
+                // The dropdown always inserts a mention with a trailing space, but Content was
+                // trimmed above — so a mention that ends the message ("@everyone" on its own,
+                // "bom dia @Ana") loses that space and needs EndsWith too. Matching only
+                // "@Name " silently dropped exactly those, the most natural way to mention
+                // someone: no record, no highlight, no notification. The trailing space still
+                // matters mid-text, to keep "@Ana" from matching a longer "@Anabela".
+                bool StillMentioned(string token) =>
+                    message.Content.Contains(token + " ", StringComparison.Ordinal)
+                    || message.Content.EndsWith(token, StringComparison.Ordinal);
+
+                // Covers picking "@everyone" from the dropdown and then deleting that text
+                // before hitting Enviar.
+                var mentionedEveryoneValid = mentionedEveryone && StillMentioned("@everyone");
+
+                // Only keep mentions whose inserted text is still present — covers someone
+                // picking a mention from the dropdown and then deleting that text before
+                // hitting Enviar. "@everyone" makes every other member mentioned, regardless
+                // of whether they were also picked individually.
+                var validMentionedUserIds = mentionedEveryoneValid
+                    ? recipientIds
+                    : mentionedUserIds
+                        .Where(id => WorkspaceMembers.Any(m => m.UserId == id && StillMentioned($"@{m.DisplayName}")))
+                        .ToList();
+                foreach (var mentionedUserId in validMentionedUserIds)
+                {
+                    db.ChatMessageMentions.Add(new ChatMessageMention
+                    {
+                        Id = Guid.NewGuid(),
+                        ChatMessageId = message.Id,
+                        UserId = mentionedUserId
+                    });
+                }
+
+                await db.SaveChangesAsync();
+
+                foreach (var file in pendingFiles)
+                {
+                    // Re-check here, not just at selection time in HandleFilesSelected — the
+                    // browser-reported ContentType is client input, and pendingFiles can sit
+                    // staged for a while before the user hits Enviar.
+                    if (!AttachmentStorageService.IsAllowedContentType(file.ContentType))
+                    {
+                        sendError = $"\"{file.Name}\" tem um tipo de arquivo não permitido e não foi enviado.";
+                        continue;
+                    }
+
+                    var attachmentId = Guid.NewGuid();
+                    string storagePath;
+                    try
+                    {
+                        await using var stream = file.OpenReadStream(AttachmentStorageService.MaxSizeBytes);
+                        storagePath = await Storage.SaveAsync(message.Id, attachmentId, file.Name, stream, file.ContentType);
+                    }
+                    catch (InvalidDataException)
+                    {
+                        // File's actual bytes contradict the content type the browser reported.
+                        sendError = $"\"{file.Name}\" não corresponde ao tipo de arquivo informado e não foi enviado.";
+                        continue;
+                    }
+                    savedStoragePaths.Add(storagePath);
+
+                    db.ChatMessageAttachments.Add(new ChatMessageAttachment
+                    {
+                        Id = attachmentId,
+                        ChatMessageId = message.Id,
+                        FileName = file.Name,
+                        ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                        SizeBytes = file.Size,
+                        StoragePath = storagePath
+                    });
+                }
+                await db.SaveChangesAsync();
+
+                // Reload with everything included so the broadcast carries a display-ready message.
+                message = await db.ChatMessages
+                    .Include(m => m.User)
+                    .Include(m => m.ReferencedDocPage)
+                    .Include(m => m.Attachments)
+                    .Include(m => m.Mentions).ThenInclude(x => x.User)
+                    .FirstAsync(m => m.Id == message.Id);
+
+                // Notify every other workspace member — WorkspaceChatBroadcaster only reaches
+                // circuits with this chat page currently open, so this is what tells someone who
+                // isn't looking at the chat right now that a message is waiting. Mentioned
+                // members get a more specific notification instead (below), not this one too.
+                var senderName = string.IsNullOrEmpty(message.User!.DisplayName) ? (message.User.Email ?? "Alguém") : message.User.DisplayName;
+
+                foreach (var recipientId in recipientIds.Except(validMentionedUserIds))
+                {
+                    db.Notifications.Add(new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = recipientId,
+                        Type = NotificationType.ChatMessage,
+                        Message = Notification.TruncateMessage($"{senderName} enviou uma mensagem no chat de \"{Workspace.Name}\"."),
+                        WorkspaceId = WorkspaceId,
+                        IsRead = false,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+
+                foreach (var mentionedUserId in validMentionedUserIds.Where(id => id != CurrentUserId))
+                {
+                    db.Notifications.Add(new Notification
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = mentionedUserId,
+                        Type = NotificationType.ChatMention,
+                        Message = Notification.TruncateMessage($"{senderName} mencionou você no chat de \"{Workspace.Name}\"."),
+                        WorkspaceId = WorkspaceId,
+                        IsRead = false,
+                        CreatedAtUtc = DateTime.UtcNow
+                    });
+                }
+
+                await db.SaveChangesAsync();
+            }
+
+            sendModel.Content = "";
+            selectedDocId = "";
+            pendingFiles = [];
+            mentionedUserIds.Clear();
+            mentionedEveryone = false;
+            Broadcaster.Broadcast(message);
+        }
+        catch (Exception)
+        {
+            sendError = "Não foi possível enviar a mensagem. Tente novamente.";
+
+            // Best-effort cleanup of files already written to disk this attempt — a failed
+            // delete here shouldn't hide the real error from the user.
+            try
+            {
+                foreach (var path in savedStoragePaths)
+                {
+                    Storage.Delete(path);
+                }
+            }
+            catch
+            {
+            }
+        }
+        finally
+        {
+            isSending = false;
+        }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024.0:0.#} KB";
+        }
+
+        return $"{bytes / (1024.0 * 1024.0):0.#} MB";
+    }
+
+    private static string MentionInitial(string displayName) =>
+        string.IsNullOrWhiteSpace(displayName) ? "?" : displayName.Trim()[0].ToString().ToUpperInvariant();
+
+    private static string MentionAvatarUrl(string userId, string avatarPath) =>
+        $"/avatars/{userId}/download?v={Uri.EscapeDataString(System.IO.Path.GetFileNameWithoutExtension(avatarPath))}";
+
+    public void Dispose()
+    {
+        selfRef?.Dispose();
+    }
+
+    private class SendMessageModel
+    {
+        // Not [Required] — a message can be just a file and/or a doc reference, with no
+        // text. HandleSend does the "must have at least one of text/file/doc" check itself.
+        [StringLength(2000, ErrorMessage = "Mensagem muito longa.")]
+        public string Content { get; set; } = "";
+    }
+}
