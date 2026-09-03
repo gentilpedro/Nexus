@@ -34,9 +34,24 @@ export function initComposeMentions(element, dotNetRef) {
     element.addEventListener('input', () => {
         dotNetRef.invokeMethodAsync('OnComposeInput', element.value, element.selectionStart);
     });
+
+    // <textarea> never submits its form on Enter by itself — only <input> does that natively.
+    // Shift+Enter still falls through to the default behavior (a newline), matching the usual
+    // chat-app convention.
+    element.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            element.closest('form')?.requestSubmit();
+        }
+    });
 }
 
-export function insertMentionText(element, newValue, caretPosition) {
+// Sets the textarea's DOM value directly. Needed anywhere the C# side wants to force what's
+// on screen (inserting a mention token, clearing the box after a send) — Blazor's own
+// re-render only pushes "value" down when its *previous* rendered value differs from the new
+// one, but this textarea is deliberately uncontrolled (see ChatComposeBox.razor) so its actual
+// on-screen content moves via this function, not via Blazor's diff, and can otherwise go stale.
+export function setComposeValue(element, newValue, caretPosition) {
     if (!element) {
         return;
     }
