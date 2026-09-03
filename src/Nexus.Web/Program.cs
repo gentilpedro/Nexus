@@ -407,6 +407,38 @@ app.MapGet("/chat-attachments/{id:guid}/download", async (
     return Results.File(fullPath, attachment.ContentType, attachment.FileName);
 }).RequireAuthorization();
 
+app.MapGet("/doc-files/{id:guid}/download", async (
+    Guid id,
+    HttpContext http,
+    IDbContextFactory<Nexus.Infrastructure.Data.AppDbContext> dbFactory,
+    IAuthorizationService authorizationService,
+    AttachmentStorageService storage) =>
+{
+    await using var db = await dbFactory.CreateDbContextAsync();
+    var doc = await db.DocPages.FirstOrDefaultAsync(d => d.Id == id && d.Type == DocPageType.File);
+
+    if (doc?.FileStoragePath is null)
+    {
+        return Results.NotFound();
+    }
+
+    var authResult = await authorizationService.AuthorizeAsync(
+        http.User, doc.WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+
+    if (!authResult.Succeeded)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var fullPath = storage.GetFullPath(doc.FileStoragePath);
+    if (!File.Exists(fullPath))
+    {
+        return Results.NotFound();
+    }
+
+    return Results.File(fullPath, doc.FileContentType ?? "application/octet-stream", doc.FileName ?? doc.Title);
+}).RequireAuthorization();
+
 app.MapGet("/avatars/{userId:guid}/download", async (
     Guid userId,
     HttpContext http,
