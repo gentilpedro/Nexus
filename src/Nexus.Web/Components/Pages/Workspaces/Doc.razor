@@ -15,6 +15,7 @@
 @inject NavigationContextService NavContext
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@inject AttachmentStorageService Storage
 
 <PageTitle>@(doc?.Title ?? "Nova página")</PageTitle>
 
@@ -216,6 +217,14 @@
             // Stale/direct link to a spreadsheet under the text-doc route — send it to the
             // right editor instead of rendering the wrong one.
             NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/spreadsheets/{doc.Id}", replace: true);
+            return;
+        }
+
+        if (doc.Type == DocPageType.File)
+        {
+            // A File page has no editor of its own — a direct link (e.g. from the docs
+            // list) just downloads the imported file instead.
+            NavigationManager.NavigateTo($"/doc-files/{doc.Id}/download", forceLoad: true);
             return;
         }
 
@@ -432,6 +441,12 @@
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.ReferencedDocPageId, (Guid?)null));
 
         await db.DocPages.Where(d => d.Id == doc.Id).ExecuteDeleteAsync();
+
+        if (doc.Type == DocPageType.File && doc.FileStoragePath is not null)
+        {
+            Storage.Delete(doc.FileStoragePath);
+        }
+
         NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
     }
 }

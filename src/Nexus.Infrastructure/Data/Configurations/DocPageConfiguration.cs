@@ -19,6 +19,10 @@ public class DocPageConfiguration : IEntityTypeConfiguration<DocPage>
         builder.Property(d => d.ContentHtml).HasMaxLength(DocPage.MaxContentHtmlLength);
         builder.Property(d => d.GridDataJson).HasMaxLength(DocPage.MaxGridDataJsonLength);
 
+        builder.Property(d => d.FileName).HasMaxLength(500);
+        builder.Property(d => d.FileContentType).HasMaxLength(200);
+        builder.Property(d => d.FileStoragePath).HasMaxLength(500);
+
         // Page belongs to the workspace's lifecycle — deleting the workspace deletes its pages.
         builder.HasOne(d => d.Workspace)
             .WithMany()

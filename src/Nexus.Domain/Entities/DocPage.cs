@@ -16,10 +16,19 @@ public class DocPage
     public string Title { get; set; } = "";
     public DocPageType Type { get; set; }
 
-    // Text pages use ContentHtml; Spreadsheet pages use GridDataJson — only one is
-    // populated depending on Type, same idea as WorkItem.Type discriminating one entity.
+    // Text pages use ContentHtml; Spreadsheet pages use GridDataJson; File pages use the
+    // File* properties below — only the set matching Type is populated, same idea as
+    // WorkItem.Type discriminating one entity.
     public string? ContentHtml { get; set; }
     public string? GridDataJson { get; set; }
+
+    // Set only when Type == File — an imported file stored the same way as a chat
+    // attachment (see AttachmentStorageService), just owned by a DocPage instead of a
+    // ChatMessage.
+    public string? FileName { get; set; }
+    public string? FileContentType { get; set; }
+    public long? FileSizeBytes { get; set; }
+    public string? FileStoragePath { get; set; }
 
     // Who created this page — set once at creation, never overwritten on edit.
     public string? CreatedByUserId { get; set; }
