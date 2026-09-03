@@ -13,6 +13,7 @@
 @inject WorkspaceChatBroadcaster Broadcaster
 @inject AttachmentStorageService Storage
 @inject IJSRuntime JS
+@inject ILogger<ChatComposeBox> Logger
 
 <EditForm Model="sendModel" OnValidSubmit="HandleSend" class="chat-compose">
     <div class="chat-compose-toolbar">
@@ -462,8 +463,9 @@
             mentionedEveryone = false;
             Broadcaster.Broadcast(message);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.LogError(ex, "Failed to send chat message in workspace {WorkspaceId}", WorkspaceId);
             sendError = "Não foi possível enviar a mensagem. Tente novamente.";
 
             // Best-effort cleanup of files already written to disk this attempt — a failed
