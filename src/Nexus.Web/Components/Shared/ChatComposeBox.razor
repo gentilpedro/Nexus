@@ -219,7 +219,7 @@
         showMentionDropdown = false;
         StateHasChanged();
 
-        await module.InvokeVoidAsync("insertMentionText", composeTextareaEl, newValue, newCaret);
+        await module.InvokeVoidAsync("setComposeValue", composeTextareaEl, newValue, newCaret);
     }
 
     private int QueryLengthAt(int atIndex)
@@ -461,6 +461,16 @@
             pendingFiles = [];
             mentionedUserIds.Clear();
             mentionedEveryone = false;
+
+            // renderedContent going "" -> "" is a no-op for Blazor's own diffing (this textarea
+            // is uncontrolled — see the field's comment — so the DOM's actual value, whatever the
+            // user just typed, was never tracked as part of that diff). Without this the sent
+            // text stayed visible in the box after a successful send.
+            if (module is not null)
+            {
+                await module.InvokeVoidAsync("setComposeValue", composeTextareaEl, "", 0);
+            }
+
             Broadcaster.Broadcast(message);
         }
         catch (Exception ex)
