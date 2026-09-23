@@ -143,27 +143,59 @@ Serve para o job `sync-github` empurrar a branch `sync/gitlab` e abrir o Pull Re
 
 ### 3. Branch protegida no GitLab
 
-A main do GitLab é protegida contra push direto de pessoas, mas o espelhamento precisa conseguir
-escrever nela. Em **Settings → Repository → Protected branches**, a main deve ter *Allowed to
-push and merge* incluindo o usuário dono do token do passo 1 (ou o Project Access Token, se foi
-esse o caminho escolhido).
+Em **Settings → Repository → Protected branches**, a main precisa de *Allowed to push and merge*
+= **Maintainers**. Com o valor padrão (*No one*) o espelhamento é recusado com
+`You are not allowed to push code to protected branches on this project` — o push do GitHub é um
+`git push` comum, e o GitLab não tem como distingui-lo de uma pessoa.
+
+No plano Free só dá para escolher papéis, não usuários específicos, então o efeito colateral é
+inevitável: **qualquer maintainer passa a conseguir commitar direto na main do GitLab**, por fora
+de MR. A regra "só entra por MR" continua valendo lá, mas como convenção.
+
+O portão que de fato importa é o do GitHub, e esse é aplicado de verdade: o ruleset `protect main`
+exige Pull Request e o job `verify` verde para qualquer mudança na main — inclusive para
+administradores —, além de bloquear force-push e deleção. É ele que garante que nada chega a
+produção sem passar por revisão.
 
 ### 4. Alinhamento inicial dos históricos
 
-Feito uma única vez, quando esta mudança entrou. Os dois repositórios tinham históricos sem
-nenhum commit em comum (o GitLab era uma cópia achatada em um "Initial commit"), e o alinhamento
-substituiu o histórico do GitLab pelo do GitHub — 152 commits com autor, data e mensagem
-originais, em vez de três.
+Feito uma única vez, em 23/09/2026. Os dois repositórios tinham históricos sem nenhum commit em
+comum (o projeto do GitLab foi criado do zero em vez de importado, e tinha só um "Initial commit"
+achatado), e o alinhamento substituiu o histórico do GitLab pelo do GitHub: 156 commits com as
+datas e mensagens originais, 27 branches e 4 tags, em vez de três commits.
+
+Na mesma passada a autoria foi normalizada — 72 dos commits estavam assinados com o literal
+`--local`, resultado de um `git config user.name --local` em que a flag virou o valor.
 
 ```bash
 git clone --bare https://github.com/gentilpedro/Nexus.git nexus.git
 cd nexus.git
-git push --force <url-do-gitlab> 'refs/heads/main:refs/heads/main'
-git push --force <url-do-gitlab> 'refs/tags/*:refs/tags/*'
-git push        <url-do-gitlab> 'refs/heads/*:refs/heads/*'
+git bundle create ../backup.bundle --all   # antes de qualquer coisa
+
+git filter-repo --force --commit-callback '
+commit.author_name = b"gentilpedro"
+commit.author_email = b"gentil.pedro21@gmail.com"
+commit.committer_name = b"gentilpedro"
+commit.committer_email = b"gentil.pedro21@gmail.com"
+'
+
+git push --force <url-do-github> '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+git push --force <url-do-gitlab> '+refs/heads/main:refs/heads/main'
+git push --force -o ci.skip <url-do-gitlab> '+refs/tags/*:refs/tags/*' '+refs/heads/*:refs/heads/*'
 ```
 
-Depois disso, `--force` nunca mais.
+Três detalhes que só aparecem na hora de rodar:
+
+- **Desligue as workflows `Deploy Nexus` e `Sincronizar com o GitLab` antes** (`gh workflow
+  disable`). Um force-push de 31 refs dispara um evento de push por ref — seriam 31 execuções do
+  espelhamento e um redeploy em produção sem nenhuma mudança de código.
+- **`-o ci.skip` no push em massa para o GitLab**, pelo mesmo motivo do outro lado: sem isso são
+  31 pipelines completos de uma vez.
+- **`Allow force push` na main do GitLab** precisa ser ligado para o passo e **desligado logo
+  depois**. É a única vez que ele deve estar ligado.
+
+Depois disso, `--force` nunca mais: os dois repositórios compartilham o histórico, e reescrever
+de um lado faz o outro divergir na hora.
 
 ## Quando algo dá errado
 
