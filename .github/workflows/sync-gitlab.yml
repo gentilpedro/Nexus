@@ -76,12 +76,24 @@ jobs:
 
           destino="https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git"
 
+          # Estado da main do GitLab, para explicar uma eventual recusa. || true: o repositório
+          # pode estar vazio, e aí não há o que comparar.
+          git fetch "$destino" 'refs/heads/main:refs/remotes/gitlab/main' > /dev/null 2>&1 || true
+
           # A main vai sozinha e sem --force, de propósito: se o push falhar é porque a main do
           # GitLab tem commit que não existe aqui. Sobrescrever apagaria esse commit antes de ele
           # virar PR aqui (é o que o job sync-github do GitLab faz). Falhar alto é o comportamento
           # certo — o aviso chega antes do dado sumir.
           if ! git push "$destino" 'refs/heads/main:refs/heads/main'; then
-            echo "::error::A main do GitLab divergiu da daqui. Provavelmente há commit feito direto no GitLab: confira o PR aberto pelo job sync-github e faça o merge antes de tentar de novo."
+            # Duas causas possíveis, com soluções opostas: ou os históricos nunca foram alinhados
+            # (e a saída é o alinhamento inicial), ou eles divergiram depois (e a saída é mergear
+            # o PR de volta). Sem separar as duas, a mensagem manda procurar um PR que não existe.
+            if git rev-parse --verify --quiet refs/remotes/gitlab/main > /dev/null \
+               && ! git merge-base refs/heads/main refs/remotes/gitlab/main > /dev/null 2>&1; then
+              echo "::error::Os dois repositórios não têm nenhum commit em comum — o alinhamento inicial dos históricos ainda não foi feito. Ver o passo 4 de docs/sincronizacao-github-gitlab.md. Enquanto isso, nenhum push chega ao GitLab."
+            else
+              echo "::error::A main do GitLab divergiu desta: há commit lá que não existe aqui. Procure o PR aberto pelo job sync-github, mergeie, e rode esta workflow de novo. Não resolva com --force: isso apagaria o commit feito no GitLab."
+            fi
             exit 1
           fi
 
