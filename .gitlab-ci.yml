@@ -241,15 +241,38 @@ release:
       bash .github/scripts/release-notes.sh "$previous_tag" "$version" "$CI_PROJECT_PATH" > release-notes.md
       cat release-notes.md
 
-      # A tag já existe (chegou do GitHub), então este POST só cria o objeto Release apontando
-      # para ela. Autenticado com o token do próprio job — não precisa de nenhum Personal Access
-      # Token guardado em variável do projeto.
-      curl --fail --silent --show-error --request POST \
+      # A tag já existe (chegou do GitHub), então só falta o objeto Release apontando para ela.
+      # Autenticado com o token do próprio job — não precisa de nenhum Personal Access Token
+      # guardado em variável do projeto.
+      api_releases="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+
+      # Criar e atualizar são endpoints diferentes aqui: um POST numa tag que já tem Release
+      # devolve 409 e reprova o job. Isso transforma qualquer reexecução — um job reiniciado à
+      # mão, um pipeline repetido depois de mexer nas notas — em pipeline vermelho, sem que nada
+      # esteja de fato errado. Por isso decide entre criar e atualizar antes de escrever.
+      if curl --fail --silent --output /dev/null \
+           --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+           "${api_releases}/${CI_COMMIT_TAG}"; then
+        echo "Release ${CI_COMMIT_TAG} já existe — atualizando as notas."
+        metodo="PUT"
+        destino="${api_releases}/${CI_COMMIT_TAG}"
+      else
+        echo "Criando a Release ${CI_COMMIT_TAG}."
+        metodo="POST"
+        destino="$api_releases"
+      fi
+
+      # tag_name só vai no POST: no PUT a tag já está na própria URL, e mandá-la no corpo é erro.
+      set -- --data-urlencode "name=${CI_COMMIT_TAG}" \
+             --data-urlencode "description@release-notes.md"
+      if [ "$metodo" = "POST" ]; then
+        set -- "$@" --data-urlencode "tag_name=${CI_COMMIT_TAG}"
+      fi
+
+      curl --fail --silent --show-error --request "$metodo" \
         --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
-        --data-urlencode "tag_name=${CI_COMMIT_TAG}" \
-        --data-urlencode "name=${CI_COMMIT_TAG}" \
-        --data-urlencode "description@release-notes.md" \
-        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+        "$@" \
+        "$destino"
   artifacts:
     paths:
       - release-notes.md
