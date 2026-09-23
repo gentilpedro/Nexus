@@ -1,0 +1,130 @@
+name: Sincronizar com o GitLab
+
+# Espelha este repositório para o GitLab (o repositório do TCC), que precisa refletir o mesmo
+# código e o mesmo histórico daqui. O sentido contrário — commit feito no GitLab — é tratado pelo
+# job `sync-github` do .gitlab-ci.yml, que abre um Pull Request aqui em vez de empurrar direto
+# para a main.
+#
+# Os dois repositórios compartilham o mesmo histórico de commits (ver
+# docs/sincronizacao-github-gitlab.md). É isso que torna o espelhamento um `git push` comum, sem
+# force e sem conversão de patch: cada commit tem o mesmo SHA nos dois lados.
+#
+# O GitHub continua sendo a origem da verdade: é daqui que sai o deploy (FTPS -> IIS) e é aqui
+# que as tags/releases são criadas. O GitLab recebe tudo pronto.
+
+on:
+  # Toda branch, não só a main: o TCC precisa mostrar o trabalho como ele aconteceu (branches de
+  # feature, PRs, merges), não só o resultado final na main.
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+
+  # A tag da release é criada pelo job `release` do deploy-nexus.yml usando o GITHUB_TOKEN, e o
+  # GitHub de propósito não dispara workflows para refs criadas com esse token (proteção contra
+  # recursão). Sem este gatilho a tag ficaria só aqui e nunca chegaria ao GitLab.
+  workflow_run:
+    workflows: ["Deploy Nexus"]
+    types: [completed]
+
+  # Permite re-espelhar manualmente depois de resolver uma divergência.
+  workflow_dispatch:
+
+# Dois espelhamentos ao mesmo tempo podem empurrar refs fora de ordem. Sem cancelar em andamento:
+# cada execução empurra um conjunto de refs que a seguinte não necessariamente repete.
+concurrency:
+  group: sync-gitlab
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  espelhar:
+    runs-on: ubuntu-latest
+
+    env:
+      # Caminho do projeto no gitlab.com (grupo/subgrupo/projeto).
+      GITLAB_PROJECT: senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus
+
+    steps:
+      - name: Conferir se o token do GitLab está configurado
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_SYNC_TOKEN }}
+        run: |
+          if [ -z "$GITLAB_TOKEN" ]; then
+            echo "::error::O segredo GITLAB_SYNC_TOKEN não está configurado — o GitLab não vai receber este push. Veja docs/sincronizacao-github-gitlab.md."
+            exit 1
+          fi
+
+      # Clone bare: traz refs/heads/* e refs/tags/* e nada mais. Um `actions/checkout` comum traria
+      # só a ref do evento, e um clone --mirror traria também refs/pull/*, que não deve ser
+      # espelhado.
+      - name: Clonar o repositório completo
+        run: |
+          git clone --bare \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" \
+            repo.git
+
+      - name: Empurrar branches e tags para o GitLab
+        working-directory: repo.git
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          destino="https://oauth2:${GITLAB_TOKEN}@gitlab.com/${GITLAB_PROJECT}.git"
+
+          # Estado da main do GitLab, para explicar uma eventual recusa. || true: o repositório
+          # pode estar vazio, e aí não há o que comparar.
+          git fetch "$destino" 'refs/heads/main:refs/remotes/gitlab/main' > /dev/null 2>&1 || true
+
+          # A main vai sozinha e sem --force, de propósito: se o push falhar é porque a main do
+          # GitLab tem commit que não existe aqui. Sobrescrever apagaria esse commit antes de ele
+          # virar PR aqui (é o que o job sync-github do GitLab faz). Falhar alto é o comportamento
+          # certo — o aviso chega antes do dado sumir.
+          if ! git push "$destino" 'refs/heads/main:refs/heads/main'; then
+            # Duas causas possíveis, com soluções opostas: ou os históricos nunca foram alinhados
+            # (e a saída é o alinhamento inicial), ou eles divergiram depois (e a saída é mergear
+            # o PR de volta). Sem separar as duas, a mensagem manda procurar um PR que não existe.
+            if git rev-parse --verify --quiet refs/remotes/gitlab/main > /dev/null \
+               && ! git merge-base refs/heads/main refs/remotes/gitlab/main > /dev/null 2>&1; then
+              echo "::error::Os dois repositórios não têm nenhum commit em comum — o alinhamento inicial dos históricos ainda não foi feito. Ver o passo 4 de docs/sincronizacao-github-gitlab.md. Enquanto isso, nenhum push chega ao GitLab."
+            else
+              echo "::error::A main do GitLab divergiu desta: há commit lá que não existe aqui. Procure o PR aberto pelo job sync-github, mergeie, e rode esta workflow de novo. Não resolva com --force: isso apagaria o commit feito no GitLab."
+            fi
+            exit 1
+          fi
+
+          # Demais branches e tags. As branches sync/* são criadas pelo próprio GitLab ao abrir o
+          # PR de volta — devolvê-las seria só ruído.
+          refspecs=()
+          while read -r ref; do
+            case "$ref" in
+              refs/heads/main|refs/heads/sync/*) continue ;;
+            esac
+            refspecs+=("${ref}:${ref}")
+          done < <(git for-each-ref --format='%(refname)' refs/heads refs/tags)
+
+          if [ ${#refspecs[@]} -eq 0 ]; then
+            echo "Nada além da main para espelhar."
+            exit 0
+          fi
+
+          # Best-effort: uma branch antiga que divergiu não pode impedir o espelhamento das
+          # outras. A main, que é a que importa, já foi empurrada acima com verificação.
+          if ! git push "$destino" "${refspecs[@]}"; then
+            echo "::warning::Alguma branch ou tag secundária não pôde ser espelhada (veja o log acima). A main está sincronizada."
+          fi
+
+      - name: Resumo
+        if: always()
+        run: |
+          {
+            echo "### Espelhamento para o GitLab"
+            echo
+            echo "- Projeto: \`${GITLAB_PROJECT}\`"
+            echo "- Commit: \`${GITHUB_SHA:0:7}\`"
+            echo "- Resultado: \`${{ job.status }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -33,7 +33,11 @@ else
   range="HEAD"
 fi
 
-commit_url="https://github.com/${repo}/commit"
+# Base URLs são sobrescrevíveis por variável de ambiente — o pipeline do GitHub usa o padrão
+# (github.com), o pipeline do GitLab aponta para o próprio projeto (ver .gitlab-ci.yml). Sem a
+# variável definida, o comportamento é idêntico ao original.
+commit_url="${NEXUS_COMMIT_BASE_URL:-https://github.com/${repo}/commit}"
+compare_base_url="${NEXUS_COMPARE_BASE_URL:-https://github.com/${repo}/compare}"
 
 # Ordem intencional: o que o usuário final percebe vem antes do que só interessa a quem mantém o
 # código.
@@ -191,8 +195,8 @@ fi
 printf -- '---\n\n'
 
 if [ -n "$previous_tag" ]; then
-  printf '**Diferença completa:** https://github.com/%s/compare/%s...v%s\n\n' \
-    "$repo" "$previous_tag" "$version"
+  printf '**Diferença completa:** %s/%s...v%s\n\n' \
+    "$compare_base_url" "$previous_tag" "$version"
 fi
 
 printf 'Para confirmar qual versão está no ar: `GET https://usenexus.runasp.net/version`\n'

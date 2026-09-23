@@ -1,0 +1,256 @@
+# Pipeline do Nexus no GitLab, adaptado de .github/workflows/deploy-nexus.yml (GitHub Actions).
+#
+# Cobre validacao (calculo de versao + build/testes/analise estatica), a sincronizacao de volta
+# para o GitHub e a criacao da Release deste repositorio GitLab. NAO cobre deploy (FTPS -> IIS):
+# isso continua exclusivo do pipeline no GitHub — publicar em producao a partir de dois lugares
+# diferentes criaria duas fontes de verdade para "o que esta no ar".
+#
+# Os dois repositorios compartilham o mesmo historico de commits: um commit tem o mesmo SHA aqui
+# e no GitHub. Ver docs/sincronizacao-github-gitlab.md.
+#
+# Regra complementar (configurada no projeto, fora deste arquivo): a branch default e protegida
+# contra push direto por pessoas — toda mudanca so entra via Merge Request, e o MR so pode ser
+# mergeado se o pipeline (jobs abaixo) passar. O token do espelhamento vindo do GitHub e a
+# excecao: ele precisa ter permissao de push na branch protegida.
+
+stages:
+  - version
+  - verify
+  - sync
+  - release
+
+variables:
+  # Historico e tags completos: sem isso next-version.sh não sabe qual foi a ultima release nem
+  # quais commits vieram depois dela (equivalente a fetch-depth: 0 no GitHub Actions). O job de
+  # sincronizacao tambem depende disso para comparar as duas branches.
+  GIT_DEPTH: 0
+  DOTNET_IMAGE: "mcr.microsoft.com/dotnet/sdk:10.0"
+  # Repositorio espelho no GitHub (owner/nome) e branch usada para levar commits daqui para la.
+  GITHUB_PROJECT: "gentilpedro/Nexus"
+  GITHUB_SYNC_BRANCH: "sync/gitlab"
+
+# Decide o numero da proxima versao a partir dos commits desde a ultima tag (Conventional
+# Commits — ver .github/scripts/next-version.sh). Roda antes do build porque a versao precisa
+# ser carimbada no binario que o verify compila, não aplicada depois.
+version:
+  stage: version
+  image: $DOTNET_IMAGE
+  interruptible: true
+  rules:
+    # Pipeline de tag só cria a Release (a tag já traz a versão pronta) — recompilar tudo de novo
+    # seria repetir, em minutos de runner, o que o pipeline da main acabou de fazer.
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - when: on_success
+  before_script:
+    # A imagem do SDK do .NET não vem com git; os scripts de versionamento precisam dele.
+    - apt-get update -qq && apt-get install -y -qq git > /dev/null
+  script:
+    # A lógica de versionamento decide o número que vai para a tag/produção no pipeline real —
+    # se ela errar em silêncio o estrago só aparece depois de publicado, então é testada aqui.
+    - bash .github/scripts/test-release-scripts.sh
+    - bash .github/scripts/next-version.sh > raw-version.env
+    - echo "build_timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> raw-version.env
+    # Prefixo NEXUS_ + chave em maiúsculo evita colidir com variáveis próprias do GitLab
+    # (ex.: uma variável "VERSION" genérica) quando isso vira variável de ambiente do job seguinte.
+    - sed -E 's/^([a-z_]+)=/NEXUS_\U\1=/' raw-version.env > next-version.env
+    - cat next-version.env
+  artifacts:
+    # `reports: dotenv` é o jeito nativo do GitLab de repassar saída de um job para o próximo —
+    # equivalente a `needs.version.outputs.*` no GitHub Actions.
+    reports:
+      dotenv: next-version.env
+    expire_in: 1 hour
+
+# Quality gate: tudo que pode rejeitar uma mudança ruim roda aqui, antes de qualquer job que
+# toque produção (que nem existe neste pipeline — ver o comentário no topo do arquivo) e antes
+# de abrir o PR de sincronização no GitHub.
+verify:
+  stage: verify
+  image: $DOTNET_IMAGE
+  interruptible: true
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - when: on_success
+  needs:
+    - job: version
+      artifacts: true
+  script:
+    # Carimba a versão no assembly: o SDK junta Version + SourceRevisionId em
+    # AssemblyInformationalVersion ("1.4.0+<sha>"); BuildTimestamp vira AssemblyMetadata.
+    # É isso que o endpoint /version e o rodapé do app leem em tempo de execução.
+    - >
+      VERSION_PROPS="-p:Version=$NEXUS_VERSION
+      -p:SourceRevisionId=$CI_COMMIT_SHA
+      -p:BuildTimestamp=$NEXUS_BUILD_TIMESTAMP"
+
+    # A solução inteira, não só o Nexus.Web — os projetos de teste fazem parte dela, e uma
+    # quebra de compilação em qualquer um deles também deve reprovar o gate.
+    - dotnet restore Nexus.slnx
+    - dotnet build Nexus.slnx --configuration Release --no-restore $VERSION_PROPS
+    - dotnet test Nexus.slnx --configuration Release --no-build --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
+
+    # Reprova em qualquer dependência com vulnerabilidade High/Critical conhecida.
+    # `dotnet list package --vulnerable` sempre sai com código 0 — a severidade precisa ser
+    # detectada na própria saída.
+    - dotnet list Nexus.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+    - |
+      if grep -qiE '\|\s*(High|Critical)\s*\|' vuln.txt; then
+        echo "Vulnerabilidade High/Critical encontrada nas dependências."
+        exit 1
+      fi
+      echo "Nenhuma vulnerabilidade High/Critical encontrada."
+
+    # Análise estática: reprova em qualquer warning do compilador tratado como erro no projeto
+    # inteiro (NU1902 fica de fora — é a exceção documentada do AngleSharp 0.17.1, moderate).
+    - dotnet build Nexus.slnx --configuration Release --no-incremental $VERSION_PROPS /p:TreatWarningsAsErrors=true /p:WarningsNotAsErrors=NU1902
+
+    - dotnet publish src/Nexus.Web/Nexus.Web.csproj -c Release -o publish --no-restore $VERSION_PROPS
+
+    # Falha cedo se o carimbo de versão não chegou ao binário publicado — sem esta conferência
+    # um erro nas propriedades do MSBuild passaria despercebido.
+    - |
+      expected="$NEXUS_VERSION"
+      found="$(grep -aoE "${expected}\+[0-9a-f]{40}" publish/Nexus.Web.dll | head -n 1 || true)"
+      if [ -z "$found" ]; then
+        echo "O binário publicado não foi carimbado com a versão ${expected}."
+        exit 1
+      fi
+      echo "Versão carimbada: ${found}"
+  artifacts:
+    when: always
+    paths:
+      - test-results/
+      - publish/
+    expire_in: 1 week
+
+# Leva para o GitHub o que foi commitado aqui. O deploy sai de lá, então uma mudança que entrasse
+# só no GitLab nunca chegaria em produção — este job existe para que isso não aconteça.
+#
+# Nunca empurra para a main do GitHub: cria/atualiza a branch sync/gitlab lá e abre um Pull
+# Request, que fica esperando aprovação manual como qualquer outra mudança.
+#
+# Depois do verify, de propósito: um PR só é aberto se o código passou no quality gate.
+sync-github:
+  stage: sync
+  image: alpine:3.20
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  needs:
+    - job: verify
+  before_script:
+    - apk add --no-cache git curl jq > /dev/null
+  script:
+    - |
+      if [ -z "${GITHUB_SYNC_TOKEN:-}" ]; then
+        echo "A variável GITHUB_SYNC_TOKEN não está configurada neste projeto."
+        echo "Ver docs/sincronizacao-github-gitlab.md."
+        exit 1
+      fi
+      # Todos os itens de `script:` rodam no mesmo shell, então esta variável vale até o fim.
+      remote="https://x-access-token:${GITHUB_SYNC_TOKEN}@github.com/${GITHUB_PROJECT}.git"
+
+    # A main do GitHub como ponto de comparação. --no-tags: aqui só interessa onde a main dele
+    # está; as tags deste repositório chegam pelo espelhamento, não por este fetch.
+    - git fetch --no-tags "$remote" '+refs/heads/main:refs/remotes/github/main'
+
+    - |
+      # Este commit veio do próprio GitHub (chegou aqui pelo espelhamento)? Então não há nada a
+      # devolver — e é justamente esta verificação que impede o laço infinito
+      # "GitHub espelha -> GitLab devolve -> GitHub espelha -> ...".
+      if git merge-base --is-ancestor "$CI_COMMIT_SHA" refs/remotes/github/main; then
+        echo "Commit ${CI_COMMIT_SHA} já está na main do GitHub. Nada a sincronizar."
+        exit 0
+      fi
+
+      # Sem ancestral comum os dois repositórios não compartilham histórico, e um PR entre eles
+      # seria impossível de mergear. Isso só acontece se o alinhamento inicial não foi feito.
+      if ! git merge-base "$CI_COMMIT_SHA" refs/remotes/github/main > /dev/null 2>&1; then
+        echo "Os dois repositórios não têm histórico em comum — o alinhamento inicial não foi feito."
+        echo "Ver docs/sincronizacao-github-gitlab.md."
+        exit 1
+      fi
+
+      # --force na branch de sincronização (e só nela): ela é descartável, sempre reescrita para
+      # apontar ao commit atual da main daqui. A main do GitHub nunca é tocada por este job.
+      git push --force "$remote" "${CI_COMMIT_SHA}:refs/heads/${GITHUB_SYNC_BRANCH}"
+
+      owner="${GITHUB_PROJECT%%/*}"
+      api="https://api.github.com/repos/${GITHUB_PROJECT}"
+
+      aberto="$(curl --fail --silent --show-error \
+        --header "Authorization: Bearer ${GITHUB_SYNC_TOKEN}" \
+        --header "Accept: application/vnd.github+json" \
+        "${api}/pulls?state=open&base=main&head=${owner}:${GITHUB_SYNC_BRANCH}" \
+        | jq -r '.[0].html_url // empty')"
+
+      if [ -n "$aberto" ]; then
+        echo "PR de sincronização já aberto — agora atualizado com este commit: ${aberto}"
+        exit 0
+      fi
+
+      corpo="Commits feitos no [GitLab](${CI_PROJECT_URL}) que ainda não estão aqui.
+
+      Aberto automaticamente pelo job \`sync-github\` do pipeline do GitLab (pipeline [${CI_PIPELINE_ID}](${CI_PIPELINE_URL})), que já passou no quality gate de lá.
+
+      O merge deste PR dispara o deploy e devolve o código ao GitLab pelo espelhamento. Não faça push direto na main do GitHub para resolver isto."
+
+      jq -n \
+        --arg title "sync(gitlab): $(git log -1 --format=%s "$CI_COMMIT_SHA")" \
+        --arg head "$GITHUB_SYNC_BRANCH" \
+        --arg body "$corpo" \
+        '{title: $title, head: $head, base: "main", body: $body}' > pr.json
+
+      criado="$(curl --fail --silent --show-error --request POST \
+        --header "Authorization: Bearer ${GITHUB_SYNC_TOKEN}" \
+        --header "Accept: application/vnd.github+json" \
+        --data @pr.json \
+        "${api}/pulls" | jq -r '.html_url')"
+
+      echo "PR aberto: ${criado}"
+
+# Cria a Release deste projeto GitLab para uma tag que chegou do GitHub pelo espelhamento.
+#
+# Só em pipeline de tag, de propósito. A tag é criada uma única vez, no GitHub, depois do deploy
+# — ela significa "esta versão está no ar". Se este projeto também calculasse a própria versão e
+# criasse a própria tag, as duas numerações divergiriam e o espelhamento passaria a falhar com
+# tags de mesmo nome apontando para commits diferentes.
+release:
+  stage: release
+  image: alpine:3.20
+  needs: []
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  before_script:
+    - apk add --no-cache bash git curl > /dev/null
+  script:
+    - |
+      version="${CI_COMMIT_TAG#v}"
+
+      # A tag imediatamente anterior a esta na ordem de versão (v1.10.0 > v1.9.0, diferente da
+      # ordem alfabética) — é o ponto de partida das notas.
+      previous_tag="$(git tag --list 'v[0-9]*' --sort=-v:refname \
+        | awk -v cur="$CI_COMMIT_TAG" 'achou { print; exit } $0 == cur { achou = 1 }')"
+      echo "Release ${CI_COMMIT_TAG} (anterior: ${previous_tag:-nenhuma})"
+
+      # Reaponta as notas para este projeto GitLab em vez do padrão github.com do script original
+      # (ver o comentário em .github/scripts/release-notes.sh).
+      export NEXUS_COMMIT_BASE_URL="${CI_PROJECT_URL}/-/commit"
+      export NEXUS_COMPARE_BASE_URL="${CI_PROJECT_URL}/-/compare"
+      bash .github/scripts/release-notes.sh "$previous_tag" "$version" "$CI_PROJECT_PATH" > release-notes.md
+      cat release-notes.md
+
+      # A tag já existe (chegou do GitHub), então este POST só cria o objeto Release apontando
+      # para ela. Autenticado com o token do próprio job — não precisa de nenhum Personal Access
+      # Token guardado em variável do projeto.
+      curl --fail --silent --show-error --request POST \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+        --data-urlencode "tag_name=${CI_COMMIT_TAG}" \
+        --data-urlencode "name=${CI_COMMIT_TAG}" \
+        --data-urlencode "description@release-notes.md" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+  artifacts:
+    paths:
+      - release-notes.md
+    expire_in: 6 months
