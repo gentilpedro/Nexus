@@ -94,25 +94,52 @@ produção; entrar por ele é sempre mais curto.
 
 ## Configuração (uma vez só)
 
-### 1. Token do GitLab, guardado no GitHub
+São dois **Personal Access Tokens**, um de cada lado — cada repositório guarda o token do outro. O
+token de um lado só precisa do mínimo que o job daquele sentido faz, nada além disso.
 
-1. No GitLab: **User settings → Access tokens** → novo token com escopo `write_repository` e papel
-   **Maintainer**. (Um Project Access Token do projeto também serve.)
-2. No GitHub, em `gentilpedro/Nexus` → **Settings → Secrets and variables → Actions → New
+### 1. Token do GitLab, guardado como segredo no GitHub
+
+Serve para a workflow de espelhamento empurrar commits e tags no GitLab.
+
+1. No GitLab, em https://gitlab.com/-/user_settings/personal_access_tokens (avatar → **Edit
+   profile → Access tokens**) → **Add new token**:
+   - Nome: algo reconhecível, ex. `espelhamento-github`
+   - Validade: obrigatória, no máximo 1 ano — anote a data, quando vencer a sincronização para
+   - Escopo: **apenas `write_repository`**. Nada de `api`: o job só faz `git push`.
+2. Copie o token (ele só aparece uma vez).
+3. No GitHub, em `gentilpedro/Nexus` → **Settings → Secrets and variables → Actions → New
    repository secret**:
    - Nome: `GITLAB_SYNC_TOKEN`
    - Valor: o token gerado.
 
-### 2. Token do GitHub, guardado no GitLab
+O token herda as permissões do **seu usuário** no projeto — não existe "escolher papel" num PAT.
+Por isso o passo 3 abaixo importa: o seu usuário precisa poder escrever na main protegida.
 
-1. No GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens** →
-   novo token com acesso ao repositório `gentilpedro/Nexus` e as permissões:
-   - `Contents`: Read and write (empurrar a branch `sync/gitlab`)
-   - `Pull requests`: Read and write (abrir o PR)
+> Alternativa: um **Project Access Token** (projeto → **Settings → Access tokens**), que cria um
+> usuário-robô com papel próprio e não morre junto com a sua conta. Exige papel Owner no projeto
+> para ser criado — se o botão não aparecer, use o PAT acima, funciona igual.
+
+### 2. Token do GitHub, guardado como variável de CI no GitLab
+
+Serve para o job `sync-github` empurrar a branch `sync/gitlab` e abrir o Pull Request.
+
+1. No GitHub, em **Settings → Developer settings → Personal access tokens → Fine-grained tokens**
+   → **Generate new token**:
+   - Resource owner: `gentilpedro`
+   - Repository access: **Only select repositories** → `Nexus`
+   - Repository permissions:
+     - `Contents`: **Read and write** (empurrar a branch `sync/gitlab`)
+     - `Pull requests`: **Read and write** (abrir o PR)
+   - `Metadata: Read-only` entra sozinho; nenhuma outra permissão é necessária.
 2. No GitLab, no projeto → **Settings → CI/CD → Variables → Add variable**:
    - Chave: `GITHUB_SYNC_TOKEN`
    - Valor: o token gerado
-   - Marcar **Masked** e **Protected** (a branch default é protegida).
+   - Tipo: **Variable**
+   - Marcar **Masked** (não vaza no log) e **Protected** (a branch default é protegida — sem isso
+     a variável não chega no job que roda nela).
+
+> Um token clássico com escopo `repo` também funciona, mas dá acesso total a **todos** os seus
+> repositórios. O fine-grained fica restrito ao `Nexus` e às duas permissões acima.
 
 ### 3. Branch protegida no GitLab
 
