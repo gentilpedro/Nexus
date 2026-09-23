@@ -1,3 +1,36 @@
+# Stack de desenvolvimento local. NÃO é um deploy de produção: constrói a partir do código,
+# expõe o Postgres no host e lê a senha do banco do .env (não versionado).
+#
+# Sobe uma instância por padrão. Para exercitar o backplane entre instâncias:
+#
+#   1. descomente REDIS_CONNECTION no .env (ver .env.example)
+#   2. docker compose --profile escala up
+#
+# ...que sobe o Redis e uma segunda instância do app em http://localhost:8081. Abra as duas
+# portas em navegadores diferentes, entre no mesmo workspace e poste no chat: a mensagem aparece
+# do outro lado sem recarregar a página. Sem o Redis, cada porta só enxerga as próprias mensagens
+# — que é exatamente a limitação que o backplane resolve.
+
+# Configuração comum às duas instâncias, para não duplicar (e não deixar as duas divergirem).
+x-web-comum: &web-comum
+  build:
+    context: .
+    dockerfile: Dockerfile
+  environment: &web-env
+    # Este compose é desenvolvimento local: sem esta linha o app assume Production e se recusa a
+    # subir aqui, porque as chaves de Data Protection não podem ser cifradas no Linux sem um
+    # certificado (DPAPI é só Windows) e é o appsettings.Development.json que carrega o opt-in
+    # DataProtection:AllowUnprotectedKeys.
+    #
+    # Um deploy real em container NÃO pode copiar esta linha. Tem que fornecer
+    # DataProtection__CertificatePath (+ __CertificatePassword), para a chave ficar cifrada em
+    # repouso — ver InfrastructureServiceCollectionExtensions.
+    ASPNETCORE_ENVIRONMENT: Development
+    ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=Nexus;Username=postgres;Password=${POSTGRES_PASSWORD}"
+  depends_on:
+    db:
+      condition: service_healthy
+
 services:
   db:
     image: postgres:16-alpine
@@ -15,28 +48,49 @@ services:
       timeout: 5s
       retries: 10
 
+  # Estado compartilhado entre instâncias: pub/sub do chat e contador do rate limiter do circuito
+  # (ver src/Nexus.Web/Services/Backplane). Só sobe no profile "escala" — com uma instância só,
+  # o app roda sem Redis e usa as implementações em memória.
+  redis:
+    image: redis:7-alpine
+    profiles: ["escala"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *web-comum
     ports:
       - "8080:8080"
     environment:
-      # This compose file is a LOCAL DEVELOPMENT stack, not a production deployment: it builds
-      # from source, exposes Postgres on the host, and takes its database password from the
-      # untracked .env. Saying so explicitly matters — without it the app defaults to the
-      # Production environment and refuses to start here, because Data Protection keys cannot be
-      # encrypted on Linux without a certificate (DPAPI is Windows-only) and appsettings.
-      # Development.json is what carries the DataProtection:AllowUnprotectedKeys opt-in.
-      #
-      # A real container deployment must NOT copy this line. It has to supply
-      # DataProtection__CertificatePath (+ __CertificatePassword) instead, so the key ring is
-      # encrypted at rest — see InfrastructureServiceCollectionExtensions.
-      ASPNETCORE_ENVIRONMENT: Development
+      <<: *web-env
+      # Só esta instância aplica migrations. Duas subindo juntas e migrando o mesmo banco ao
+      # mesmo tempo é uma corrida de verdade — a segunda encontra objetos que a primeira acabou
+      # de criar e falha no meio.
       APPLY_MIGRATIONS_ON_STARTUP: "true"
-      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=Nexus;Username=postgres;Password=${POSTGRES_PASSWORD}"
+      # Vazio quando o Redis não está de pé: o app cai para o modo instância única, que é o
+      # comportamento normal de desenvolvimento.
+      Redis__ConnectionString: "${REDIS_CONNECTION:-}"
+
+  # Segunda instância, para demonstrar o backplane. Mesma imagem, mesmo banco, mesmo Redis.
+  web2:
+    <<: *web-comum
+    profiles: ["escala"]
+    ports:
+      - "8081:8080"
+    environment:
+      <<: *web-env
+      # Nunca migra: quem faz isso é a instância "web".
+      APPLY_MIGRATIONS_ON_STARTUP: "false"
+      Redis__ConnectionString: "${REDIS_CONNECTION:-redis:6379}"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:

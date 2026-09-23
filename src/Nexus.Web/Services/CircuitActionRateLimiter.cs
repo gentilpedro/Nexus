@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 
+using Nexus.Web.Services.Backplane;
+
 namespace Nexus.Web.Services;
 
 /// <summary>
@@ -20,7 +22,7 @@ namespace Nexus.Web.Services;
 /// without bound as users come and go.
 /// </para>
 /// </remarks>
-public class CircuitActionRateLimiter(TimeProvider? timeProvider = null)
+public class CircuitActionRateLimiter(TimeProvider? timeProvider = null) : ICircuitActionRateLimiter
 {
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private readonly ConcurrentDictionary<string, Window> windows = new();
@@ -74,6 +76,19 @@ public class CircuitActionRateLimiter(TimeProvider? timeProvider = null)
         Prune(now, window);
         return allowed;
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Completes synchronously: the state is a local dictionary, so there is nothing to await.
+    /// The async signature exists because the interface must also fit a limiter whose state
+    /// lives in Redis.
+    /// </remarks>
+    public ValueTask<bool> TryAcquireAsync(
+        string key,
+        int permitLimit,
+        TimeSpan window,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(TryAcquire(key, permitLimit, window));
 
     // Time-based cleanup, not size-based.
     //

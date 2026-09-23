@@ -6,10 +6,11 @@
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
 @using Nexus.Web.Services
+@using Nexus.Web.Services.Backplane
 @implements IDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
-@inject CircuitActionRateLimiter ChatRateLimiter
+@inject ICircuitActionRateLimiter ChatRateLimiter
 @inject WorkspaceChatBroadcaster Broadcaster
 @inject AttachmentStorageService Storage
 @inject IJSRuntime JS
@@ -295,7 +296,7 @@
         // sends travel over the persistent circuit. Each message also writes one Notification row
         // per workspace member, so an unthrottled loop is a cheap way to flood the database.
         if (CurrentUserId is not null
-            && !ChatRateLimiter.TryAcquire($"chat-send:{CurrentUserId}", permitLimit: 20, window: TimeSpan.FromMinutes(1)))
+            && !await ChatRateLimiter.TryAcquireAsync($"chat-send:{CurrentUserId}", permitLimit: 20, window: TimeSpan.FromMinutes(1)))
         {
             sendError = "Você está enviando mensagens rápido demais. Aguarde alguns segundos.";
             return;
@@ -471,7 +472,7 @@
                 await module.InvokeVoidAsync("setComposeValue", composeTextareaEl, "", 0);
             }
 
-            Broadcaster.Broadcast(message);
+            await Broadcaster.BroadcastAsync(message);
         }
         catch (Exception ex)
         {
