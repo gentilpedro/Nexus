@@ -13,6 +13,7 @@ using Nexus.Web.BackgroundServices;
 using Nexus.Web.Components;
 using Nexus.Web.Components.Account;
 using Nexus.Web.Services;
+using Nexus.Web.Services.Backplane;
 
 // Container HEALTHCHECK support (see Dockerfile). The dotnet/aspnet base image ships neither
 // curl nor wget, and installing one purely to probe an HTTP endpoint would add packages to the
@@ -67,8 +68,9 @@ builder.Services.AddScoped<WorkItemQueryService>();
 builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddScoped<NotificationBadgeService>();
 builder.Services.AddScoped<AuditLogService>();
-builder.Services.AddSingleton<WorkspaceChatBroadcaster>();
-builder.Services.AddSingleton<CircuitActionRateLimiter>();
+// Chat ao vivo e rate limiting do circuito. Sem Redis:ConnectionString configurado,
+// registra as implementacoes de instancia unica — o comportamento anterior.
+builder.Services.AddChatBackplane(builder.Configuration);
 builder.Services.AddSingleton<AttachmentStorageService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
 builder.Services.AddHostedService<DueDateNotificationHostedService>();

@@ -39,6 +39,9 @@
     <!-- Backs the /health/ready endpoint's database probe (AddDbContextCheck). -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10" />
+    <!-- Backplane entre instancias: pub/sub do chat e contador do rate limiter compartilhado
+         (ver Services/Backplane). So e usado quando Redis:ConnectionString esta configurado. -->
+    <PackageReference Include="StackExchange.Redis" Version="2.8.24" />
   </ItemGroup>
 
   <ItemGroup>
