@@ -64,7 +64,7 @@ def api_all(path):
 
 
 def git(*args):
-    return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
+    return subprocess.run(["git", *args], check=True, capture_output=True, text=True, encoding="utf-8").stdout
 
 
 # --------------------------------------------------------------------------------------------
@@ -124,7 +124,9 @@ def run_claude(prompt):
         }
     }
     command = [
-        shutil.which("claude") or "claude", "-p", prompt,
+        # O prompt vai pela entrada padrão: como argumento, o cmd.exe do Windows corta na primeira
+        # quebra de linha, e prompt longo esbarra no limite de tamanho da linha de comando.
+        shutil.which("claude") or "claude", "-p", "Siga as instruções recebidas pela entrada padrão.",
         "--output-format", "json",
         "--model", MODEL,
         "--max-turns", "40",
@@ -140,7 +142,8 @@ def run_claude(prompt):
         "ANTHROPIC_API_KEY": os.environ["ANTHROPIC_API_KEY"],
         "DISABLE_AUTOUPDATER": "1",
     } if not DRY_RUN else {k: v for k, v in os.environ.items() if k != "GITLAB_REVIEW_TOKEN"}
-    result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT_SECONDS)
+    result = subprocess.run(command, input=prompt, env=env, capture_output=True, text=True,
+                            encoding="utf-8", timeout=CLAUDE_TIMEOUT_SECONDS)
     if result.returncode != 0:
         print(redact(result.stderr[-2000:]), file=sys.stderr)
         raise SystemExit("O Claude Code terminou com erro.")
