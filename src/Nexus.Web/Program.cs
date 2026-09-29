@@ -72,6 +72,7 @@ builder.Services.AddScoped<AuditLogService>();
 // Chat ao vivo e rate limiting do circuito. Sem Redis:ConnectionString configurado,
 // registra as implementacoes de instancia unica — o comportamento anterior.
 builder.Services.AddChatBackplane(builder.Configuration);
+builder.Services.AddSingleton<Nexus.Web.Services.Collab.DocCollabService>();
 builder.Services.AddSingleton<AttachmentStorageService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
 builder.Services.AddHostedService<DueDateNotificationHostedService>();

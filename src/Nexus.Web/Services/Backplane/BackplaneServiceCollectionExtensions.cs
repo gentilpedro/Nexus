@@ -1,3 +1,4 @@
+using Nexus.Web.Services.Collab;
 using StackExchange.Redis;
 
 namespace Nexus.Web.Services.Backplane;
@@ -31,12 +32,14 @@ public static class BackplaneServiceCollectionExtensions
         // Redis limiter uses when the connection is down.
         services.AddSingleton<CircuitActionRateLimiter>();
         services.AddSingleton<WorkspaceChatBroadcaster>();
+        services.AddSingleton<DocChangeNotifier>();
 
         var connectionString = configuration[ConnectionStringKey];
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             services.AddSingleton<IChatMessagePublisher, NullChatMessagePublisher>();
+            services.AddSingleton<IDocChangePublisher, NullDocChangePublisher>();
             services.AddSingleton<ICircuitActionRateLimiter>(
                 sp => sp.GetRequiredService<CircuitActionRateLimiter>());
             return services;
@@ -57,6 +60,9 @@ public static class BackplaneServiceCollectionExtensions
         });
 
         services.AddSingleton<IChatMessagePublisher, RedisChatMessagePublisher>();
+        // Os avisos dos Docs ainda não cruzam instâncias; cada uma vê só os próprios editores
+        // até o catch-up (#42).
+        services.AddSingleton<IDocChangePublisher, NullDocChangePublisher>();
         services.AddSingleton<ICircuitActionRateLimiter, RedisCircuitActionRateLimiter>();
         services.AddHostedService<RedisChatSubscriber>();
 
