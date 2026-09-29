@@ -1,10 +1,11 @@
+using Nexus.Web.Services.Collab;
 using StackExchange.Redis;
 
 namespace Nexus.Web.Services.Backplane;
 
 /// <summary>
-/// Wires the chat fan-out and the circuit rate limiter to either this process alone or to a
-/// Redis backplane shared by every instance.
+/// Wires the chat fan-out, the Docs change notifications and presence, and the circuit rate
+/// limiter to either this process alone or to a Redis backplane shared by every instance.
 /// </summary>
 public static class BackplaneServiceCollectionExtensions
 {
@@ -12,8 +13,8 @@ public static class BackplaneServiceCollectionExtensions
     public const string ConnectionStringKey = "Redis:ConnectionString";
 
     /// <summary>
-    /// Registers the chat broadcaster and the circuit rate limiter, backed by Redis when
-    /// <c>Redis:ConnectionString</c> is configured.
+    /// Registers the chat broadcaster, the Docs notifier and presence store, and the circuit rate
+    /// limiter, backed by Redis when <c>Redis:ConnectionString</c> is configured.
     /// </summary>
     /// <remarks>
     /// Absence of configuration selects the single-instance implementations, which is what the
@@ -31,12 +32,15 @@ public static class BackplaneServiceCollectionExtensions
         // Redis limiter uses when the connection is down.
         services.AddSingleton<CircuitActionRateLimiter>();
         services.AddSingleton<WorkspaceChatBroadcaster>();
+        services.AddSingleton<DocChangeNotifier>();
 
         var connectionString = configuration[ConnectionStringKey];
 
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             services.AddSingleton<IChatMessagePublisher, NullChatMessagePublisher>();
+            services.AddSingleton<IDocChangePublisher, NullDocChangePublisher>();
+            services.AddSingleton<IDocPresenceStore, InMemoryDocPresenceStore>();
             services.AddSingleton<ICircuitActionRateLimiter>(
                 sp => sp.GetRequiredService<CircuitActionRateLimiter>());
             return services;
@@ -57,8 +61,11 @@ public static class BackplaneServiceCollectionExtensions
         });
 
         services.AddSingleton<IChatMessagePublisher, RedisChatMessagePublisher>();
+        services.AddSingleton<IDocChangePublisher, RedisDocChangePublisher>();
+        services.AddSingleton<IDocPresenceStore, RedisDocPresenceStore>();
         services.AddSingleton<ICircuitActionRateLimiter, RedisCircuitActionRateLimiter>();
         services.AddHostedService<RedisChatSubscriber>();
+        services.AddHostedService<RedisDocChangeSubscriber>();
 
         return services;
     }

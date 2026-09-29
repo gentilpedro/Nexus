@@ -881,6 +881,110 @@
     margin: 0;
 }
 
+/* Edição ao vivo: título, estado da sincronização e "Concluir" na mesma linha */
+.doc-edit-header {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    background: var(--color-bg);
+}
+
+/* O título ocupa a linha inteira: ao lado das ações ele seria cortado. */
+.doc-edit-header .doc-title-input {
+    flex: 1 1 100%;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+.doc-edit-header .doc-edit-actions {
+    padding-bottom: var(--space-3);
+}
+
+.doc-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-left: auto;
+}
+
+.doc-sync {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    font-size: var(--text-small);
+    color: var(--color-text-muted);
+    transition: color var(--duration-base) var(--ease-out);
+}
+
+.doc-sync--synced { color: var(--color-success-text); }
+.doc-sync--offline { color: var(--color-warning-text); }
+.doc-sync--error { color: var(--color-danger-text); }
+
+.doc-sync--syncing .icon {
+    animation: doc-sync-spin 1s linear infinite;
+}
+
+@keyframes doc-sync-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .doc-sync--syncing .icon { animation: none; }
+}
+
+/* Quem mais está editando o documento agora */
+.doc-presence {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    min-width: 0;
+    font-size: var(--text-small);
+    color: var(--color-accent-text);
+}
+
+.doc-presence > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.doc-presence-avatars {
+    display: inline-flex;
+    flex-shrink: 0;
+}
+
+.doc-presence-avatars .avatar {
+    box-shadow: 0 0 0 2px var(--color-bg);
+}
+
+.doc-presence-avatars .avatar + .avatar {
+    margin-left: -0.375rem;
+}
+
+.doc-sync-error p {
+    margin: 0 0 var(--space-2);
+}
+
+.doc-recovery {
+    display: block;
+    width: 100%;
+    margin-bottom: var(--space-3);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--text-small);
+    resize: vertical;
+}
+
+@media (max-width: 640px) {
+    .doc-edit-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+
 /* Planilha */
 .spreadsheet-toolbar {
     display: flex;

@@ -19,6 +19,14 @@ public class DocPageConfiguration : IEntityTypeConfiguration<DocPage>
         builder.Property(d => d.ContentHtml).HasMaxLength(DocPage.MaxContentHtmlLength);
         builder.Property(d => d.GridDataJson).HasMaxLength(DocPage.MaxGridDataJsonLength);
 
+        builder.Property(d => d.DeltaJson).HasMaxLength(DocPage.MaxDeltaJsonLength);
+
+        // A revisão é o que serializa a edição colaborativa: uma operação só é gravada se a
+        // revisão no banco ainda for a que ela leu. Com duas instâncias aceitando operações do
+        // mesmo documento, a segunda a gravar recebe DbUpdateConcurrencyException e trata o
+        // pedido de novo, já vendo a revisão nova.
+        builder.Property(d => d.Revision).IsConcurrencyToken();
+
         builder.Property(d => d.FileName).HasMaxLength(500);
         builder.Property(d => d.FileContentType).HasMaxLength(200);
         builder.Property(d => d.FileStoragePath).HasMaxLength(500);

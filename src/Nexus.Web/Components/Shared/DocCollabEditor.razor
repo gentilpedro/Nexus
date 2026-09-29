@@ -1,0 +1,249 @@
+@* Editor colaborativo de um documento de texto (#32). O Quill e o protocolo vivem em
+   doc-collab-interop.js; este componente é a ponte com o servidor: cada envio passa pela
+   revalidação de acesso e pelo limite de taxa antes de chegar ao DocCollabService, e os avisos
+   de mudança de outras pessoas descem para o navegador. *@
+@implements IAsyncDisposable
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Services.Backplane
+@using Nexus.Web.Services.Collab
+@inject DocCollabService Collab
+@inject DocChangeNotifier Notifier
+@inject WorkspaceAccessGuard AccessGuard
+@inject ICircuitActionRateLimiter RateLimiter
+@inject IDocPresenceStore Presence
+@inject DocPresenceCircuitHandler PresenceCircuit
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IJSRuntime JS
+
+@* O Quill transforma o elemento-alvo no .ql-container e põe a barra de ferramentas como irmã
+   dele; o invólucro é o que deixa as duas dentro de .doc-editor, onde o CSS as estiliza. *@
+<div class="doc-editor"><div id="@elementId"></div></div>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid WorkspaceId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid DocId { get; set; }
+
+    /// <summary>Estado da sincronização, para o indicador na página.</summary>
+    [Parameter]
+    public EventCallback<DocSyncState> OnStateChanged { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    // Uma edição rápida manda dezenas de operações por segundo em rajada, mas só uma fica em voo
+    // por vez; o limite existe contra um cliente adulterado, não contra quem digita rápido.
+    private const int OperationsPerMinute = 1200;
+    private const int HtmlSavesPerMinute = 120;
+    private static readonly TimeSpan AccessCacheDuration = TimeSpan.FromSeconds(20);
+
+    private readonly string elementId = "doc-collab-" + Guid.NewGuid().ToString("N");
+    private IJSObjectReference? module;
+    private DotNetObjectReference<DocCollabEditor>? selfRef;
+    private string? userId;
+    private bool hasAccess;
+    private DateTime accessCheckedUntilUtc;
+
+    // Presença: esta aba é uma sessão de edição, anunciada ao entrar, renovada periodicamente e
+    // removida ao sair. Se o circuito morrer sem sair, ela expira sozinha (IDocPresenceStore).
+    private readonly Guid presenceSessionId = Guid.NewGuid();
+    private DocEditor? presence;
+    private PeriodicTimer? heartbeat;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var authState = await AuthStateTask!;
+        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var snapshot = await Collab.LoadAsync(WorkspaceId, DocId);
+        selfRef = DotNetObjectReference.Create(this);
+        module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/doc-collab-interop.js");
+        Notifier.Changed += OnDocChanged;
+        await module.InvokeVoidAsync("start", elementId, selfRef, new { docId = DocId, snapshot });
+
+        await JoinPresenceAsync();
+    }
+
+    private async Task JoinPresenceAsync()
+    {
+        if (userId is null)
+        {
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var user = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.DisplayName, u.Email })
+                .FirstOrDefaultAsync();
+            var name = string.IsNullOrWhiteSpace(user?.DisplayName) ? user?.Email ?? "Alguém" : user.DisplayName;
+            presence = new DocEditor(userId, name);
+        }
+
+        PresenceCircuit.Register(presenceSessionId, DocId, presence);
+        await Presence.JoinAsync(DocId, presenceSessionId, presence);
+        await Notifier.PublishAsync(new DocChange(DocId, 0, Guid.Empty, DocChangeKind.Presence));
+
+        heartbeat = new PeriodicTimer(IDocPresenceStore.Heartbeat);
+        _ = RenewPresenceAsync(heartbeat, presence);
+    }
+
+    private async Task RenewPresenceAsync(PeriodicTimer timer, DocEditor editor)
+    {
+        try
+        {
+            while (await timer.WaitForNextTickAsync())
+            {
+                // Com a conexão caída, a presença já saiu (DocPresenceCircuitHandler); renovar
+                // aqui a traria de volta para alguém que fechou a aba.
+                if (PresenceCircuit.IsConnected)
+                {
+                    await Presence.JoinAsync(DocId, presenceSessionId, editor);
+                }
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Timer descartado ao sair do documento.
+        }
+    }
+
+    [JSInvokable]
+    public async Task<DocSubmitResult> Submit(string clientId, long seq, long baseRevision, string change, bool isSeed)
+    {
+        if (!Guid.TryParse(clientId, out var client))
+        {
+            return DocSubmitResult.Rejected("Identificação do editor inválida.");
+        }
+        if (!await HasAccessAsync())
+        {
+            return DocSubmitResult.Forbidden();
+        }
+        if (!await RateLimiter.TryAcquireAsync($"doc-op:{userId}", OperationsPerMinute, TimeSpan.FromMinutes(1)))
+        {
+            return DocSubmitResult.RateLimited();
+        }
+        return await Collab.SubmitAsync(WorkspaceId, DocId, userId, client, seq, baseRevision, change, isSeed);
+    }
+
+    [JSInvokable]
+    public async Task<DocCatchUpResult> CatchUp(long sinceRevision)
+    {
+        if (!await HasAccessAsync())
+        {
+            return new DocCatchUpResult("forbidden");
+        }
+        return await Collab.GetOperationsSinceAsync(WorkspaceId, DocId, sinceRevision);
+    }
+
+    [JSInvokable]
+    public async Task<bool> SaveHtml(long revision, string html)
+    {
+        if (!await HasAccessAsync()
+            || !await RateLimiter.TryAcquireAsync($"doc-html:{userId}", HtmlSavesPerMinute, TimeSpan.FromMinutes(1)))
+        {
+            return false;
+        }
+        return await Collab.SaveHtmlAsync(WorkspaceId, DocId, revision, html);
+    }
+
+    [JSInvokable]
+    public async Task<DocCollabSnapshot?> Reload() =>
+        await HasAccessAsync() ? await Collab.LoadAsync(WorkspaceId, DocId) : null;
+
+    [JSInvokable]
+    public Task OnSyncState(string status, int pending, string? message, string? recovery) =>
+        OnStateChanged.InvokeAsync(new DocSyncState(status, pending, message, recovery));
+
+    /// <summary>
+    /// Espera as pendências chegarem ao servidor e grava o HTML do modo leitura. Falso se ainda
+    /// houver alteração sem sincronizar (sem conexão, por exemplo).
+    /// </summary>
+    public async Task<bool> FinishAsync()
+    {
+        if (module is null)
+        {
+            return true;
+        }
+        try
+        {
+            return await module.InvokeAsync<bool>("finish", elementId, 8000);
+        }
+        catch (JSDisconnectedException)
+        {
+            return false;
+        }
+    }
+
+    // Revalidar a cada envio consultaria o banco a cada tecla; um cache curto mantém a garantia
+    // de que alguém removido do workspace para de conseguir editar em segundos.
+    private async Task<bool> HasAccessAsync()
+    {
+        var now = DateTime.UtcNow;
+        if (now < accessCheckedUntilUtc)
+        {
+            return hasAccess;
+        }
+        hasAccess = await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member);
+        accessCheckedUntilUtc = now + AccessCacheDuration;
+        return hasAccess;
+    }
+
+    private void OnDocChanged(DocChange change)
+    {
+        if (change.DocPageId != DocId || change.Kind != DocChangeKind.Operation || module is null)
+        {
+            return;
+        }
+
+        // Vem de qualquer thread (inclusive do backplane): volta para o contexto do circuito.
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await module.InvokeVoidAsync("notify", elementId, change.Revision);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuito caiu; ao reconectar, o editor busca o que perdeu.
+            }
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Notifier.Changed -= OnDocChanged;
+        heartbeat?.Dispose();
+        if (presence is not null)
+        {
+            PresenceCircuit.Unregister(presenceSessionId);
+            await Presence.LeaveAsync(DocId, presenceSessionId);
+            await Notifier.PublishAsync(new DocChange(DocId, 0, Guid.Empty, DocChangeKind.Presence));
+        }
+        try
+        {
+            if (module is not null)
+            {
+                await module.InvokeVoidAsync("stop", elementId);
+                await module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Aba fechada: as pendências já foram gravadas no navegador pelo pagehide.
+        }
+        selfRef?.Dispose();
+    }
+}
