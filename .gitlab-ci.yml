@@ -13,9 +13,22 @@
 # mergeado se o pipeline (jobs abaixo) passar. O token do espelhamento vindo do GitHub e a
 # excecao: ele precisa ter permissao de push na branch protegida.
 
+# Uma pipeline por push. Sem isto, o job ai-review (que só existe em pipeline de MR) faria cada
+# push numa branch com MR aberto gerar duas pipelines — a de branch e a de MR — rodando version e
+# verify duas vezes. Com MR aberto vale a pipeline de MR, que é a que o GitLab exige para mergear.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
 stages:
   - version
   - verify
+  - review
   - sync
   - release
 
@@ -132,6 +145,35 @@ verify:
 # Request, que fica esperando aprovação manual como qualquer outra mudança.
 #
 # Depois do verify, de propósito: um PR só é aberto se o código passou no quality gate.
+# Revisor automático de MRs (issue #43): o Claude Code lê o diff e o repositório e comenta no MR
+# como um revisor. Detalhes, segurança e configuração em docs/revisor-ia.md.
+#
+# Só aconselha: allow_failure, e o bot não aprova nem faz merge. Quem barra o merge continua sendo
+# o verify. Não roda para MR de fork (o projeto é público e a chave da API é do dono), nem em
+# rascunho, nem se as duas variáveis não estiverem configuradas.
+ai-review:
+  stage: review
+  image: node:24-bookworm-slim
+  needs: []
+  interruptible: true
+  allow_failure: true
+  timeout: 25m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "merge_request_event"'
+      when: never
+    - if: '$CI_MERGE_REQUEST_SOURCE_PROJECT_ID != $CI_PROJECT_ID'
+      when: never
+    - if: '$CI_MERGE_REQUEST_DRAFT == "true"'
+      when: never
+    - if: '$ANTHROPIC_API_KEY == null || $GITLAB_REVIEW_TOKEN == null'
+      when: never
+    - when: on_success
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git python3 ca-certificates > /dev/null
+    - npm install --global --silent @anthropic-ai/claude-code
+  script:
+    - python3 .gitlab/ai-review/review.py
+
 sync-github:
   stage: sync
   image: alpine:3.20
