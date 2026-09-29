@@ -9,74 +9,98 @@
 @inject NotificationBadgeService Badge
 @implements IDisposable
 
-<nav class="topnav">
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+
+<header class="topnav">
     <div class="topnav-left">
         <AuthorizeView>
             <Authorized>
-                <button type="button" class="app-sidebar-toggle" @onclick="ToggleSidebar" aria-label="Abrir menu">☰</button>
-            </Authorized>
-        </AuthorizeView>
-        <AuthorizeView>
-            <Authorized>
+                <button type="button" class="icon-btn app-sidebar-toggle" @onclick="ToggleSidebar"
+                        aria-expanded="@(sidebarOpen ? "true" : "false")" aria-controls="app-sidebar">
+                    <Icon Name="menu" Label="Abrir menu de navegação" />
+                </button>
                 @* data-nexus-action instead of an inline onclick: blocked by script-src 'self'.
                    Handled by the delegated listener in theme-interop.js. *@
-                <button type="button" class="topnav-icon-btn" title="Voltar" aria-label="Voltar" data-nexus-action="history-back">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+                <button type="button" class="icon-btn topnav-back" data-nexus-action="history-back" data-tooltip="Voltar">
+                    <Icon Name="arrow-left" Label="Voltar" />
                 </button>
             </Authorized>
         </AuthorizeView>
         <a class="topnav-brand-link" href="/">
-            <img class="topnav-logo" src="@Assets["IconNexus.png"]" alt="Nexus" />
-            <strong class="app-sidebar-title">Nexus</strong>
+            <img class="topnav-logo" src="@Assets["IconNexus.png"]" alt="" />
+            <span class="topnav-wordmark">Nexus</span>
+            <span class="sr-only">— Início</span>
         </a>
     </div>
+
     <div class="topnav-center">
         <AuthorizeView>
             <Authorized>
-                <form class="topnav-search-form" @onsubmit="SubmitSearch" @onsubmit:preventDefault="true">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-                    <input type="search" placeholder="Buscar tarefas, documentos ou pessoas..." @bind="searchText" @bind:event="oninput" />
+                <form class="topnav-search-form" role="search" @onsubmit="SubmitSearch" @onsubmit:preventDefault="true">
+                    <Icon Name="search" />
+                    <label for="global-search" class="sr-only">Buscar no Nexus</label>
+                    <input id="global-search" type="search" placeholder="Buscar tarefas, documentos ou pessoas"
+                           autocomplete="off" @bind="searchText" @bind:event="oninput" />
+                    <kbd class="topnav-search-kbd" aria-hidden="true">/</kbd>
                 </form>
             </Authorized>
         </AuthorizeView>
     </div>
+
     <div class="topnav-links">
-        <ThemeSwitch />
         <AuthorizeView>
             <Authorized>
-                <a class="topnav-icon-btn" href="/notifications" aria-label="Notificações">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+                <a class="icon-btn topnav-search-mobile" href="/search">
+                    <Icon Name="search" Label="Buscar" />
+                </a>
+            </Authorized>
+        </AuthorizeView>
+
+        <ThemeSwitch />
+
+        <AuthorizeView>
+            <Authorized>
+                <a class="icon-btn topnav-icon-btn" href="/notifications" data-tooltip="Notificações">
+                    <Icon Name="bell" Label="@(Badge.UnreadCount > 0 ? $"Notificações, {Badge.UnreadCount} não lidas" : "Notificações")" />
                     @if (Badge.UnreadCount > 0)
                     {
-                        <span class="topnav-icon-dot"></span>
+                        <span class="topnav-icon-dot" aria-hidden="true"></span>
                     }
                 </a>
-                <div class="topnav-user-menu">
-                    <button type="button" class="topnav-avatar-btn" @onclick="ToggleUserMenu">
-                        @if (avatarUrl is not null)
-                        {
-                            <img class="topnav-avatar" src="@avatarUrl" alt="" />
-                        }
-                        else
-                        {
-                            <span class="topnav-avatar">@avatarInitial</span>
-                        }
+                <div class="topnav-user-menu menu-anchor" @onkeydown="HandleMenuKeyDown">
+                    <button type="button" class="topnav-avatar-btn" @onclick="ToggleUserMenu"
+                            aria-haspopup="menu" aria-expanded="@(userMenuOpen ? "true" : "false")" aria-controls="user-menu">
+                        <Avatar Name="@displayName" ImageUrl="@avatarUrl" Size="sm" />
                         <span class="topnav-avatar-name">@displayName</span>
-                        <svg class="icon" style="width:.9rem;height:.9rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                        <Icon Name="chevron-down" />
+                        <span class="sr-only">Menu da conta</span>
                     </button>
                     @if (userMenuOpen)
                     {
-                        <div class="topnav-user-dropdown-backdrop" @onclick="CloseUserMenu"></div>
-                        <div class="topnav-user-dropdown">
-                            <a href="Account/Manage" data-enhance-nav="false">
-                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                        <div class="menu-backdrop" @onclick="CloseUserMenu"></div>
+                        <div id="user-menu" class="menu topnav-user-dropdown" role="menu">
+                            <div class="topnav-user-summary">
+                                <strong>@displayName</strong>
+                                @if (!string.IsNullOrEmpty(email))
+                                {
+                                    <span>@email</span>
+                                }
+                            </div>
+                            <div class="menu-separator" role="separator"></div>
+                            <a href="Account/Manage" data-enhance-nav="false" role="menuitem">
+                                <Icon Name="user" />
                                 Minha conta
                             </a>
+                            <a href="/workspaces" role="menuitem">
+                                <Icon Name="workspace" />
+                                Meus workspaces
+                            </a>
+                            <div class="menu-separator" role="separator"></div>
                             <form action="Account/Logout" method="post" data-enhance="false">
                                 <AntiforgeryToken />
                                 <input type="hidden" name="ReturnUrl" value="@NavigationManager.ToBaseRelativePath(NavigationManager.Uri)" />
-                                <button type="submit">
-                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+                                <button type="submit" role="menuitem">
+                                    <Icon Name="log-out" />
                                     Sair
                                 </button>
                             </form>
@@ -85,16 +109,18 @@
                 </div>
             </Authorized>
             <NotAuthorized>
-                <NavLink href="/Account/Login" class="btn" data-enhance-nav="false">
-                    Entrar
-                </NavLink>
-                <NavLink href="Account/Register" class="btn" data-enhance-nav="false">
-                    Criar conta
-                </NavLink>
+                <div class="topnav-guest-actions">
+                    <NavLink href="/Account/Login" class="btn btn-ghost" data-enhance-nav="false">
+                        Entrar
+                    </NavLink>
+                    <NavLink href="Account/Register" class="btn" data-enhance-nav="false">
+                        Criar conta
+                    </NavLink>
+                </div>
             </NotAuthorized>
         </AuthorizeView>
     </div>
-</nav>
+</header>
 
 <div class="app-shell">
     <AuthorizeView>
@@ -103,26 +129,33 @@
             {
                 <div class="app-sidebar-backdrop" @onclick="CloseSidebar"></div>
             }
-            <WorkspaceSidebar IsOpen="sidebarOpen" />
+            <WorkspaceSidebar IsOpen="sidebarOpen" OnClose="CloseSidebar" />
         </Authorized>
     </AuthorizeView>
-    <div class="app-main">
+    <main id="conteudo" class="app-main" tabindex="-1">
         @Body
-    </div>
+
+        <footer class="app-footer">
+            <a href="/privacidade" data-enhance-nav="false">Política de Privacidade</a>
+            <span aria-hidden="true">·</span>
+            <a href="/termos-de-uso" data-enhance-nav="false">Termos de Uso</a>
+            <span aria-hidden="true">·</span>
+            @* O title carrega o commit e a data da build: basta passar o mouse para saber exatamente o
+               que está no ar, sem abrir /version. *@
+            <span title="@AppVersion.Current.DetailedLabel">Nexus @AppVersion.Current.Version</span>
+        </footer>
+    </main>
 </div>
 
-<footer class="app-footer" style="text-align:center;padding:1rem;font-size:0.8rem;color:var(--color-text-muted);">
-    <a href="/privacidade" data-enhance-nav="false">Política de Privacidade</a>
-    <span aria-hidden="true"> · </span>
-    @* O title carrega o commit e a data da build: basta passar o mouse para saber exatamente o
-       que está no ar, sem abrir /version. *@
-    <span title="@AppVersion.Current.DetailedLabel">Nexus @AppVersion.Current.Version</span>
-</footer>
+<ToastHost />
 
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+<div id="blazor-error-ui" data-nosnippet role="alert">
+    <div class="blazor-error-ui-inner">
+        <Icon Name="alert-circle" />
+        <span>Algo deu errado e esta página parou de responder.</span>
+        <a href="." class="reload">Recarregar</a>
+        <span class="dismiss" role="button" tabindex="0"><Icon Name="x" Label="Fechar aviso" /></span>
+    </div>
 </div>
 
 @code {
@@ -132,7 +165,7 @@
     private bool sidebarOpen;
     private bool userMenuOpen;
     private string displayName = "";
-    private string avatarInitial = "?";
+    private string? email;
     private string? avatarUrl;
     private string searchText = "";
 
@@ -165,30 +198,26 @@
 
         var user = await db.Users.Where(u => u.Id == userId).Select(u => new { u.DisplayName, u.Email, u.AvatarStoragePath }).FirstOrDefaultAsync();
         displayName = string.IsNullOrEmpty(user?.DisplayName) ? (user?.Email?.Split('@')[0] ?? "") : user.DisplayName;
-        avatarInitial = string.IsNullOrWhiteSpace(displayName) ? "?" : displayName.Trim()[0].ToString().ToUpperInvariant();
+        email = user?.Email;
         avatarUrl = user?.AvatarStoragePath is null
             ? null
             : $"/avatars/{userId}/download?v={Uri.EscapeDataString(Path.GetFileNameWithoutExtension(user.AvatarStoragePath))}";
     }
 
-    private void ToggleSidebar()
-    {
-        sidebarOpen = !sidebarOpen;
-    }
+    private void ToggleSidebar() => sidebarOpen = !sidebarOpen;
 
-    private void CloseSidebar()
-    {
-        sidebarOpen = false;
-    }
+    private void CloseSidebar() => sidebarOpen = false;
 
-    private void ToggleUserMenu()
-    {
-        userMenuOpen = !userMenuOpen;
-    }
+    private void ToggleUserMenu() => userMenuOpen = !userMenuOpen;
 
-    private void CloseUserMenu()
+    private void CloseUserMenu() => userMenuOpen = false;
+
+    private void HandleMenuKeyDown(KeyboardEventArgs e)
     {
-        userMenuOpen = false;
+        if (e.Key == "Escape")
+        {
+            userMenuOpen = false;
+        }
     }
 
     private void SubmitSearch()
@@ -201,10 +230,7 @@
     private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         // Navigating (e.g. tapping a sidebar link on mobile) should close the overlay.
-        if (sidebarOpen)
-        {
-            sidebarOpen = false;
-        }
+        sidebarOpen = false;
         userMenuOpen = false;
 
         await RefreshHeaderStateAsync();

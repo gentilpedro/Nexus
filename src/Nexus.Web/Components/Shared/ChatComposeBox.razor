@@ -17,68 +17,74 @@
 @inject ILogger<ChatComposeBox> Logger
 
 <EditForm Model="sendModel" OnValidSubmit="HandleSend" class="chat-compose">
-    <div class="chat-compose-toolbar">
-        <label for="chat-file-input" class="chat-toolbar-btn" title="Anexar arquivo">📎</label>
-        <InputFile id="chat-file-input" OnChange="HandleFilesSelected" multiple class="chat-file-input-hidden" />
-        <select @bind="selectedDocId" class="chat-docref-select">
-            <option value="">Referenciar doc...</option>
-            @foreach (var doc in DocPages)
-            {
-                <option value="@doc.Id">@doc.Title</option>
-            }
-        </select>
-    </div>
-    <div class="chat-compose-textarea-wrap">
-        <textarea @ref="composeTextareaEl" value="@renderedContent" rows="2" placeholder="Escreva uma mensagem... use @@ para mencionar alguém"></textarea>
-        @if (showMentionDropdown)
-        {
-            <div class="chat-mention-dropdown">
-                @if (showEveryoneOption)
-                {
-                    <button type="button" class="chat-mention-option chat-mention-option--everyone" @onclick="SelectEveryoneMention">
-                        <span class="chat-mention-avatar chat-mention-avatar--everyone">
-                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-                        </span>
-                        <span class="chat-mention-name">Todos (@@everyone)</span>
-                    </button>
-                }
-                @foreach (var member in mentionSuggestions)
-                {
-                    <button type="button" class="chat-mention-option" @onclick="() => SelectMention(member.UserId, member.DisplayName)">
-                        @if (!string.IsNullOrEmpty(member.AvatarPath))
-                        {
-                            <img class="chat-mention-avatar" src="@MentionAvatarUrl(member.UserId, member.AvatarPath)" alt="" />
-                        }
-                        else
-                        {
-                            <span class="chat-mention-avatar">@MentionInitial(member.DisplayName)</span>
-                        }
-                        <span class="chat-mention-name">@member.DisplayName</span>
-                    </button>
-                }
-            </div>
-        }
-    </div>
-    @if (pendingFiles.Count > 0)
-    {
-        <div class="chat-compose-pending">
-            @for (var i = 0; i < pendingFiles.Count; i++)
-            {
-                var index = i;
-                var file = pendingFiles[i];
-                <span class="chat-compose-pending-file">
-                    @file.Name (@FormatSize(file.Size))
-                    <button type="button" class="chat-compose-pending-remove" @onclick="() => RemovePendingFile(index)">✕</button>
-                </span>
-            }
-        </div>
-    }
     @if (!string.IsNullOrEmpty(sendError))
     {
-        <div class="alert alert-danger">@sendError</div>
+        <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@sendError</span></div>
     }
-    <div class="chat-compose-actions">
-        <button type="submit" class="btn" disabled="@isSending">Enviar</button>
+    <div class="chat-compose-box">
+        <div class="chat-compose-textarea-wrap">
+            <label for="chat-compose-input" class="sr-only">Mensagem para @Workspace.Name</label>
+            <textarea id="chat-compose-input" @ref="composeTextareaEl" value="@renderedContent" rows="2"
+                      placeholder="Mensagem para @Workspace.Name — use @@ para mencionar alguém"
+                      aria-describedby="chat-compose-hint"></textarea>
+            @if (showMentionDropdown)
+            {
+                <div class="chat-mention-dropdown" role="listbox" aria-label="Mencionar">
+                    @if (showEveryoneOption)
+                    {
+                        <button type="button" role="option" class="chat-mention-option chat-mention-option--everyone" @onclick="SelectEveryoneMention">
+                            <span class="avatar avatar--sm chat-mention-everyone" aria-hidden="true"><Icon Name="team" Class="icon--sm" /></span>
+                            <span class="chat-mention-name">Todos <span class="cell-muted">@@everyone</span></span>
+                        </button>
+                    }
+                    @foreach (var member in mentionSuggestions)
+                    {
+                        <button type="button" role="option" class="chat-mention-option" @onclick="() => SelectMention(member.UserId, member.DisplayName)">
+                            <Avatar Name="@member.DisplayName" ImageUrl="@(string.IsNullOrEmpty(member.AvatarPath) ? null : MentionAvatarUrl(member.UserId, member.AvatarPath))" Size="sm" />
+                            <span class="chat-mention-name">@member.DisplayName</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        @if (pendingFiles.Count > 0)
+        {
+            <ul class="chat-compose-pending" aria-label="Arquivos que serão enviados">
+                @for (var i = 0; i < pendingFiles.Count; i++)
+                {
+                    var index = i;
+                    var file = pendingFiles[i];
+                    <li class="chat-compose-pending-file">
+                        <Icon Name="paperclip" Class="icon--sm" />
+                        <span class="chat-compose-pending-name">@file.Name</span>
+                        <span class="cell-muted">@FormatSize(file.Size)</span>
+                        <button type="button" class="icon-btn icon-btn--sm" @onclick="() => RemovePendingFile(index)">
+                            <Icon Name="x" Label="@($"Remover {file.Name}")" />
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+
+        <div class="chat-compose-toolbar">
+            <label for="chat-file-input" class="icon-btn icon-btn--sm chat-attach-btn" data-tooltip="Anexar arquivo">
+                <Icon Name="paperclip" Label="Anexar arquivo" />
+            </label>
+            <InputFile id="chat-file-input" OnChange="HandleFilesSelected" multiple class="sr-only" />
+            <label for="chat-docref" class="sr-only">Citar um documento</label>
+            <select id="chat-docref" @bind="selectedDocId" class="chat-docref-select">
+                <option value="">Citar documento…</option>
+                @foreach (var doc in DocPages)
+                {
+                    <option value="@doc.Id">@doc.Title</option>
+                }
+            </select>
+            <span id="chat-compose-hint" class="chat-compose-hint">Enter envia · Shift+Enter quebra a linha</span>
+            <button type="submit" class="btn btn-sm chat-send-btn @(isSending ? "is-loading" : "")" disabled="@isSending">
+                <Icon Name="send" /> Enviar
+            </button>
+        </div>
     </div>
 </EditForm>
 

@@ -9,56 +9,66 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 
-<PageTitle>Conversas</PageTitle>
+<PageTitle>Chats · Nexus</PageTitle>
 
-<div class="page-container page-container--wide">
-    <div class="page-header">
-        <h1>Conversas</h1>
-    </div>
+<div class="page-container page-container--wide chat-page">
+    <PageHeader Title="Chats" Description="Uma conversa por workspace, com todos os membros dele." />
 
     @if (items is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="5" Label="Carregando conversas…" />
     }
     else if (items.Count == 0)
     {
-        <div class="empty-state">
-            <p>Você ainda não participa de nenhum workspace.</p>
-        </div>
+        <EmptyState Icon="chat" Title="Nenhuma conversa ainda"
+                    Description="Cada workspace tem um chat próprio. Crie um workspace ou aceite um convite para começar a conversar.">
+            <a class="btn" href="/workspaces/new"><Icon Name="plus" /> Criar workspace</a>
+        </EmptyState>
     }
     else
     {
         <div class="chats-layout @(WorkspaceId is not null ? "chats-layout--chat-open" : "")">
-            <div class="chats-sidebar">
-                <div class="chats-sidebar-search">
-                    <input type="search" placeholder="Buscar conversas..." @bind="filterText" @bind:event="oninput" />
+            <nav class="chats-sidebar" aria-label="Conversas">
+                <div class="chats-sidebar-search input-with-icon">
+                    <Icon Name="search" />
+                    <label for="chats-filter" class="sr-only">Buscar conversas</label>
+                    <input id="chats-filter" type="search" placeholder="Buscar conversas" @bind="filterText" @bind:event="oninput" />
                 </div>
-                <div class="chats-sidebar-list">
+                <ul class="chats-sidebar-list">
                     @foreach (var item in FilteredItems)
                     {
-                        <a class="chats-sidebar-item @(item.WorkspaceId == WorkspaceId ? "active" : "")" href="@($"/chats/{item.WorkspaceId}")">
-                            <span class="chat-message-avatar">@Initial(item.WorkspaceName)</span>
-                            <div class="chats-sidebar-item-body">
-                                <div class="chats-sidebar-item-top">
-                                    <span>#@item.WorkspaceName</span>
-                                    @if (item.LastMessageAtUtc is not null)
-                                    {
-                                        <span class="chat-message-time">@item.LastMessageAtUtc.Value.ToLocalTime().ToString("dd/MM")</span>
-                                    }
-                                </div>
-                                @if (item.LastMessageContent is not null)
-                                {
-                                    <div class="chats-sidebar-item-preview"><strong>@item.LastMessageAuthor:</strong> @item.LastMessageContent</div>
-                                }
-                                else
-                                {
-                                    <div class="chats-sidebar-item-preview">Nenhuma mensagem ainda.</div>
-                                }
-                            </div>
-                        </a>
+                        var active = item.WorkspaceId == WorkspaceId;
+                        <li>
+                            <a class="chats-sidebar-item @(active ? "active" : "")" href="@($"/chats/{item.WorkspaceId}")" aria-current="@(active ? "page" : null)">
+                                <Avatar Name="@item.WorkspaceName" Color="@item.WorkspaceColor" Size="lg" Square="true" />
+                                <span class="chats-sidebar-item-body">
+                                    <span class="chats-sidebar-item-top">
+                                        <span class="chats-sidebar-item-name">@item.WorkspaceName</span>
+                                        @if (item.LastMessageAtUtc is not null)
+                                        {
+                                            <time class="chats-sidebar-item-time" datetime="@item.LastMessageAtUtc.Value.ToString("o")">@ShortWhen(item.LastMessageAtUtc.Value)</time>
+                                        }
+                                    </span>
+                                    <span class="chats-sidebar-item-preview">
+                                        @if (item.LastMessageContent is not null)
+                                        {
+                                            <span class="chats-sidebar-item-author">@item.LastMessageAuthor:</span> @item.LastMessageContent
+                                        }
+                                        else
+                                        {
+                                            <span class="cell-muted">Nenhuma mensagem ainda</span>
+                                        }
+                                    </span>
+                                </span>
+                            </a>
+                        </li>
                     }
-                </div>
-            </div>
+                    @if (!FilteredItems.Any())
+                    {
+                        <li><EmptyState Compact="true" Title="Nenhuma conversa encontrada" /></li>
+                    }
+                </ul>
+            </nav>
             <div class="chats-main">
                 @if (WorkspaceId is Guid selectedId)
                 {
@@ -67,7 +77,7 @@
                 else
                 {
                     <div class="chats-main-empty">
-                        <p>Selecione uma conversa à esquerda para começar.</p>
+                        <EmptyState Icon="chat" Title="Escolha uma conversa" Description="Selecione um workspace ao lado para ver as mensagens e conversar com o time." />
                     </div>
                 }
             </div>
@@ -107,6 +117,7 @@
             {
                 m.WorkspaceId,
                 WorkspaceName = m.Workspace.Name,
+                WorkspaceColor = m.Workspace.Color,
                 Last = db.ChatMessages
                     .Where(cm => cm.WorkspaceId == m.WorkspaceId)
                     .OrderByDescending(cm => cm.CreatedAtUtc)
@@ -125,6 +136,7 @@
             {
                 WorkspaceId = x.WorkspaceId,
                 WorkspaceName = x.WorkspaceName,
+                WorkspaceColor = x.WorkspaceColor,
                 LastMessageContent = x.Last?.Content,
                 LastMessageAuthor = x.Last?.AuthorName,
                 LastMessageAtUtc = x.Last?.CreatedAtUtc
@@ -134,12 +146,21 @@
             .ToList();
     }
 
-    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+    // "14:32" hoje, "ontem", "12/09" no resto — o formato das listas de conversa.
+    private static string ShortWhen(DateTime utc)
+    {
+        var local = utc.ToLocalTime();
+        var today = DateTime.Now.Date;
+        if (local.Date == today) return local.ToString("HH:mm");
+        if (local.Date == today.AddDays(-1)) return "ontem";
+        return local.ToString(local.Year == today.Year ? "dd/MM" : "dd/MM/yy");
+    }
 
     private class ChatOverviewItem
     {
         public Guid WorkspaceId { get; set; }
         public string WorkspaceName { get; set; } = "";
+        public string? WorkspaceColor { get; set; }
         public string? LastMessageContent { get; set; }
         public string? LastMessageAuthor { get; set; }
         public DateTime? LastMessageAtUtc { get; set; }

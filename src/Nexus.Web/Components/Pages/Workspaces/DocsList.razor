@@ -14,114 +14,105 @@
 @inject AttachmentStorageService Storage
 @inject NavigationContextService NavContext
 
-<PageTitle>Docs</PageTitle>
+<PageTitle>Documentos · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
 
-<div class="page-container">
+<div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Workspace não encontrado ou você não tem acesso a ele.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Workspace não encontrado"
+                    Description="Ele pode ter sido excluído, ou você não faz mais parte dele.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (workspace is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando documentos…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
-            Docs
-        </div>
+        <PageHeader Title="@workspace.Name">
+            <Breadcrumbs>
+                <a href="/workspaces">Workspaces</a>
+            </Breadcrumbs>
+        </PageHeader>
 
-        <div class="page-header">
-            <h1>Docs</h1>
-            <div class="form-actions">
-                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/docs/novo")">+ Novo documento</a>
-                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/spreadsheets/nova")">+ Nova planilha</a>
-                <label for="docs-import-input" class="btn btn-secondary">
-                    @(isImporting ? "Importando..." : "+ Importar arquivo")
+        <WorkspaceTabs WorkspaceId="WorkspaceId" Active="docs" CanManage="isAdmin" />
+
+        <div class="list-toolbar">
+            <div class="pill-tabs" role="group" aria-label="Filtrar por tipo">
+                <button type="button" aria-pressed="@(typeFilter is null ? "true" : "false")" class="@(typeFilter is null ? "active" : "")" @onclick="() => typeFilter = null">Todos <span class="tab-count">@(docs?.Count ?? 0)</span></button>
+                <button type="button" aria-pressed="@(typeFilter == DocPageType.Text ? "true" : "false")" class="@(typeFilter == DocPageType.Text ? "active" : "")" @onclick="() => typeFilter = DocPageType.Text">Documentos <span class="tab-count">@(docs?.Count(d => d.Type == DocPageType.Text) ?? 0)</span></button>
+                <button type="button" aria-pressed="@(typeFilter == DocPageType.Spreadsheet ? "true" : "false")" class="@(typeFilter == DocPageType.Spreadsheet ? "active" : "")" @onclick="() => typeFilter = DocPageType.Spreadsheet">Planilhas <span class="tab-count">@(docs?.Count(d => d.Type == DocPageType.Spreadsheet) ?? 0)</span></button>
+                <button type="button" aria-pressed="@(typeFilter == DocPageType.File ? "true" : "false")" class="@(typeFilter == DocPageType.File ? "active" : "")" @onclick="() => typeFilter = DocPageType.File">Arquivos <span class="tab-count">@(docs?.Count(d => d.Type == DocPageType.File) ?? 0)</span></button>
+            </div>
+            <div class="button-row">
+                <label for="docs-import-input" class="btn btn-ghost @(isImporting ? "is-loading" : "")">
+                    <Icon Name="upload" /> <span class="label-collapsible">Importar arquivo</span>
                 </label>
                 <InputFile id="docs-import-input" OnChange="HandleImportFilesSelected" multiple
-                           class="chat-file-input-hidden" disabled="@isImporting" />
+                           class="sr-only" disabled="@isImporting" />
+                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/spreadsheets/nova")"><Icon Name="sheet" /> Nova planilha</a>
+                <a class="btn" href="@($"/workspaces/{WorkspaceId}/docs/novo")"><Icon Name="plus" /> Novo documento</a>
             </div>
         </div>
 
         @if (!string.IsNullOrEmpty(importError))
         {
-            <div class="alert alert-danger">@importError</div>
-        }
-
-        @if (docs is { Count: > 0 })
-        {
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Documentos</span>
-                        <span class="stat-card-value">@docs.Count(d => d.Type == DocPageType.Text)</span>
-                    </div>
-                    <span class="stat-card-icon">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><polyline points="14 2 14 8 20 8" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Planilhas</span>
-                        <span class="stat-card-value">@docs.Count(d => d.Type == DocPageType.Spreadsheet)</span>
-                    </div>
-                    <span class="stat-card-icon is-success">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="9" x2="9" y2="21" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Arquivos</span>
-                        <span class="stat-card-value">@docs.Count(d => d.Type == DocPageType.File)</span>
-                    </div>
-                    <span class="stat-card-icon is-warning">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
-                    </span>
-                </div>
-            </div>
+            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@importError</span></div>
         }
 
         @if (docs is null)
         {
-            <p>Carregando páginas...</p>
+            <Skeleton Count="6" />
         }
         else if (docs.Count == 0)
         {
-            <div class="empty-state">
-                <p>Nenhuma página ainda. Crie a primeira.</p>
+            <EmptyState Icon="doc" Title="Nenhum documento ainda"
+                        Description="Registre decisões, processos e guias do time. Crie um documento, uma planilha, ou importe arquivos que vocês já usam.">
+                <a class="btn" href="@($"/workspaces/{WorkspaceId}/docs/novo")"><Icon Name="plus" /> Criar o primeiro documento</a>
+            </EmptyState>
+        }
+        else if (!FilteredDocs.Any())
+        {
+            <div class="card">
+                <EmptyState Compact="true" Title="Nada deste tipo por aqui ainda">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => typeFilter = null">Ver todos</button>
+                </EmptyState>
             </div>
         }
         else
         {
             <div class="table-scroll">
-                <table class="data-table">
+                <table class="data-table docs-table">
                     <thead>
                         <tr>
-                            <th></th>
-                            <th>Título</th>
-                            <th>Atualizado em</th>
-                            <th>Por quem</th>
-                            <th></th>
+                            <th>Nome</th>
+                            <th>Atualizado</th>
+                            <th>Por</th>
+                            <th><span class="sr-only">Ações</span></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var doc in docs)
+                        @foreach (var doc in FilteredDocs)
                         {
                             <tr class="data-table-row" @onclick="() => OpenDoc(doc)">
-                                <td>@(doc.Type == DocPageType.Spreadsheet ? "📊" : doc.Type == DocPageType.File ? "📎" : "📄")</td>
-                                <td>@doc.Title</td>
-                                <td>@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</td>
-                                <td>@AuthorLabel(doc)</td>
-                                <td>
+                                <td class="cell-title">
+                                    <span class="doc-cell">
+                                        <span class="doc-type-icon doc-type-icon--@doc.Type.ToString().ToLowerInvariant()" aria-hidden="true">
+                                            <Icon Name="@(doc.Type == DocPageType.Spreadsheet ? "sheet" : doc.Type == DocPageType.File ? "paperclip" : "doc")" />
+                                        </span>
+                                        <button type="button" class="row-link" @onclick="() => OpenDoc(doc)" @onclick:stopPropagation="true">@doc.Title</button>
+                                        <span class="sr-only">(@TypeLabel(doc.Type))</span>
+                                    </span>
+                                </td>
+                                <td class="cell-muted tabular">@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</td>
+                                <td><span class="cell-person"><Avatar Name="@AuthorLabel(doc)" Size="xs" /> @AuthorLabel(doc)</span></td>
+                                <td class="cell-actions">
                                     @if (doc.Type == DocPageType.File && (isAdmin || doc.CreatedByUserId == currentUserId))
                                     {
-                                        <button type="button" class="btn-link" @onclick="() => HandleDeleteFile(doc)" @onclick:stopPropagation="true">Excluir</button>
+                                        <button type="button" class="icon-btn icon-btn--sm is-danger" @onclick="() => HandleDeleteFile(doc)" @onclick:stopPropagation="true">
+                                            <Icon Name="trash" Label="@($"Excluir {doc.Title}")" />
+                                        </button>
                                     }
                                 </td>
                             </tr>
@@ -130,6 +121,8 @@
                 </table>
             </div>
         }
+
+        <ConfirmDialog @ref="confirm" />
     }
 </div>
 
@@ -151,6 +144,19 @@
     private bool isAdmin;
     private bool isImporting;
     private string? importError;
+    private DocPageType? typeFilter;
+    private ConfirmDialog? confirm;
+
+    private IEnumerable<DocPage> FilteredDocs => docs is null
+        ? []
+        : typeFilter is null ? docs : docs.Where(d => d.Type == typeFilter);
+
+    private static string TypeLabel(DocPageType type) => type switch
+    {
+        DocPageType.Spreadsheet => "planilha",
+        DocPageType.File => "arquivo",
+        _ => "documento"
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -303,6 +309,11 @@
 
     private async Task HandleDeleteFile(DocPage doc)
     {
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("arquivo", doc.Title, "Ele deixa de estar disponível para todo o workspace.")))
+        {
+            return;
+        }
+
         if (doc.Type != DocPageType.File || !(isAdmin || doc.CreatedByUserId == currentUserId))
         {
             return;

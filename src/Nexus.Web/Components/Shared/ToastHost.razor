@@ -1,0 +1,33 @@
+@* Uma região só, no MainLayout. role="status" + aria-live="polite": o leitor de tela anuncia
+   "Tarefa salva" sem interromper o que a pessoa está fazendo. *@
+@using Nexus.Web.Services
+@inject ToastService Toasts
+@implements IDisposable
+
+<div class="toast-region" role="status" aria-live="polite" aria-atomic="false">
+    @foreach (var toast in Toasts.Toasts)
+    {
+        <div class="toast toast--@toast.Kind.ToString().ToLowerInvariant()" @key="toast.Id">
+            <Icon Name="@IconFor(toast.Kind)" Class="toast-icon" />
+            <span class="toast-message">@toast.Message</span>
+            <button type="button" class="icon-btn icon-btn--sm toast-close" @onclick="() => Toasts.Dismiss(toast.Id)">
+                <Icon Name="x" Label="Fechar aviso" />
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Toasts.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private static string IconFor(ToastKind kind) => kind switch
+    {
+        ToastKind.Error => "alert-circle",
+        ToastKind.Info => "info",
+        _ => "check-circle"
+    };
+
+    public void Dispose() => Toasts.Changed -= OnChanged;
+}

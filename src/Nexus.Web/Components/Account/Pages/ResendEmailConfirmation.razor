@@ -1,4 +1,4 @@
-﻿@page "/Account/ResendEmailConfirmation"
+@page "/Account/ResendEmailConfirmation"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth")]
 
@@ -52,7 +52,7 @@
         var user = await UserManager.FindByEmailAsync(Input.Email!);
         if (user is null)
         {
-            message = "Verification email sent. Please check your email.";
+            message = "Enviamos um e-mail de confirmação. Confira sua caixa de entrada.";
             return;
         }
 
@@ -64,7 +64,7 @@
             new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
         await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
 
-        message = "Verification email sent. Please check your email.";
+        message = "Enviamos um e-mail de confirmação. Confira sua caixa de entrada.";
     }
 
     private sealed class InputModel

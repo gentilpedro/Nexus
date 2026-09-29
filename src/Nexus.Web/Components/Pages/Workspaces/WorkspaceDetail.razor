@@ -13,180 +13,161 @@
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
 @inject IJSRuntime JS
+@inject WorkspaceAccessGuard AccessGuard
+@inject ToastService Toasts
 
-<PageTitle>@(workspace?.Name ?? "Workspace")</PageTitle>
+<PageTitle>@(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
 
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Workspace não encontrado ou você não tem acesso a ele.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Workspace não encontrado"
+                    Description="Ele pode ter sido excluído, ou você não faz mais parte dele.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (workspace is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Variant="card" Count="3" Label="Carregando workspace…" />
     }
     else
     {
-        <div class="breadcrumbs"><a href="/workspaces">Workspaces</a> / @workspace.Name</div>
-        <div class="page-header">
-            <div>
-                <h1 style="margin-bottom:0.15rem;">@workspace.Name</h1>
-                <span class="topnav-user">Gerencie os spaces, tarefas e progresso deste workspace.</span>
+        <header class="workspace-hero">
+            <Avatar Name="@workspace.Name" Color="@workspace.Color" Size="xl" Square="true" />
+            <div class="workspace-hero-text">
+                <nav class="breadcrumbs" aria-label="Você está em"><a href="/workspaces">Workspaces</a></nav>
+                <h1 class="page-title" tabindex="-1">@workspace.Name</h1>
+                <p class="page-meta">
+                    <span><Icon Name="team" Class="icon--sm" /> @memberCount membro@(memberCount == 1 ? "" : "s")</span>
+                    <span><Icon Name="space" Class="icon--sm" /> @(spaces?.Count ?? 0) space@(spaces?.Count == 1 ? "" : "s")</span>
+                    <span><Icon Name="check-circle" Class="icon--sm" /> @overallCompletedCount tarefas concluídas (@overallProgressPercent%)</span>
+                </p>
             </div>
-            <div class="form-actions">
-                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/members")">Membros</a>
-                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/chat")">Chat</a>
-                <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/docs")">Docs</a>
-                @if (canManageSpaces)
-                {
-                    <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/settings")">Configurações</a>
-                    <button class="btn" @onclick="ToggleCreateForm">+ Novo space</button>
-                }
-            </div>
-        </div>
+            @if (canManageSpaces)
+            {
+                <div class="page-actions">
+                    <button type="button" class="btn" @onclick="ToggleCreateForm"><Icon Name="plus" /> Novo space</button>
+                </div>
+            }
+        </header>
 
-        <div class="stat-grid">
-            <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Tarefas concluídas</span>
-                    <span class="stat-card-value">@overallCompletedCount</span>
-                </div>
-                <span class="stat-card-icon is-success">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                </span>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Progresso geral</span>
-                    <span class="stat-card-value">@overallProgressPercent%</span>
-                </div>
-                <span class="stat-card-icon">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
-                </span>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Spaces</span>
-                    <span class="stat-card-value">@(spaces?.Count ?? 0)</span>
-                </div>
-                <span class="stat-card-icon">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
-                </span>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Membros</span>
-                    <span class="stat-card-value">@memberCount</span>
-                </div>
-                <span class="stat-card-icon is-warning">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-                </span>
-            </div>
-        </div>
+        <WorkspaceTabs WorkspaceId="WorkspaceId" Active="overview" CanManage="canManageSpaces" />
 
         <div class="dashboard-layout">
-            <div class="side-card">
-                <h2>Desempenho semanal</h2>
-                <p class="topnav-user" style="margin-top:-0.5rem;margin-bottom:0.75rem;">Tarefas concluídas nos últimos 7 dias</p>
-                <div style="height:200px;">
-                    <canvas id="workspace-productivity-chart"></canvas>
+            <section aria-labelledby="spaces-title">
+                <div class="section-header">
+                    <h2 id="spaces-title" class="section-title">Spaces</h2>
                 </div>
-            </div>
-            <div class="side-card">
-                <h2>Atividade recente</h2>
-                @if (recentActivity is null)
+
+                @if (showCreateForm)
                 {
-                    <p class="topnav-user">Carregando...</p>
+                    <EditForm Model="createModel" OnValidSubmit="HandleCreateSpace" class="card inline-form">
+                        <DataAnnotationsValidator />
+                        <div class="form-field">
+                            <label for="space-name" class="required">Nome do space</label>
+                            <InputText id="space-name" @bind-Value="createModel.Name" placeholder="Ex.: Marketing, Produto, Clientes" autofocus />
+                            <ValidationMessage For="() => createModel.Name" />
+                            <span class="field-hint">Um space agrupa listas de um mesmo assunto ou equipe.</span>
+                        </div>
+                        <div class="form-actions form-actions--end">
+                            <button type="button" class="btn btn-ghost" @onclick="ToggleCreateForm">Cancelar</button>
+                            <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving">Criar space</button>
+                        </div>
+                    </EditForm>
                 }
-                else if (recentActivity.Count == 0)
+
+                @if (spaces is null)
                 {
-                    <p class="topnav-user">Nenhuma atividade recente.</p>
+                    <Skeleton Variant="card" Count="4" />
+                }
+                else if (spaces.Count == 0)
+                {
+                    <div class="card">
+                        <EmptyState Icon="space" Title="Nenhum space ainda"
+                                    Description="@(canManageSpaces ? "Crie um space para cada área do time — por exemplo Produto, Marketing ou Atendimento — e dentro dele as listas de tarefas." : "Quando um administrador criar um space, ele aparece aqui.")">
+                            @if (canManageSpaces && !showCreateForm)
+                            {
+                                <button type="button" class="btn" @onclick="ToggleCreateForm"><Icon Name="plus" /> Criar o primeiro space</button>
+                            }
+                        </EmptyState>
+                    </div>
                 }
                 else
                 {
-                    @foreach (var activity in recentActivity)
-                    {
-                        <div class="progress-row">
-                            <div class="progress-row-top">
-                                <span class="name">@activity.Text</span>
-                            </div>
-                            <span class="chat-message-time">@RelativeTime(activity.When)</span>
-                        </div>
-                    }
-                }
-            </div>
-        </div>
-
-        @if (showCreateForm)
-        {
-            <EditForm Model="createModel" OnValidSubmit="HandleCreateSpace" class="card" style="margin-bottom:1rem;">
-                <DataAnnotationsValidator />
-                <div class="form-field">
-                    <label for="space-name">Nome do space</label>
-                    <InputText id="space-name" @bind-Value="createModel.Name" placeholder="Ex: Marketing" />
-                    <ValidationMessage For="() => createModel.Name" />
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn" disabled="@isSaving">Criar</button>
-                    <button type="button" class="btn btn-secondary" @onclick="ToggleCreateForm">Cancelar</button>
-                </div>
-            </EditForm>
-        }
-
-        <h2 style="font-size:1rem;margin-bottom:0.75rem;">Spaces</h2>
-
-        @if (spaces is null)
-        {
-            <p>Carregando spaces...</p>
-        }
-        else if (spaces.Count == 0)
-        {
-            <div class="empty-state">
-                <p>Nenhum space criado ainda.</p>
-            </div>
-        }
-        else
-        {
-            <div class="card-list">
-                @foreach (var space in spaces)
-                {
-                    var progress = spaceProgress.TryGetValue(space.Id, out var p) ? p : (Done: 0, Total: 0);
-                    <a class="card card-link" href="@($"/workspaces/{WorkspaceId}/spaces/{space.Id}")">
-                        <strong>@space.Name</strong>
-                        <div class="topnav-user" style="margin-top:0.35rem;">
-                            @(listCounts != null && listCounts.TryGetValue(space.Id, out var c) ? c : 0) lista(s)
-                        </div>
-                        @if (progress.Total > 0)
+                    <ul class="space-list">
+                        @foreach (var space in spaces)
                         {
-                            <div class="progress-track" style="margin-top:0.5rem;">
-                                <div class="progress-fill" style="width:@(progress.Done * 100 / progress.Total)%"></div>
-                            </div>
-                            <div class="topnav-user" style="margin-top:0.25rem;">@progress.Done de @progress.Total tarefas concluídas</div>
+                            var progress = spaceProgress.TryGetValue(space.Id, out var p) ? p : (Done: 0, Total: 0);
+                            var lists = listCounts != null && listCounts.TryGetValue(space.Id, out var c) ? c : 0;
+                            var pct = progress.Total == 0 ? 0 : progress.Done * 100 / progress.Total;
+                            <li>
+                                <a class="space-item" href="@($"/workspaces/{WorkspaceId}/spaces/{space.Id}")">
+                                    <span class="space-item-icon" aria-hidden="true"><Icon Name="space" /></span>
+                                    <span class="space-item-body">
+                                        <span class="space-item-name">@space.Name</span>
+                                        <span class="space-item-meta">
+                                            @lists lista@(lists == 1 ? "" : "s")
+                                            @if (progress.Total > 0)
+                                            {
+                                                <text> · @progress.Done de @progress.Total tarefas concluídas</text>
+                                            }
+                                        </span>
+                                    </span>
+                                    @if (progress.Total > 0)
+                                    {
+                                        <span class="space-item-progress">
+                                            <span class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@pct" aria-label="@($"{pct}% concluído")">
+                                                <span class="progress-fill" style="width:@(pct)%"></span>
+                                            </span>
+                                            <span class="space-item-pct">@pct%</span>
+                                        </span>
+                                    }
+                                    <Icon Name="chevron-right" Class="space-item-chevron" />
+                                </a>
+                            </li>
                         }
-                    </a>
+                    </ul>
                 }
-            </div>
-        }
+            </section>
 
-        <div class="landing-feature-grid" style="margin-top:1.5rem;">
-            <a class="card" href="@($"/workspaces/{WorkspaceId}/chat")" style="text-align:center;">
-                <svg class="icon" style="width:1.6rem;height:1.6rem;color:var(--color-primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-                <div style="font-weight:600;margin-top:0.5rem;">Abrir Chat</div>
-                <div class="topnav-user">Comunique-se com a equipe</div>
-            </a>
-            <a class="card" href="@($"/workspaces/{WorkspaceId}/docs")" style="text-align:center;">
-                <svg class="icon" style="width:1.6rem;height:1.6rem;color:var(--color-primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><polyline points="14 2 14 8 20 8" /></svg>
-                <div style="font-weight:600;margin-top:0.5rem;">Docs do Workspace</div>
-                <div class="topnav-user">Base de conhecimento central</div>
-            </a>
-            <a class="card" href="@($"/workspaces/{WorkspaceId}/members")" style="text-align:center;">
-                <svg class="icon" style="width:1.6rem;height:1.6rem;color:var(--color-primary);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-                <div style="font-weight:600;margin-top:0.5rem;">Membros</div>
-                <div class="topnav-user">Gerencie quem tem acesso</div>
-            </a>
+            <aside class="dashboard-rail" aria-label="Atividade do workspace">
+                <section class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2 class="card-title">Ritmo da semana</h2>
+                            <p class="card-subtitle">Tarefas concluídas por dia</p>
+                        </div>
+                    </div>
+                    <div class="dashboard-chart">
+                        <canvas id="workspace-productivity-chart" role="img" aria-label="@ChartSummary"></canvas>
+                    </div>
+                </section>
+                <section class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Atividade recente</h2>
+                    </div>
+                    @if (recentActivity is null)
+                    {
+                        <Skeleton Variant="text" Count="4" />
+                    }
+                    else if (recentActivity.Count == 0)
+                    {
+                        <EmptyState Compact="true" Title="Nada por aqui ainda" Description="Tarefas atualizadas, comentários e anexos aparecem aqui." />
+                    }
+                    else
+                    {
+                        <ol class="activity-list">
+                            @foreach (var activity in recentActivity)
+                            {
+                                <li class="activity-item">
+                                    <span class="activity-text">@activity.Text</span>
+                                    <time class="activity-time" datetime="@activity.When.ToString("o")" title="@activity.When.ToLocalTime().ToString("dd/MM/yyyy HH:mm")">@RelativeTime(activity.When)</time>
+                                </li>
+                            }
+                        </ol>
+                    }
+                </section>
+            </aside>
         </div>
     }
 </div>
@@ -217,6 +198,10 @@
     private Guid? loadedWorkspaceId;
 
     private record ActivityItem(DateTime When, string Text);
+
+    private string ChartSummary => weeklyValues.Count == 0
+        ? "Gráfico de tarefas concluídas nos últimos 7 dias"
+        : $"Tarefas concluídas nos últimos 7 dias: {string.Join(", ", weeklyLabels.Zip(weeklyValues, (l, v) => $"{l} {v}"))}";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -390,6 +375,15 @@
 
     private async Task HandleCreateSpace()
     {
+        // O botão só aparece para admins; a checagem no servidor impede que um pedido montado
+        // à mão (ou um papel rebaixado com a aba aberta) crie spaces mesmo assim.
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin))
+        {
+            Toasts.Show("Você não tem mais permissão para criar spaces neste workspace.", ToastKind.Error);
+            showCreateForm = false;
+            return;
+        }
+
         isSaving = true;
 
         var maxSortOrder = spaces!.Count == 0 ? -1 : spaces.Max(s => s.SortOrder);
@@ -408,6 +402,7 @@
 
         showCreateForm = false;
         isSaving = false;
+        Toasts.Show($"Space \"{createModel.Name.Trim()}\" criado");
         await LoadSpacesAsync();
         NavContext.Refresh();
     }

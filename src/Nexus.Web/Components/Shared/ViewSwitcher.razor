@@ -1,12 +1,15 @@
 @using Nexus.Domain.Entities
 
-<div class="view-tabs">
-    <a class="@(ActiveView == "list" ? "active" : "")" href="@($"/lists/{ListId}/list")">Lista</a>
-    <a class="@(ActiveView == "board" ? "active" : "")" href="@($"/lists/{ListId}/board")">Kanban</a>
-    <a class="@(ActiveView == "backlog" ? "active" : "")" href="@($"/lists/{ListId}/backlog")">Backlog</a>
-    <a class="@(ActiveView == "calendar" ? "active" : "")" href="@($"/lists/{ListId}/calendar")">Calendário</a>
-    <a class="@(ActiveView == "gantt" ? "active" : "")" href="@($"/lists/{ListId}/gantt")">Gantt</a>
-</div>
+<nav class="view-tabs" aria-label="Visões da lista">
+    @foreach (var (key, label, icon) in Views)
+    {
+        var active = ActiveView == key;
+        <a class="@(active ? "active" : "")" href="@($"/lists/{ListId}/{key}")" aria-current="@(active ? "page" : null)">
+            <Icon Name="@icon" />
+            @label
+        </a>
+    }
+</nav>
 
 @code {
     [Parameter, EditorRequired]
@@ -14,4 +17,13 @@
 
     [Parameter, EditorRequired]
     public string ActiveView { get; set; } = "list";
+
+    private static readonly (string Key, string Label, string Icon)[] Views =
+    [
+        ("list", "Lista", "list"),
+        ("board", "Kanban", "board"),
+        ("backlog", "Backlog", "backlog"),
+        ("calendar", "Calendário", "calendar"),
+        ("gantt", "Gantt", "gantt")
+    ];
 }

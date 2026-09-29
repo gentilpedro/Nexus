@@ -10,58 +10,71 @@
 @inject IdentityRedirectManager RedirectManager
 @inject AttachmentStorageService Storage
 
-<PageTitle>Perfil</PageTitle>
+<PageTitle>Perfil · Nexus</PageTitle>
 
-<h2>Perfil</h2>
-<StatusMessage />
+<AccountSection Title="Perfil" Description="Como você aparece para o time: nas tarefas, nos comentários, no chat e nos convites.">
+    <StatusMessage />
 
-<EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post" enctype="multipart/form-data" class="card">
-    <DataAnnotationsValidator />
-    <ValidationSummary class="validation-errors" role="alert" />
-    <div class="form-field">
-        <label>Foto de perfil</label>
-        <div class="profile-avatar-row">
+    <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post" enctype="multipart/form-data" class="card form-card">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="validation-errors" role="alert" />
+
+        <div class="profile-photo-row">
             @if (avatarUrl is not null)
             {
-                <img class="profile-avatar" src="@avatarUrl" alt="Foto de perfil" />
+                <img class="avatar avatar--xl" src="@avatarUrl" alt="Sua foto de perfil" />
             }
             else
             {
-                <span class="profile-avatar profile-avatar-fallback">@avatarInitial</span>
+                <Avatar Name="@(string.IsNullOrWhiteSpace(Input.Name) ? avatarInitial : Input.Name)" Size="xl" />
             }
-            <div class="profile-avatar-actions">
-                <input type="file" name="AvatarFile" accept="image/png,image/jpeg,image/webp" />
+            <div class="profile-photo-actions">
+                <span class="field-label">Foto de perfil</span>
+                <div class="button-row">
+                    <input type="file" id="AvatarFile" name="AvatarFile" accept="image/png,image/jpeg,image/webp" class="sr-only file-trigger" data-file-label="avatar-file-name" />
+                    <label for="AvatarFile" class="btn btn-secondary btn-sm"><Icon Name="upload" /> Escolher foto</label>
+                    <span id="avatar-file-name" class="field-hint" aria-live="polite">Nenhuma foto nova selecionada</span>
+                </div>
+                <span class="field-hint">JPG, PNG ou WEBP, até 5 MB. A foto nova vale depois de salvar.</span>
                 @if (avatarUrl is not null)
                 {
-                    <label class="form-check">
+                    <label class="checkbox-field">
                         <InputCheckbox @bind-Value="Input.RemoveAvatar" />
-                        Remover foto atual
+                        Remover a foto atual
                     </label>
                 }
-                <span style="font-size:0.8rem;color:var(--color-text-muted);">JPG, PNG ou WEBP, até 5 MB.</span>
             </div>
         </div>
         @if (!string.IsNullOrEmpty(avatarErrorMessage))
         {
-            <div class="alert alert-danger">@avatarErrorMessage</div>
+            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@avatarErrorMessage</span></div>
         }
-    </div>
-    <div class="form-field">
-        <label for="Input.Name">Nome</label>
-        <InputText @bind-Value="Input.Name" id="Input.Name" placeholder="Seu nome" />
-        <ValidationMessage For="() => Input.Name" />
-    </div>
-    <div class="form-field">
-        <label for="username">Nome de usuário</label>
-        <input type="text" value="@username" id="username" disabled />
-    </div>
-    <div class="form-field">
-        <label for="Input.PhoneNumber">Telefone</label>
-        <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" placeholder="Digite seu telefone" />
-        <ValidationMessage For="() => Input.PhoneNumber" />
-    </div>
-    <button type="submit" class="btn">Salvar</button>
-</EditForm>
+
+        <div class="form-section">
+            <div class="form-field">
+                <label for="Input.Name">Nome</label>
+                <InputText @bind-Value="Input.Name" id="Input.Name" autocomplete="name" placeholder="Como o time vai te chamar" />
+                <ValidationMessage For="() => Input.Name" />
+            </div>
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="username">E-mail de acesso</label>
+                    <input type="text" value="@username" id="username" disabled aria-describedby="username-hint" />
+                    <span id="username-hint" class="field-hint">Para trocar, vá em <a href="Account/Manage/Email">E-mail</a>.</span>
+                </div>
+                <div class="form-field">
+                    <label for="Input.PhoneNumber">Telefone <span class="field-hint">(opcional)</span></label>
+                    <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" type="tel" autocomplete="tel" placeholder="(11) 91234-5678" />
+                    <ValidationMessage For="() => Input.PhoneNumber" />
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions form-actions--end">
+            <button type="submit" class="btn">Salvar perfil</button>
+        </div>
+    </EditForm>
+</AccountSection>
 
 @code {
     private const long MaxAvatarSizeBytes = 5 * 1024 * 1024;
@@ -124,7 +137,7 @@
             var setPhoneResult = await UserManager.SetPhoneNumberAsync(user, Input.PhoneNumber);
             if (!setPhoneResult.Succeeded)
             {
-                RedirectManager.RedirectToCurrentPageWithStatus("Error: Failed to set phone number.", HttpContext);
+                RedirectManager.RedirectToCurrentPageWithStatus("Erro: não foi possível salvar o telefone.", HttpContext);
                 return;
             }
         }
@@ -136,7 +149,7 @@
             var updateResult = await UserManager.UpdateAsync(user);
             if (!updateResult.Succeeded)
             {
-                RedirectManager.RedirectToCurrentPageWithStatus("Error: Failed to set name.", HttpContext);
+                RedirectManager.RedirectToCurrentPageWithStatus("Erro: não foi possível salvar o nome.", HttpContext);
                 return;
             }
         }
@@ -189,7 +202,7 @@
         }
 
         await SignInManager.RefreshSignInAsync(user);
-        RedirectManager.RedirectToCurrentPageWithStatus("Your profile has been updated", HttpContext);
+        RedirectManager.RedirectToCurrentPageWithStatus("Perfil atualizado.", HttpContext);
     }
 
     private sealed class InputModel

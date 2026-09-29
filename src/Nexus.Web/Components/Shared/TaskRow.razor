@@ -1,25 +1,46 @@
 @using Nexus.Domain.Entities
+@using Nexus.Web.Extensions
 
-<div class="dashboard-task-row">
-    <div class="dashboard-task-path">
-        <a href="@($"/workspaces/{Item.TaskList.Space.WorkspaceId}")">@Item.TaskList.Space.Workspace.Name</a>
-        <span>/</span>
-        <a href="@($"/workspaces/{Item.TaskList.Space.WorkspaceId}/spaces/{Item.TaskList.SpaceId}")">@Item.TaskList.Space.Name</a>
-        <span>/</span>
-        <a href="@($"/lists/{Item.TaskListId}/list")">@Item.TaskList.Name</a>
+@* Linha de tarefa das listas do dashboard e da busca. O título é um <button> (teclado e leitor
+   de tela) cujo ::after cobre a linha inteira; os links do caminho ficam acima dele e continuam
+   clicáveis. *@
+<li class="task-row @(IsDone ? "is-done" : "")">
+    <WorkItemTypeIcon Type="Item.Type" />
+    <div class="task-row-main">
+        <button type="button" class="task-row-title" @onclick="() => OnClick.InvokeAsync(Item)">@Item.Title</button>
+        <span class="task-row-path">
+            <a href="@($"/workspaces/{Item.TaskList.Space.WorkspaceId}")">@Item.TaskList.Space.Workspace.Name</a>
+            <span class="breadcrumb-sep" aria-hidden="true">/</span>
+            <a href="@($"/lists/{Item.TaskListId}/list")">@Item.TaskList.Name</a>
+        </span>
     </div>
-    <div class="task-row" @onclick="() => OnClick.InvokeAsync(Item)">
-        <WorkItemTypeIcon Type="Item.Type" />
-        <span class="task-row-title">@Item.Title</span>
-        <StatusBadge Name="@Item.Status.Name" Category="Item.Status.Category" Color="Item.Status.Color" />
-        <PriorityBadge Priority="Item.Priority" />
-        @if (Item.DueDateUtc is not null)
+    <div class="task-row-meta">
+        <StatusBadge Name="@Item.Status.Name" Category="Item.Status.Category" Color="@Item.Status.Color" />
+        <PriorityBadge Priority="Item.Priority" IconOnly="true" />
+        @if (Item.DueDateUtc is DateTime due)
         {
-            <span class="task-row-due @(IsOverdue ? "is-overdue" : "")">@Item.DueDateUtc.Value.ToString("dd/MM")</span>
+            <span class="task-row-due @(IsOverdue ? "is-overdue" : DueDateLabel.IsDueSoon(due) && !IsDone ? "is-soon" : "")"
+                  title="@DueDateLabel.Describe(due, IsDone)">
+                <Icon Name="calendar" Class="icon--sm" />
+                <span aria-hidden="true">@DueDateLabel.Format(due)</span>
+                <span class="sr-only">@DueDateLabel.Describe(due, IsDone)</span>
+            </span>
         }
-        <span class="task-row-avatar" title="@AssigneeLabel">@AssigneeInitial</span>
+        @if (ShowAssignee || Item.Assignee is not null)
+        {
+            <span title="@AssigneeLabel">
+                @if (Item.Assignee is null)
+                {
+                    <span class="avatar avatar--sm avatar--empty" role="img" aria-label="Sem responsável"></span>
+                }
+                else
+                {
+                    <Avatar Name="@AssigneeLabel" Size="sm" Decorative="false" />
+                }
+            </span>
+        }
     </div>
-</div>
+</li>
 
 @code {
     [Parameter, EditorRequired]
@@ -28,24 +49,16 @@
     [Parameter]
     public EventCallback<WorkItem> OnClick { get; set; }
 
-    private bool IsOverdue => Item.DueDateUtc is not null && Item.DueDateUtc.Value.Date < DateTime.UtcNow.Date;
+    /// <summary>Mostra o avatar mesmo sem responsável (lista de delegadas).</summary>
+    [Parameter]
+    public bool ShowAssignee { get; set; }
+
+    private bool IsDone => Item.Status.Category == StatusCategory.Done;
+
+    private bool IsOverdue => !IsDone && Item.DueDateUtc is DateTime due && DueDateLabel.IsOverdue(due);
 
     private string AssigneeLabel =>
         Item.Assignee is null
             ? "Sem responsável"
             : (string.IsNullOrEmpty(Item.Assignee.DisplayName) ? Item.Assignee.Email ?? "" : Item.Assignee.DisplayName);
-
-    private string AssigneeInitial
-    {
-        get
-        {
-            if (Item.Assignee is null)
-            {
-                return "?";
-            }
-
-            var name = string.IsNullOrEmpty(Item.Assignee.DisplayName) ? Item.Assignee.Email : Item.Assignee.DisplayName;
-            return string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
-        }
-    }
 }

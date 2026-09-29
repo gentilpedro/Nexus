@@ -6,109 +6,163 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationContextService NavContext
-@inject NavigationManager NavigationManager
+@inject NotificationBadgeService Badge
 @implements IDisposable
 
-<aside class="app-sidebar @(IsOpen ? "is-open" : "")">
-    <nav class="app-sidebar-nav">
-        <NavLink class="app-sidebar-nav-link" href="/" Match="NavLinkMatch.All">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
-            Dashboard
-        </NavLink>
-        <NavLink class="app-sidebar-nav-link" href="/search">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-            Tarefas
-        </NavLink>
-        <NavLink class="app-sidebar-nav-link" href="/chats">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-            Chat
-        </NavLink>
-        <NavLink class="app-sidebar-nav-link" href="@DocumentsHref" Match="NavLinkMatch.All">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><polyline points="14 2 14 8 20 8" /></svg>
-            Documentos
-        </NavLink>
-        <NavLink class="app-sidebar-nav-link" href="@TeamHref" Match="NavLinkMatch.All">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-            Equipe
-        </NavLink>
-    </nav>
-
-    <div class="app-sidebar-section-header">
-        <span>Workspaces</span>
-        <a href="/workspaces/new" class="app-sidebar-add-btn" aria-label="Novo workspace" title="Novo workspace">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-        </a>
+@* Navegação em dois níveis:
+   1. Itens globais, que levam sempre ao mesmo lugar (Início, Notificações, Chats, Busca).
+   2. A árvore de workspaces. Documentos, Chat e Membros ficam DENTRO de cada workspace, em vez
+      de itens globais que mudavam de destino conforme a página aberta. *@
+<aside id="app-sidebar" class="app-sidebar @(IsOpen ? "is-open" : "")" aria-label="Navegação principal">
+    <div class="app-sidebar-drawer-header">
+        <span class="topnav-wordmark">Nexus</span>
+        <button type="button" class="icon-btn icon-btn--sm" @onclick="OnClose">
+            <Icon Name="x" Label="Fechar menu" />
+        </button>
     </div>
 
-    @if (workspaces is null)
-    {
-        <p class="app-sidebar-loading">Carregando...</p>
-    }
-    else if (workspaces.Count == 0)
-    {
-        <p class="app-sidebar-loading">Nenhum workspace ainda.</p>
-    }
-    else
-    {
-        <nav class="app-sidebar-tree">
-            @foreach (var workspace in workspaces)
-            {
-                <div class="app-sidebar-node">
-                    <button type="button" class="app-sidebar-chevron"
-                            @onclick="() => ToggleWorkspace(workspace.Id)"
-                            aria-label="Expandir workspace">
-                        @(expandedWorkspaces.Contains(workspace.Id) ? "▾" : "▸")
-                    </button>
-                    <a class="app-sidebar-workspace @(workspace.Id == NavContext.WorkspaceId ? "active" : "")"
-                       href="@($"/workspaces/{workspace.Id}")">
-                        <span class="app-sidebar-workspace-row">
-                            <svg class="icon app-sidebar-workspace-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v18Z" /><path d="M2 22h20" /><path d="M9 6h1" /><path d="M9 10h1" /><path d="M9 14h1" /><path d="M14 6h1" /><path d="M14 10h1" /><path d="M14 14h1" /><path d="M9 22v-4h6v4" /></svg>
-                            @workspace.Name
-                        </span>
-                    </a>
-                </div>
-
-                @if (expandedWorkspaces.Contains(workspace.Id))
+    <div class="app-sidebar-scroll">
+        <nav class="app-sidebar-nav" aria-label="Geral">
+            <NavLink class="app-sidebar-nav-link" href="/" Match="NavLinkMatch.All">
+                <Icon Name="home" />
+                Início
+            </NavLink>
+            <NavLink class="app-sidebar-nav-link" href="/notifications">
+                <Icon Name="inbox" />
+                Notificações
+                @if (Badge.UnreadCount > 0)
                 {
-                    @foreach (var space in workspace.Spaces.OrderBy(s => s.SortOrder))
-                    {
-                        <div class="app-sidebar-node app-sidebar-node--indent1">
+                    <span class="nav-count" aria-label="@($"{Badge.UnreadCount} não lidas")">@(Badge.UnreadCount > 99 ? "99+" : Badge.UnreadCount.ToString())</span>
+                }
+            </NavLink>
+            <NavLink class="app-sidebar-nav-link" href="/chats">
+                <Icon Name="chat" />
+                Chats
+            </NavLink>
+            <NavLink class="app-sidebar-nav-link" href="/search">
+                <Icon Name="search" />
+                Busca
+            </NavLink>
+        </nav>
+
+        <div class="app-sidebar-section-header">
+            <span id="sidebar-workspaces-heading">Workspaces</span>
+            <a href="/workspaces/new" class="icon-btn icon-btn--sm app-sidebar-add-btn" data-tooltip="Novo workspace">
+                <Icon Name="plus" Label="Novo workspace" />
+            </a>
+        </div>
+
+        @if (workspaces is null)
+        {
+            <div class="app-sidebar-loading"><Skeleton Variant="text" Count="3" Label="Carregando workspaces…" /></div>
+        }
+        else if (workspaces.Count == 0)
+        {
+            <div class="app-sidebar-empty">
+                Você ainda não participa de nenhum workspace.
+                <br />
+                <a href="/workspaces/new">Criar o primeiro</a>
+            </div>
+        }
+        else
+        {
+            <ul class="app-sidebar-tree" aria-labelledby="sidebar-workspaces-heading">
+                @foreach (var workspace in workspaces)
+                {
+                    var wsExpanded = expandedWorkspaces.Contains(workspace.Id);
+                    var wsGroupId = $"sb-ws-{workspace.Id:N}";
+                    <li>
+                        <div class="app-sidebar-node @(IsWorkspaceHome(workspace.Id) ? "is-active" : "")">
                             <button type="button" class="app-sidebar-chevron"
-                                    @onclick="() => ToggleSpace(space.Id)"
-                                    aria-label="Expandir space">
-                                @(expandedSpaces.Contains(space.Id) ? "▾" : "▸")
+                                    aria-expanded="@(wsExpanded ? "true" : "false")" aria-controls="@wsGroupId"
+                                    @onclick="() => ToggleWorkspace(workspace.Id)">
+                                <Icon Name="chevron-right" Label="@($"{(wsExpanded ? "Recolher" : "Expandir")} {workspace.Name}")" />
                             </button>
-                            <a class="app-sidebar-space @(space.Id == NavContext.SpaceId ? "active" : "")"
-                               href="@($"/workspaces/{workspace.Id}/spaces/{space.Id}")">
-                                @space.Name
+                            <a class="app-sidebar-workspace @(IsWorkspaceHome(workspace.Id) ? "active" : "")"
+                               href="@($"/workspaces/{workspace.Id}")"
+                               aria-current="@(IsWorkspaceHome(workspace.Id) ? "page" : null)">
+                                <Avatar Name="@workspace.Name" Color="@workspace.Color" Size="xs" Square="true" />
+                                <span class="app-sidebar-label">@workspace.Name</span>
                             </a>
                         </div>
 
-                        @if (expandedSpaces.Contains(space.Id))
+                        @if (wsExpanded)
                         {
-                            @foreach (var list in space.Lists.OrderBy(l => l.SortOrder))
-                            {
-                                <a class="app-sidebar-list @(list.Id == NavContext.ListId ? "active" : "")"
-                                   href="@($"/lists/{list.Id}/list")">
-                                    @list.Name
-                                </a>
-                            }
-                        }
-                    }
-                }
-            }
-        </nav>
-    }
+                            <ul id="@wsGroupId">
+                                <li>
+                                    <div class="app-sidebar-node app-sidebar-node--space @(IsSection(workspace.Id, "docs") ? "is-active" : "")">
+                                        <span class="app-sidebar-chevron" aria-hidden="true"></span>
+                                        <a class="app-sidebar-space @(IsSection(workspace.Id, "docs") ? "active" : "")" href="@($"/workspaces/{workspace.Id}/docs")">
+                                            <Icon Name="doc" /><span class="app-sidebar-label">Documentos</span>
+                                        </a>
+                                    </div>
+                                </li>
+                                <li>
+                                    <div class="app-sidebar-node app-sidebar-node--space @(IsSection(workspace.Id, "chat") ? "is-active" : "")">
+                                        <span class="app-sidebar-chevron" aria-hidden="true"></span>
+                                        <a class="app-sidebar-space @(IsSection(workspace.Id, "chat") ? "active" : "")" href="@($"/workspaces/{workspace.Id}/chat")">
+                                            <Icon Name="chat" /><span class="app-sidebar-label">Chat</span>
+                                        </a>
+                                    </div>
+                                </li>
+                                <li>
+                                    <div class="app-sidebar-node app-sidebar-node--space @(IsSection(workspace.Id, "members") ? "is-active" : "")">
+                                        <span class="app-sidebar-chevron" aria-hidden="true"></span>
+                                        <a class="app-sidebar-space @(IsSection(workspace.Id, "members") ? "active" : "")" href="@($"/workspaces/{workspace.Id}/members")">
+                                            <Icon Name="team" /><span class="app-sidebar-label">Membros</span>
+                                        </a>
+                                    </div>
+                                </li>
 
-    <div class="app-sidebar-footer">
-        <form action="Account/Logout" method="post" data-enhance="false" class="app-sidebar-logout-form">
-            <AntiforgeryToken />
-            <input type="hidden" name="ReturnUrl" value="@NavigationManager.ToBaseRelativePath(NavigationManager.Uri)" />
-            <button type="submit" class="app-sidebar-logout" title="Sair">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-                Sair
-            </button>
-        </form>
+                                @foreach (var space in workspace.Spaces.OrderBy(s => s.SortOrder))
+                                {
+                                    var spExpanded = expandedSpaces.Contains(space.Id);
+                                    var spGroupId = $"sb-sp-{space.Id:N}";
+                                    var spaceActive = space.Id == NavContext.SpaceId && NavContext.ListId is null;
+                                    <li>
+                                        <div class="app-sidebar-node app-sidebar-node--space @(spaceActive ? "is-active" : "")">
+                                            <button type="button" class="app-sidebar-chevron"
+                                                    aria-expanded="@(spExpanded ? "true" : "false")" aria-controls="@spGroupId"
+                                                    @onclick="() => ToggleSpace(space.Id)">
+                                                <Icon Name="chevron-right" Label="@($"{(spExpanded ? "Recolher" : "Expandir")} {space.Name}")" />
+                                            </button>
+                                            <a class="app-sidebar-space @(spaceActive ? "active" : "")"
+                                               href="@($"/workspaces/{workspace.Id}/spaces/{space.Id}")"
+                                               aria-current="@(spaceActive ? "page" : null)">
+                                                <Icon Name="space" /><span class="app-sidebar-label">@space.Name</span>
+                                            </a>
+                                        </div>
+
+                                        @if (spExpanded)
+                                        {
+                                            <ul id="@spGroupId">
+                                                @if (space.Lists.Count == 0)
+                                                {
+                                                    <li class="app-sidebar-node app-sidebar-node--list">
+                                                        <span class="app-sidebar-list app-sidebar-muted">Nenhuma lista</span>
+                                                    </li>
+                                                }
+                                                @foreach (var list in space.Lists.OrderBy(l => l.SortOrder))
+                                                {
+                                                    var listActive = list.Id == NavContext.ListId;
+                                                    <li class="app-sidebar-node app-sidebar-node--list @(listActive ? "is-active" : "")">
+                                                        <a class="app-sidebar-list @(listActive ? "active" : "")"
+                                                           href="@($"/lists/{list.Id}/list")"
+                                                           aria-current="@(listActive ? "page" : null)">
+                                                            <Icon Name="list" /><span class="app-sidebar-label">@list.Name</span>
+                                                        </a>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </li>
+                }
+            </ul>
+        }
     </div>
 </aside>
 
@@ -116,22 +170,38 @@
     [Parameter]
     public bool IsOpen { get; set; }
 
+    /// <summary>Fecha a gaveta (tablet/celular).</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    [Inject]
+    private NavigationManager NavigationManager { get; set; } = null!;
 
     private List<Workspace>? workspaces;
     private readonly HashSet<Guid> expandedWorkspaces = new();
     private readonly HashSet<Guid> expandedSpaces = new();
 
-    private string DocumentsHref => NavContext.WorkspaceId is Guid wsId ? $"/workspaces/{wsId}/docs" : "/workspaces";
-    private string TeamHref => NavContext.WorkspaceId is Guid wsId ? $"/workspaces/{wsId}/members" : "/workspaces";
-
     protected override async Task OnInitializedAsync()
     {
         NavContext.Changed += OnContextChanged;
+        Badge.Changed += OnBadgeChanged;
+        NavigationManager.LocationChanged += OnLocationChanged;
         await LoadAsync();
         EnsureActiveExpanded();
     }
+
+    private string CurrentPath => "/" + NavigationManager.ToBaseRelativePath(NavigationManager.Uri).Split('?', '#')[0].TrimEnd('/');
+
+    private bool IsWorkspaceHome(Guid workspaceId) =>
+        string.Equals(CurrentPath, $"/workspaces/{workspaceId}", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsSection(Guid workspaceId, string section) =>
+        CurrentPath.StartsWith($"/workspaces/{workspaceId}/{section}", StringComparison.OrdinalIgnoreCase)
+        || (section == "docs" && (CurrentPath.StartsWith($"/workspaces/{workspaceId}/spreadsheets", StringComparison.OrdinalIgnoreCase)))
+        || (section == "chat" && CurrentPath.StartsWith($"/chats/{workspaceId}", StringComparison.OrdinalIgnoreCase));
 
     private async void OnContextChanged()
     {
@@ -139,6 +209,10 @@
         EnsureActiveExpanded();
         await InvokeAsync(StateHasChanged);
     }
+
+    private void OnBadgeChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
 
     private async Task LoadAsync()
     {
@@ -156,6 +230,12 @@
             .Include(w => w.Spaces).ThenInclude(s => s.Lists)
             .OrderBy(w => w.Name)
             .ToListAsync();
+
+        // Com um workspace só, abrir a árvore dele de cara poupa um clique em toda visita.
+        if (workspaces.Count == 1)
+        {
+            expandedWorkspaces.Add(workspaces[0].Id);
+        }
     }
 
     private void EnsureActiveExpanded()
@@ -190,5 +270,7 @@
     public void Dispose()
     {
         NavContext.Changed -= OnContextChanged;
+        Badge.Changed -= OnBadgeChanged;
+        NavigationManager.LocationChanged -= OnLocationChanged;
     }
 }

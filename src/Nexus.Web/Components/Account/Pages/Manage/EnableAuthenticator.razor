@@ -1,4 +1,4 @@
-﻿@page "/Account/Manage/EnableAuthenticator"
+@page "/Account/Manage/EnableAuthenticator"
 
 @using System.ComponentModel.DataAnnotations
 @using System.Globalization
@@ -44,7 +44,7 @@ else
                     Depois de escanear o QR code ou digitar a chave acima, seu aplicativo autenticador vai gerar
                     um código único. Digite o código na caixa de confirmação abaixo.
                 </p>
-                <div style="max-width:320px;">
+                <div class="narrow-form">
                     <EditForm Model="Input" FormName="send-code" OnValidSubmit="OnValidSubmitAsync" method="post">
                         <DataAnnotationsValidator />
                         <div class="form-field">

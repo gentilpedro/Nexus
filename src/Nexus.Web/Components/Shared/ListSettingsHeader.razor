@@ -1,0 +1,35 @@
+@* Cabeçalho das três telas de configuração de uma lista (Status e fluxo, Labels, Campos),
+   com abas entre elas e o caminho de volta para a lista. *@
+
+<PageHeader Title="@($"Configurar \"{ListName}\"")" Description="Só administradores do workspace veem estas configurações.">
+    <Breadcrumbs>
+        <a href="/workspaces">Workspaces</a>
+        <span class="breadcrumb-sep" aria-hidden="true">/</span>
+        <a href="@($"/workspaces/{WorkspaceId}")">@WorkspaceName</a>
+        <span class="breadcrumb-sep" aria-hidden="true">/</span>
+        <a href="@($"/workspaces/{WorkspaceId}/spaces/{SpaceId}")">@SpaceName</a>
+        <span class="breadcrumb-sep" aria-hidden="true">/</span>
+        <a href="@($"/lists/{ListId}/list")">@ListName</a>
+    </Breadcrumbs>
+    <Actions>
+        <a class="btn btn-secondary" href="@($"/lists/{ListId}/list")"><Icon Name="arrow-left" /> Voltar para a lista</a>
+    </Actions>
+</PageHeader>
+
+<nav class="view-tabs" aria-label="Configurações da lista">
+    <a class="@(Active == "workflow" ? "active" : "")" href="@($"/lists/{ListId}/workflow")" aria-current="@(Active == "workflow" ? "page" : null)"><Icon Name="refresh" /> Status e fluxo</a>
+    <a class="@(Active == "labels" ? "active" : "")" href="@($"/lists/{ListId}/labels")" aria-current="@(Active == "labels" ? "page" : null)"><Icon Name="tag" /> Labels</a>
+    <a class="@(Active == "fields" ? "active" : "")" href="@($"/lists/{ListId}/fields")" aria-current="@(Active == "fields" ? "page" : null)"><Icon Name="list" /> Campos customizados</a>
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public Guid ListId { get; set; }
+    [Parameter, EditorRequired] public string ListName { get; set; } = "";
+    [Parameter, EditorRequired] public Guid WorkspaceId { get; set; }
+    [Parameter, EditorRequired] public string WorkspaceName { get; set; } = "";
+    [Parameter, EditorRequired] public Guid SpaceId { get; set; }
+    [Parameter, EditorRequired] public string SpaceName { get; set; } = "";
+
+    /// <summary>workflow, labels ou fields.</summary>
+    [Parameter, EditorRequired] public string Active { get; set; } = "workflow";
+}

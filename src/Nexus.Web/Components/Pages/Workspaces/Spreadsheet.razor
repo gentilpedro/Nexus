@@ -15,55 +15,72 @@
 @inject NavigationContextService NavContext
 @inject NavigationManager NavigationManager
 
-<PageTitle>@(doc?.Title ?? "Nova planilha")</PageTitle>
+<PageTitle>@(doc?.Title ?? "Nova planilha") · Nexus</PageTitle>
 
-<div class="page-container page-container--wide">
+<div class="page-container page-container--full">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Planilha não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="@($"/workspaces/{WorkspaceId}/docs")">Voltar</a>
-        </div>
+        <EmptyState Icon="sheet" Title="Planilha não encontrada"
+                    Description="Ela pode ter sido excluída, ou você não tem mais acesso ao workspace dela.">
+            <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/docs")">Ver documentos</a>
+        </EmptyState>
     }
     else if (workspace is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="8" Label="Carregando planilha…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
-            <a href="@($"/workspaces/{WorkspaceId}/docs")">Docs</a> /
-            @(isCreating ? "Nova planilha" : doc?.Title)
-        </div>
+        <nav class="breadcrumbs" aria-label="Você está em">
+            <a href="/workspaces">Workspaces</a>
+            <span class="breadcrumb-sep" aria-hidden="true">/</span>
+            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a>
+            <span class="breadcrumb-sep" aria-hidden="true">/</span>
+            <a href="@($"/workspaces/{WorkspaceId}/docs")">Documentos</a>
+        </nav>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
+        }
 
         @if (isEditing)
         {
-            <div class="form-field">
-                <label for="sheet-title">Título</label>
-                <input id="sheet-title" type="text" @bind="titleInput" placeholder="Título da planilha" />
+            <label for="sheet-title" class="sr-only">Título da planilha</label>
+            <input id="sheet-title" class="doc-title-input" type="text" @bind="titleInput" placeholder="Planilha sem título" autofocus />
+
+            <div class="spreadsheet-toolbar" role="toolbar" aria-label="Estrutura da planilha">
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="AddRow"><Icon Name="plus" /> Linha</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="AddColumn"><Icon Name="plus" /> Coluna</button>
+                <span class="toolbar-separator" aria-hidden="true"></span>
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="RemoveRow" disabled="@(grid.Count <= 1)">Remover última linha</button>
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="RemoveColumn" disabled="@(grid.Count == 0 || grid[0].Count <= 1)">Remover última coluna</button>
+                <span class="spreadsheet-size">@grid.Count × @(grid.Count > 0 ? grid[0].Count : 0)</span>
             </div>
 
-            <div class="spreadsheet-toolbar">
-                <button type="button" class="btn btn-secondary" @onclick="AddRow">+ Linha</button>
-                <button type="button" class="btn btn-secondary" @onclick="RemoveRow">Remover linha</button>
-                <button type="button" class="btn btn-secondary" @onclick="AddColumn">+ Coluna</button>
-                <button type="button" class="btn btn-secondary" @onclick="RemoveColumn">Remover coluna</button>
-            </div>
-
-            <div class="table-scroll">
+            <div class="table-scroll spreadsheet-scroll">
                 <table class="spreadsheet-grid">
+                    <thead>
+                        <tr>
+                            <th class="spreadsheet-corner" aria-hidden="true"></th>
+                            @for (var c = 0; c < (grid.Count > 0 ? grid[0].Count : 0); c++)
+                            {
+                                <th scope="col">@ColumnName(c)</th>
+                            }
+                        </tr>
+                    </thead>
                     <tbody>
                         @for (var r = 0; r < grid.Count; r++)
                         {
                             var row = r;
                             <tr>
+                                <th scope="row">@(row + 1)</th>
                                 @for (var c = 0; c < grid[row].Count; c++)
                                 {
                                     var col = c;
                                     <td>
-                                        <input type="text" value="@grid[row][col]" @onchange="@(e => grid[row][col] = e.Value?.ToString() ?? "")" />
+                                        <input type="text" value="@grid[row][col]" aria-label="@($"Célula {ColumnName(col)}{row + 1}")"
+                                               @onchange="@(e => grid[row][col] = e.Value?.ToString() ?? "")" />
                                     </td>
                                 }
                             </tr>
@@ -72,38 +89,50 @@
                 </table>
             </div>
 
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger">@errorMessage</div>
-            }
-            <div class="form-actions">
-                <button type="button" class="btn" disabled="@isSaving" @onclick="HandleSave">Salvar</button>
-                <button type="button" class="btn btn-secondary" @onclick="HandleCancel">Cancelar</button>
+            <div class="doc-edit-bar">
+                <p class="field-hint"><Icon Name="info" Class="icon--sm" /> Se outra pessoa salvar esta planilha enquanto você edita, a versão salva por último é a que fica.</p>
+                <div class="button-row">
+                    <button type="button" class="btn btn-ghost" @onclick="HandleCancel">Cancelar</button>
+                    <button type="button" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving" @onclick="HandleSave">@(isCreating ? "Criar planilha" : "Salvar")</button>
+                </div>
             </div>
         }
         else if (doc is not null)
         {
-            <div class="page-header">
-                <h1>@doc.Title <span class="coming-soon-badge" style="opacity:1;">Apenas leitura</span></h1>
-                <div class="form-actions">
-                    <a class="btn" href="@($"/spreadsheets/{doc.Id}/download.xlsx")">Baixar planilha (.xlsx)</a>
-                    <button type="button" class="btn btn-secondary" @onclick="EnterEditMode">Editar</button>
+            <PageHeader Title="@doc.Title">
+                <Details>
+                    <span><Icon Name="sheet" Class="icon--sm" /> @grid.Count linhas × @(grid.Count > 0 ? grid[0].Count : 0) colunas</span>
+                </Details>
+                <Actions>
                     @if (canDelete)
                     {
-                        <button type="button" class="btn-link" @onclick="HandleDelete">Excluir</button>
+                        <button type="button" class="icon-btn icon-btn--bordered is-danger" @onclick="HandleDelete">
+                            <Icon Name="trash" Label="Excluir planilha" />
+                        </button>
                     }
-                </div>
-            </div>
-            <p class="topnav-user" style="margin-top:-0.5rem;">@grid.Count linhas · @(grid.Count > 0 ? grid[0].Count : 0) colunas</p>
-            <div class="table-scroll">
+                    <a class="btn btn-ghost" href="@($"/spreadsheets/{doc.Id}/download.xlsx")"><Icon Name="download" /> <span class="label-collapsible">Baixar .xlsx</span></a>
+                    <button type="button" class="btn" @onclick="EnterEditMode"><Icon Name="edit" /> Editar</button>
+                </Actions>
+            </PageHeader>
+            <div class="table-scroll spreadsheet-scroll">
                 <table class="spreadsheet-grid spreadsheet-grid--readonly">
+                    <thead>
+                        <tr>
+                            <th class="spreadsheet-corner" aria-hidden="true"></th>
+                            @for (var c = 0; c < (grid.Count > 0 ? grid[0].Count : 0); c++)
+                            {
+                                <th scope="col">@ColumnName(c)</th>
+                            }
+                        </tr>
+                    </thead>
                     <tbody>
-                        @foreach (var row in grid)
+                        @for (var r = 0; r < grid.Count; r++)
                         {
                             <tr>
-                                @foreach (var cell in row)
+                                <th scope="row">@(r + 1)</th>
+                                @foreach (var cell in grid[r])
                                 {
-                                    <td>@cell</td>
+                                    <td title="@cell">@cell</td>
                                 }
                             </tr>
                         }
@@ -111,6 +140,8 @@
                 </table>
             </div>
         }
+
+        <ConfirmDialog @ref="confirm" />
     }
 </div>
 
@@ -240,6 +271,23 @@
         grid.Add(Enumerable.Range(0, columns).Select(_ => "").ToList());
     }
 
+    private ConfirmDialog? confirm;
+
+    // A, B, …, Z, AA, AB… — o cabeçalho que qualquer pessoa reconhece de uma planilha.
+    private static string ColumnName(int index)
+    {
+        var name = "";
+        index++;
+        while (index > 0)
+        {
+            var rem = (index - 1) % 26;
+            name = (char)('A' + rem) + name;
+            index = (index - 1) / 26;
+        }
+
+        return name;
+    }
+
     private void RemoveRow()
     {
         if (grid.Count > 1)
@@ -358,6 +406,23 @@
     {
         if (!canDelete || doc is null)
         {
+            return;
+        }
+
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("planilha", doc.Title,
+                "Os dados são apagados para todo o workspace, e mensagens do chat que citam a planilha perdem o link.")))
+        {
+            return;
+        }
+
+        // Autor pode excluir a própria planilha; os demais precisam ser admin agora (ver WorkspaceAccessGuard).
+        var authState = await AuthStateTask!;
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var required = doc.CreatedByUserId == userId ? WorkspaceRole.Member : WorkspaceRole.Admin;
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, required))
+        {
+            errorMessage = "Você não tem mais permissão para excluir esta planilha.";
+            canDelete = false;
             return;
         }
 

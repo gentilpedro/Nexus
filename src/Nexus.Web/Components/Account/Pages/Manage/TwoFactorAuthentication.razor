@@ -8,70 +8,96 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Autenticação de dois fatores (2FA)</PageTitle>
+<PageTitle>Verificação em duas etapas · Nexus</PageTitle>
 
-<StatusMessage />
-<h3>Autenticação de dois fatores (2FA)</h3>
-@if (canTrack)
-{
-    if (is2faEnabled)
-    {
-        if (recoveryCodesLeft == 0)
+<AccountSection Title="Verificação em duas etapas"
+                Description="Além da senha, o Nexus pede um código de 6 dígitos gerado no seu celular por um aplicativo autenticador (Google Authenticator, Microsoft Authenticator ou similar).">
+    <Status>
+        @if (canTrack)
         {
-            <div class="alert alert-danger">
-                <strong>Você não tem mais códigos de recuperação.</strong>
-                <p>Você precisa <a href="Account/Manage/GenerateRecoveryCodes">gerar um novo conjunto de códigos de recuperação</a> antes de conseguir entrar com um código de recuperação.</p>
+            <span class="badge @(is2faEnabled ? "badge--success" : "badge--outline")">@(is2faEnabled ? "Ativada" : "Desativada")</span>
+        }
+    </Status>
+    <ChildContent>
+        <StatusMessage />
+
+        @if (canTrack)
+        {
+            if (is2faEnabled)
+            {
+                if (recoveryCodesLeft == 0)
+                {
+                    <div class="alert alert-danger" role="alert">
+                        <Icon Name="alert-circle" />
+                        <span><strong>Você não tem mais códigos de recuperação.</strong> <a href="Account/Manage/GenerateRecoveryCodes">Gere um novo conjunto</a> antes de precisar entrar sem o celular.</span>
+                    </div>
+                }
+                else if (recoveryCodesLeft <= 3)
+                {
+                    <div class="alert alert-warning" role="status">
+                        <Icon Name="alert" />
+                        <span><strong>Restam @recoveryCodesLeft @(recoveryCodesLeft == 1 ? "código" : "códigos") de recuperação.</strong> <a href="Account/Manage/GenerateRecoveryCodes">Gere um novo conjunto</a>.</span>
+                    </div>
+                }
+            }
+
+            <div class="card settings-card">
+                <div class="settings-card-text">
+                    <h3 class="form-section-title">Aplicativo autenticador</h3>
+                    <p class="form-section-description">
+                        @(hasAuthenticator ? "Seu aplicativo está configurado e gera os códigos de acesso." : "Escaneie um QR code com o aplicativo do celular para começar a usar a verificação em duas etapas.")
+                    </p>
+                </div>
+                <div class="button-row">
+                    @if (!hasAuthenticator)
+                    {
+                        <a href="Account/Manage/EnableAuthenticator" class="btn"><Icon Name="shield" /> Configurar aplicativo</a>
+                    }
+                    else
+                    {
+                        <a href="Account/Manage/EnableAuthenticator" class="btn btn-secondary">Configurar de novo</a>
+                        <a href="Account/Manage/ResetAuthenticator" class="btn btn-danger-ghost">Redefinir chave</a>
+                    }
+                </div>
             </div>
-        }
-        else if (recoveryCodesLeft == 1)
-        {
-            <div class="alert alert-danger">
-                <strong>Você tem 1 código de recuperação restante.</strong>
-                <p>Você pode <a href="Account/Manage/GenerateRecoveryCodes">gerar um novo conjunto de códigos de recuperação</a>.</p>
-            </div>
-        }
-        else if (recoveryCodesLeft <= 3)
-        {
-            <div class="alert alert-warning">
-                <strong>Você tem @recoveryCodesLeft códigos de recuperação restantes.</strong>
-                <p>Você deveria <a href="Account/Manage/GenerateRecoveryCodes">gerar um novo conjunto de códigos de recuperação</a>.</p>
-            </div>
-        }
 
-        if (isMachineRemembered)
-        {
-            <form style="display: inline-block" @formname="forget-browser" @onsubmit="OnSubmitForgetBrowserAsync" method="post">
-                <AntiforgeryToken />
-                <button type="submit" class="btn">Esquecer este navegador</button>
-            </form>
-        }
+            if (is2faEnabled)
+            {
+                <div class="card settings-card">
+                    <div class="settings-card-text">
+                        <h3 class="form-section-title">Códigos de recuperação</h3>
+                        <p class="form-section-description">Servem para entrar se você perder o celular. Cada código funciona uma vez só.</p>
+                    </div>
+                    <div class="button-row">
+                        <a href="Account/Manage/GenerateRecoveryCodes" class="btn btn-secondary">Gerar novos códigos</a>
+                        @if (isMachineRemembered)
+                        {
+                            <form class="inline-form-block" @formname="forget-browser" @onsubmit="OnSubmitForgetBrowserAsync" method="post">
+                                <AntiforgeryToken />
+                                <button type="submit" class="btn btn-ghost">Esquecer este navegador</button>
+                            </form>
+                        }
+                    </div>
+                </div>
 
-        <div class="form-actions">
-            <a href="Account/Manage/Disable2fa" class="btn btn-danger">Desativar 2FA</a>
-            <a href="Account/Manage/GenerateRecoveryCodes" class="btn btn-secondary">Gerar novos códigos de recuperação</a>
-        </div>
-    }
-
-    <h4 style="margin-top:1.5rem;">Aplicativo autenticador</h4>
-    <div class="form-actions">
-        @if (!hasAuthenticator)
-        {
-            <a href="Account/Manage/EnableAuthenticator" class="btn">Adicionar aplicativo autenticador</a>
+                <div class="card settings-card danger-zone">
+                    <div class="settings-card-text">
+                        <h3 class="form-section-title">Desativar verificação em duas etapas</h3>
+                        <p class="form-section-description">Sua conta volta a pedir só a senha para entrar.</p>
+                    </div>
+                    <a href="Account/Manage/Disable2fa" class="btn btn-danger-ghost btn-bordered-danger">Desativar</a>
+                </div>
+            }
         }
         else
         {
-            <a href="Account/Manage/EnableAuthenticator" class="btn btn-secondary">Configurar aplicativo autenticador</a>
-            <a href="Account/Manage/ResetAuthenticator" class="btn btn-danger">Redefinir aplicativo autenticador</a>
+            <div class="alert alert-warning" role="status">
+                <Icon Name="alert" />
+                <span><strong>Aceite a política de privacidade e cookies primeiro.</strong> A verificação em duas etapas depende dela para lembrar os dispositivos confiáveis.</span>
+            </div>
         }
-    </div>
-}
-else
-{
-    <div class="alert alert-danger">
-        <strong>A política de privacidade e cookies ainda não foi aceita.</strong>
-        <p>Você precisa aceitar a política antes de poder ativar a autenticação de dois fatores.</p>
-    </div>
-}
+    </ChildContent>
+</AccountSection>
 
 @code {
     private bool canTrack;
