@@ -66,8 +66,8 @@ public class DocCollabServiceTests
         var doc = await Reload(docId);
         Assert.Equal(1, doc.Revision);
         Assert.Equal("""[{"insert":"Olá\n"}]""", doc.DeltaJson);
-        await using var db = await factory.CreateDbContextAsync();
-        var op = await db.DocOperations.SingleAsync();
+        await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+        var op = await db.DocOperations.SingleAsync(TestContext.Current.CancellationToken);
         Assert.Equal((Ana, 1L, 1L), (op.ClientId, op.ClientSeq, op.Revision));
         Assert.Contains(changes, c => c.DocPageId == docId && c.Revision == 1 && c.Kind == DocChangeKind.Operation);
     }
@@ -150,23 +150,23 @@ public class DocCollabServiceTests
     public async Task EditorTooFarBehind_IsToldToReload()
     {
         var docId = await CreateDoc();
-        await using (var db = await factory.CreateDbContextAsync())
+        await using (var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken))
         {
             // O log já foi podado até a revisão 50.
-            var doc = await db.DocPages.SingleAsync(d => d.Id == docId);
+            var doc = await db.DocPages.SingleAsync(d => d.Id == docId, TestContext.Current.CancellationToken);
             doc.Revision = 60;
             doc.DeltaJson = """[{"insert":"texto\n"}]""";
             for (var revision = 51; revision <= 60; revision++)
             {
                 db.DocOperations.Add(new DocOperation { DocPageId = docId, Revision = revision, ClientId = Bia, ClientSeq = revision, ChangeJson = """[{"retain":1}]""" });
             }
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         Assert.Equal("resync", (await Submit(docId, Ana, 1, 10, """[{"insert":"x"}]""")).Status);
-        Assert.Equal("resync", (await service.GetOperationsSinceAsync(WorkspaceId, docId, 10)).Status);
+        Assert.Equal("resync", (await service.GetOperationsSinceAsync(WorkspaceId, docId, 10, TestContext.Current.CancellationToken)).Status);
 
-        var reachable = await service.GetOperationsSinceAsync(WorkspaceId, docId, 55);
+        var reachable = await service.GetOperationsSinceAsync(WorkspaceId, docId, 55, TestContext.Current.CancellationToken);
         Assert.Equal("ok", reachable.Status);
         Assert.Equal([56L, 57L, 58L, 59L, 60L], reachable.Ops!.Select(o => o.Revision));
     }
@@ -177,12 +177,12 @@ public class DocCollabServiceTests
         var docId = await CreateDoc();
         var sheetId = await CreateDoc(type: DocPageType.Spreadsheet);
 
-        var otherWorkspace = await service.SubmitAsync(Guid.NewGuid(), docId, "user-1", Ana, 1, 0, """[{"insert":"x"}]""", false);
+        var otherWorkspace = await service.SubmitAsync(Guid.NewGuid(), docId, "user-1", Ana, 1, 0, """[{"insert":"x"}]""", false, TestContext.Current.CancellationToken);
         var spreadsheet = await Submit(sheetId, Ana, 1, 0, """[{"insert":"x"}]""");
 
         Assert.Equal("rejected", otherWorkspace.Status);
         Assert.Equal("rejected", spreadsheet.Status);
-        Assert.Null(await service.LoadAsync(Guid.NewGuid(), docId));
+        Assert.Null(await service.LoadAsync(Guid.NewGuid(), docId, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -192,13 +192,13 @@ public class DocCollabServiceTests
         await Submit(docId, Ana, 1, 0, """[{"insert":"a"}]""");
         await Submit(docId, Ana, 2, 1, """[{"insert":"b"}]""");
 
-        Assert.True(await service.SaveHtmlAsync(WorkspaceId, docId, 2, "<p>ba</p><script>alert(1)</script>"));
+        Assert.True(await service.SaveHtmlAsync(WorkspaceId, docId, 2, "<p>ba</p><script>alert(1)</script>", TestContext.Current.CancellationToken));
         Assert.Equal("<p>ba</p>", (await Reload(docId)).ContentHtml);
 
         // Um editor atrasado mandando o HTML da revisão 1 não pode desfazer o texto.
-        Assert.False(await service.SaveHtmlAsync(WorkspaceId, docId, 1, "<p>a</p>"));
+        Assert.False(await service.SaveHtmlAsync(WorkspaceId, docId, 1, "<p>a</p>", TestContext.Current.CancellationToken));
         // Nem de uma revisão que ainda não existe.
-        Assert.False(await service.SaveHtmlAsync(WorkspaceId, docId, 9, "<p>futuro</p>"));
+        Assert.False(await service.SaveHtmlAsync(WorkspaceId, docId, 9, "<p>futuro</p>", TestContext.Current.CancellationToken));
 
         var doc = await Reload(docId);
         Assert.Equal("<p>ba</p>", doc.ContentHtml);
@@ -211,16 +211,16 @@ public class DocCollabServiceTests
         // O que impede duas instâncias de aceitarem, cada uma, uma operação diferente como a
         // mesma revisão: a segunda gravação falha em vez de sobrescrever a primeira.
         var docId = await CreateDoc();
-        await using var first = await factory.CreateDbContextAsync();
-        await using var second = await factory.CreateDbContextAsync();
-        var a = await first.DocPages.SingleAsync(d => d.Id == docId);
-        var b = await second.DocPages.SingleAsync(d => d.Id == docId);
+        await using var first = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+        await using var second = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+        var a = await first.DocPages.SingleAsync(d => d.Id == docId, TestContext.Current.CancellationToken);
+        var b = await second.DocPages.SingleAsync(d => d.Id == docId, TestContext.Current.CancellationToken);
 
         a.Revision = 1;
-        await first.SaveChangesAsync();
+        await first.SaveChangesAsync(TestContext.Current.CancellationToken);
         b.Revision = 1;
 
-        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -233,8 +233,8 @@ public class DocCollabServiceTests
             Assert.Equal("ack", result.Status);
         }
 
-        await using var db = await factory.CreateDbContextAsync();
-        var revisions = await db.DocOperations.Where(o => o.DocPageId == docId).Select(o => o.Revision).ToListAsync();
+        await using var db = await factory.CreateDbContextAsync(TestContext.Current.CancellationToken);
+        var revisions = await db.DocOperations.Where(o => o.DocPageId == docId).Select(o => o.Revision).ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(DocCollabService.KeptOperations, revisions.Count);
         Assert.Equal(101, revisions.Min());
     }

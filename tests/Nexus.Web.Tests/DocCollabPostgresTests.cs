@@ -38,7 +38,7 @@ public class DocCollabPostgresTests
         {
             db.Workspaces.Add(new Workspace { Id = workspaceId, Name = "Teste de concorrência", Slug = "teste-" + workspaceId.ToString("N"), CreatedAtUtc = DateTime.UtcNow });
             db.DocPages.Add(new DocPage { Id = docId, WorkspaceId = workspaceId, Title = "Concorrência", Type = DocPageType.Text, CreatedAtUtc = DateTime.UtcNow });
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         try
@@ -82,8 +82,8 @@ public class DocCollabPostgresTests
             await Task.WhenAll(Enumerable.Range(1, editors).Select(e => Task.Run(() => Edit(e))));
 
             await using var check = factory.CreateDbContext();
-            var doc = await check.DocPages.AsNoTracking().SingleAsync(d => d.Id == docId);
-            var revisions = await check.DocOperations.Where(o => o.DocPageId == docId).OrderBy(o => o.Revision).Select(o => o.Revision).ToListAsync();
+            var doc = await check.DocPages.AsNoTracking().SingleAsync(d => d.Id == docId, TestContext.Current.CancellationToken);
+            var revisions = await check.DocOperations.Where(o => o.DocPageId == docId).OrderBy(o => o.Revision).Select(o => o.Revision).ToListAsync(TestContext.Current.CancellationToken);
 
             // Houve disputa de verdade; sem isso o teste passaria sem provar nada.
             Assert.True(contended > 0, "nenhum envio concorrente aconteceu");
@@ -105,7 +105,7 @@ public class DocCollabPostgresTests
         finally
         {
             await using var cleanup = factory.CreateDbContext();
-            await cleanup.Workspaces.Where(w => w.Id == workspaceId).ExecuteDeleteAsync();
+            await cleanup.Workspaces.Where(w => w.Id == workspaceId).ExecuteDeleteAsync(TestContext.Current.CancellationToken);
         }
     }
 
