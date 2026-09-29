@@ -1,0 +1,58 @@
+@* Avatar de pessoa ou workspace: foto quando existe, senão a inicial sobre uma cor estável
+   derivada do nome (a mesma pessoa tem sempre a mesma cor, em qualquer tela). *@
+
+@if (!string.IsNullOrEmpty(ImageUrl))
+{
+    <img class="avatar avatar--@Size @Class" src="@ImageUrl" alt="@(Decorative ? "" : Name)" loading="lazy" />
+}
+else
+{
+    <span class="avatar avatar--@Size @(Square ? "avatar--square" : "") @Class"
+          style="@(string.IsNullOrEmpty(Color) ? $"--avatar-hue: {Hue}" : $"background: {Color}")"
+          role="@(Decorative ? null : "img")" aria-label="@(Decorative ? null : Name)" aria-hidden="@(Decorative ? "true" : null)">@Initial</span>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = "";
+
+    [Parameter]
+    public string? ImageUrl { get; set; }
+
+    /// <summary>xs (20px), sm (24px), md (32px), lg (40px), xl (64px).</summary>
+    [Parameter]
+    public string Size { get; set; } = "md";
+
+    /// <summary>Cantos arredondados em vez de círculo — usado para workspaces.</summary>
+    [Parameter]
+    public bool Square { get; set; }
+
+    /// <summary>true quando o nome já aparece em texto ao lado; evita o leitor ler duas vezes.</summary>
+    [Parameter]
+    public bool Decorative { get; set; } = true;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Cor escolhida pelo usuário (ex.: cor do workspace); sem ela, a cor vem do nome.</summary>
+    [Parameter]
+    public string? Color { get; set; }
+
+    private string Initial =>
+        string.IsNullOrWhiteSpace(Name) ? "?" : Name.Trim()[0].ToString().ToUpperInvariant();
+
+    // Matiz estável por nome, dentro de uma faixa que mantém branco legível sobre ela.
+    private int Hue
+    {
+        get
+        {
+            var hash = 0;
+            foreach (var c in Name ?? "")
+            {
+                hash = unchecked(hash * 31 + c);
+            }
+
+            return Math.Abs(hash % 360);
+        }
+    }
+}

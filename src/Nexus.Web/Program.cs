@@ -67,6 +67,7 @@ builder.Services.AddScoped<WorkspaceAccessGuard>();
 builder.Services.AddScoped<WorkItemQueryService>();
 builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddScoped<NotificationBadgeService>();
+builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<AuditLogService>();
 // Chat ao vivo e rate limiting do circuito. Sem Redis:ConnectionString configurado,
 // registra as implementacoes de instancia unica — o comportamento anterior.

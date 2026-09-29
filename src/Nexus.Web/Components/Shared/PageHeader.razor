@@ -1,0 +1,48 @@
+@* Cabeçalho padrão de página: onde estou (Breadcrumbs), o que é (Title/Description) e a ação
+   principal (Actions), sempre no mesmo lugar em todas as telas. *@
+
+<header class="page-header @Class">
+    @if (Breadcrumbs is not null)
+    {
+        <nav class="breadcrumbs" aria-label="Você está em">@Breadcrumbs</nav>
+    }
+    <div class="page-header-row">
+        <div class="page-header-text">
+            <h1 class="page-title" tabindex="-1">@Title</h1>
+            @if (Description is not null)
+            {
+                <p class="page-description">@Description</p>
+            }
+            @if (Details is not null)
+            {
+                <div class="page-meta">@Details</div>
+            }
+        </div>
+        @if (Actions is not null)
+        {
+            <div class="page-actions">@Actions</div>
+        }
+    </div>
+</header>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public RenderFragment? Breadcrumbs { get; set; }
+
+    /// <summary>Linha de metadados abaixo do título (contagens, datas). Não se chama "Meta"
+    /// porque &lt;Meta&gt; colide com a tag HTML vazia &lt;meta&gt; no parser do Razor.</summary>
+    [Parameter]
+    public RenderFragment? Details { get; set; }
+
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+}
