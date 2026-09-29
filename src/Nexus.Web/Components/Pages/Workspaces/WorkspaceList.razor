@@ -9,83 +9,101 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationContextService NavContext
+@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
+@inject ToastService Toasts
 
-<PageTitle>Workspaces</PageTitle>
+<PageTitle>Workspaces · Nexus</PageTitle>
 
 <div class="page-container page-container--wide">
-    <div class="page-header">
-        <h1>Meus Workspaces</h1>
-        <a class="btn" href="/workspaces/new">+ Novo workspace</a>
-    </div>
+    <PageHeader Title="Meus workspaces" Description="Cada workspace reúne um time, seus spaces, listas, documentos e chat.">
+        <Actions>
+            <a class="btn" href="/workspaces/new"><Icon Name="plus" /> Novo workspace</a>
+        </Actions>
+    </PageHeader>
 
     @if (memberships is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Variant="card" Count="6" Label="Carregando workspaces…" />
     }
     else if (memberships.Count == 0)
     {
-        <div class="empty-state">
-            <p>Você ainda não participa de nenhum workspace.</p>
-            <a class="btn" href="/workspaces/new">Criar meu primeiro workspace</a>
-        </div>
+        <EmptyState Icon="workspace" Title="Você ainda não participa de nenhum workspace"
+                    Description="Crie um workspace para o seu time, ou peça a alguém um convite para entrar no workspace dele.">
+            <a class="btn" href="/workspaces/new"><Icon Name="plus" /> Criar meu primeiro workspace</a>
+        </EmptyState>
     }
     else
     {
-        <div class="pill-tabs">
-            <button type="button" class="@(statusTab == "all" ? "active" : "")" @onclick='() => statusTab = "all"'>Todos <span class="tab-count">@memberships.Count</span></button>
-            <button type="button" class="@(statusTab == "active" ? "active" : "")" @onclick='() => statusTab = "active"'>Ativos <span class="tab-count">@memberships.Count(m => !m.Workspace.IsArchived)</span></button>
-            <button type="button" class="@(statusTab == "archived" ? "active" : "")" @onclick='() => statusTab = "archived"'>Arquivados <span class="tab-count">@memberships.Count(m => m.Workspace.IsArchived)</span></button>
-        </div>
-
-        <div class="form-field" style="max-width:280px;">
-            <input type="search" placeholder="Buscar workspaces..." @bind="filterText" @bind:event="oninput" />
+        <div class="list-toolbar">
+            <div class="pill-tabs" role="group" aria-label="Filtrar por situação">
+                <button type="button" aria-pressed="@(statusTab == "active" ? "true" : "false")" class="@(statusTab == "active" ? "active" : "")" @onclick='() => statusTab = "active"'>Ativos <span class="tab-count">@memberships.Count(m => !m.Workspace.IsArchived)</span></button>
+                <button type="button" aria-pressed="@(statusTab == "archived" ? "true" : "false")" class="@(statusTab == "archived" ? "active" : "")" @onclick='() => statusTab = "archived"'>Arquivados <span class="tab-count">@memberships.Count(m => m.Workspace.IsArchived)</span></button>
+                <button type="button" aria-pressed="@(statusTab == "all" ? "true" : "false")" class="@(statusTab == "all" ? "active" : "")" @onclick='() => statusTab = "all"'>Todos <span class="tab-count">@memberships.Count</span></button>
+            </div>
+            <div class="input-with-icon list-toolbar-search">
+                <Icon Name="search" />
+                <label for="ws-filter" class="sr-only">Buscar workspaces</label>
+                <input id="ws-filter" type="search" placeholder="Buscar workspaces" @bind="filterText" @bind:event="oninput" />
+            </div>
         </div>
 
         @if (!FilteredMemberships.Any())
         {
-            <div class="empty-state"><p>Nenhum workspace encontrado.</p></div>
+            <div class="card">
+                <EmptyState Compact="true" Title="Nenhum workspace encontrado"
+                            Description="@(string.IsNullOrWhiteSpace(filterText) ? "Não há workspaces nesta aba." : $"Nada corresponde a \"{filterText}\".")" />
+            </div>
         }
         else
         {
-            <div class="card-list">
+            <ul class="workspace-grid">
                 @foreach (var membership in FilteredMemberships)
                 {
-                    <div class="card" style="@(membership.Workspace.IsArchived ? "opacity:.6;" : "")">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                            <a class="card-link" style="display:block;flex:1;min-width:0;" href="@($"/workspaces/{membership.WorkspaceId}")">
-                                <span class="dashboard-workspace-avatar" style="background:@(membership.Workspace.Color ?? "var(--color-primary)")">@Initial(membership.Workspace.Name)</span>
-                                <div style="margin-top:0.6rem;">
-                                    <strong>@membership.Workspace.Name</strong>
-                                    @if (membership.Workspace.IsArchived)
-                                    {
-                                        <span class="coming-soon-badge" style="opacity:1;">Arquivado</span>
-                                    }
-                                    <div class="topnav-user">@membership.Role.ToDisplayLabel()</div>
-                                </div>
-                                <div class="topnav-user" style="margin-top:0.5rem;">
-                                    @membership.Workspace.Members.Count membro@(membership.Workspace.Members.Count == 1 ? "" : "s") · @membership.Workspace.Spaces.Count space@(membership.Workspace.Spaces.Count == 1 ? "" : "s")
-                                </div>
-                            </a>
-                            @if (membership.Role == WorkspaceRole.Owner || membership.Role == WorkspaceRole.Admin)
+                    var ws = membership.Workspace;
+                    var canManage = membership.Role is WorkspaceRole.Owner or WorkspaceRole.Admin;
+                    <li class="workspace-card @(ws.IsArchived ? "is-archived" : "")" @key="membership.WorkspaceId">
+                        <div class="workspace-card-top">
+                            <Avatar Name="@ws.Name" Color="@ws.Color" Size="lg" Square="true" />
+                            @if (canManage)
                             {
-                                <div class="board-column-menu">
-                                    <button type="button" class="board-column-menu-btn" @onclick="() => ToggleMenu(membership.WorkspaceId)" aria-label="Opções">⋮</button>
+                                <div class="menu-anchor workspace-card-menu" @onkeydown="HandleMenuKey">
+                                    <button type="button" class="icon-btn icon-btn--sm" @onclick="() => ToggleMenu(membership.WorkspaceId)"
+                                            aria-haspopup="menu" aria-expanded="@(openMenuId == membership.WorkspaceId ? "true" : "false")">
+                                        <Icon Name="more" Label="@($"Opções de {ws.Name}")" />
+                                    </button>
                                     @if (openMenuId == membership.WorkspaceId)
                                     {
-                                        <div class="board-column-menu-backdrop" @onclick="() => openMenuId = null"></div>
-                                        <div class="board-column-menu-dropdown">
-                                            <a href="@($"/workspaces/{membership.WorkspaceId}/settings")">Configurações</a>
-                                            <button type="button" @onclick="() => HandleToggleArchive(membership.Workspace)">
-                                                @(membership.Workspace.IsArchived ? "Desarquivar" : "Arquivar")
+                                        <div class="menu-backdrop" @onclick="() => openMenuId = null"></div>
+                                        <div class="menu" role="menu">
+                                            <a role="menuitem" href="@($"/workspaces/{membership.WorkspaceId}/settings")"><Icon Name="settings" /> Configurações</a>
+                                            <a role="menuitem" href="@($"/workspaces/{membership.WorkspaceId}/members")"><Icon Name="team" /> Membros</a>
+                                            <div class="menu-separator" role="separator"></div>
+                                            <button type="button" role="menuitem" @onclick="() => HandleToggleArchive(ws)">
+                                                <Icon Name="@(ws.IsArchived ? "refresh" : "inbox")" />
+                                                @(ws.IsArchived ? "Desarquivar" : "Arquivar")
                                             </button>
                                         </div>
                                     }
                                 </div>
                             }
                         </div>
-                    </div>
+                        <a class="workspace-card-link" href="@($"/workspaces/{membership.WorkspaceId}")">
+                            <span class="workspace-card-name">@ws.Name</span>
+                        </a>
+                        <div class="workspace-card-meta">
+                            <span class="badge @(membership.Role == WorkspaceRole.Owner ? "badge--accent" : "")">@membership.Role.ToDisplayLabel()</span>
+                            @if (ws.IsArchived)
+                            {
+                                <span class="badge badge--outline">Arquivado</span>
+                            }
+                        </div>
+                        <p class="workspace-card-stats">
+                            <span><Icon Name="team" Class="icon--sm" /> @ws.Members.Count membro@(ws.Members.Count == 1 ? "" : "s")</span>
+                            <span><Icon Name="space" Class="icon--sm" /> @ws.Spaces.Count space@(ws.Spaces.Count == 1 ? "" : "s")</span>
+                        </p>
+                    </li>
                 }
-            </div>
+            </ul>
         }
     }
 </div>
@@ -131,10 +149,26 @@
         openMenuId = openMenuId == workspaceId ? null : workspaceId;
     }
 
+    private void HandleMenuKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            openMenuId = null;
+        }
+    }
+
     private async Task HandleToggleArchive(Workspace workspace)
     {
         openMenuId = null;
         var newValue = !workspace.IsArchived;
+
+        // O menu só aparece para Owner/Admin, mas isso é só a interface: confere o papel atual
+        // no servidor antes de gravar, como as demais escritas do app (ver WorkspaceAccessGuard).
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, workspace.Id, WorkspaceRole.Admin))
+        {
+            Toasts.Show("Você não tem mais permissão para arquivar este workspace.", ToastKind.Error);
+            return;
+        }
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
@@ -143,7 +177,6 @@
         }
 
         workspace.IsArchived = newValue;
+        Toasts.Show(newValue ? $"\"{workspace.Name}\" arquivado" : $"\"{workspace.Name}\" desarquivado");
     }
-
-    private static string Initial(string name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
 }

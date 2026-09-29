@@ -6,59 +6,61 @@
 @inject WorkspaceInviteService InviteService
 @inject NavigationManager NavigationManager
 
-<PageTitle>Convite para workspace</PageTitle>
+<PageTitle>Convite para workspace · Nexus</PageTitle>
 
-<div class="page-container" style="max-width:520px;">
+<div class="page-container centered-page">
     @if (invite is null)
     {
-        <div class="empty-state">
-            <p>Convite não encontrado. Peça para quem te convidou enviar um novo link.</p>
-        </div>
+        <EmptyState Icon="mail" Title="Convite não encontrado"
+                    Description="O link pode estar incompleto. Peça para quem te convidou enviar um novo." />
     }
     else if (invite.AcceptedAtUtc is not null)
     {
-        <div class="empty-state">
-            <p>Este convite já foi utilizado. Se você já tem conta, <a href="/Account/Login">entre por aqui</a>.</p>
-        </div>
+        <EmptyState Icon="check-circle" Title="Este convite já foi usado"
+                    Description="Se foi você quem aceitou, é só entrar na sua conta.">
+            <a class="btn" href="/Account/Login" data-enhance-nav="false">Entrar</a>
+        </EmptyState>
     }
     else if (invite.ExpiresAtUtc <= DateTime.UtcNow)
     {
-        <div class="empty-state">
-            <p>Este convite expirou. Peça para quem te convidou enviar um novo.</p>
-        </div>
+        <EmptyState Icon="clock" Title="Este convite expirou"
+                    Description="Convites valem por tempo limitado. Peça para quem te convidou enviar um novo." />
     }
     else if (emailMismatch is not null)
     {
-        <div class="alert alert-danger">
-            Este convite é para <strong>@invite.Email</strong>, mas você está logado como <strong>@emailMismatch</strong>.
-            Saia da conta atual e entre (ou crie uma conta) com o e-mail convidado.
+        <div class="card invite-card">
+            <span class="dialog-icon is-danger" aria-hidden="true"><Icon Name="alert" /></span>
+            <h1 class="invite-title">Este convite é para outro e-mail</h1>
+            <p class="invite-text">
+                O convite foi enviado para <strong>@invite.Email</strong>, mas você está conectado como <strong>@emailMismatch</strong>.
+                Saia desta conta e entre — ou crie uma conta — com o e-mail convidado.
+            </p>
         </div>
     }
     else
     {
-        <div class="card">
-            <h2>Convite para workspace</h2>
-            <p>Você foi convidado para participar do workspace <strong>@invite.Workspace.Name</strong> no Nexus.</p>
-            <p class="topnav-user">Convite enviado para <strong>@invite.Email</strong>.</p>
+        <div class="card invite-card">
+            <Avatar Name="@invite.Workspace.Name" Color="@invite.Workspace.Color" Size="xl" Square="true" />
+            <h1 class="invite-title">Entrar em <span>@invite.Workspace.Name</span></h1>
+            <p class="invite-text">Você foi convidado para participar deste workspace no Nexus. O convite foi enviado para <strong>@invite.Email</strong>.</p>
 
             @if (!string.IsNullOrEmpty(errorMessage))
             {
-                <div class="alert alert-danger">@errorMessage</div>
+                <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
             }
 
             @if (isAuthenticated)
             {
-                <p>Você só entra no workspace depois de aceitar este convite.</p>
-                <div class="form-actions">
-                    <button type="button" class="btn" disabled="@isAccepting" @onclick="HandleAccept">Aceitar convite</button>
-                    <a class="btn btn-secondary" href="/workspaces">Agora não</a>
+                <div class="invite-actions">
+                    <button type="button" class="btn btn-lg btn-block @(isAccepting ? "is-loading" : "")" disabled="@isAccepting" @onclick="HandleAccept">Aceitar e entrar no workspace</button>
+                    <a class="btn btn-ghost btn-block" href="/workspaces">Agora não</a>
                 </div>
             }
             else
             {
-                <div class="form-actions">
-                    <a class="btn btn-secondary" href="@LoginUrl" data-enhance-nav="false">Já tenho conta — Entrar</a>
-                    <a class="btn" href="@RegisterUrl" data-enhance-nav="false">Criar conta</a>
+                <div class="invite-actions">
+                    <a class="btn btn-lg btn-block" href="@RegisterUrl" data-enhance-nav="false">Criar conta e entrar</a>
+                    <a class="btn btn-secondary btn-block" href="@LoginUrl" data-enhance-nav="false">Já tenho conta</a>
                 </div>
             }
         </div>
