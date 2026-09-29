@@ -7,6 +7,7 @@
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
 @using Nexus.Web.Services
+@using Nexus.Web.Services.Collab
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
@@ -17,6 +18,7 @@
 @inject IJSRuntime JS
 @inject AttachmentStorageService Storage
 @inject ToastService Toasts
+@inject DocChangeNotifier DocChanges
 
 <PageTitle>@(doc?.Title ?? "Novo documento") · Nexus</PageTitle>
 
@@ -42,23 +44,64 @@
             <a href="@($"/workspaces/{WorkspaceId}/docs")">Documentos</a>
         </nav>
 
-        @if (isEditing)
+        @if (isEditing && isCreating)
         {
             <div class="doc-edit">
                 <label for="doc-title" class="sr-only">Título do documento</label>
                 <input id="doc-title" class="doc-title-input" type="text" @bind="titleInput" placeholder="Sem título" autofocus />
-                <div id="@editorElementId" class="doc-editor"></div>
+                <div class="doc-editor"><div id="@editorElementId"></div></div>
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
                     <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
                 }
                 <div class="doc-edit-bar">
-                    <p class="field-hint"><Icon Name="info" Class="icon--sm" /> Se outra pessoa salvar este documento enquanto você edita, a versão salva por último é a que fica.</p>
+                    <p class="field-hint"><Icon Name="info" Class="icon--sm" /> Depois de criado, o documento pode ser editado por várias pessoas ao mesmo tempo.</p>
                     <div class="button-row">
                         <button type="button" class="btn btn-ghost" @onclick="HandleCancel">Cancelar</button>
-                        <button type="button" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving" @onclick="HandleSave">@(isCreating ? "Criar documento" : "Salvar")</button>
+                        <button type="button" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving" @onclick="HandleSave">Criar documento</button>
                     </div>
                 </div>
+            </div>
+        }
+        else if (isEditing && doc is not null)
+        {
+            @* Edição ao vivo: cada alteração vai para o servidor enquanto a pessoa digita, e as
+               de quem mais estiver editando aparecem aqui. Não há "Salvar" nem "Cancelar". *@
+            <div class="doc-edit">
+                <div class="doc-edit-header">
+                    <label for="doc-title" class="sr-only">Título do documento</label>
+                    <input id="doc-title" class="doc-title-input" type="text" maxlength="200"
+                           @bind="titleInput" @bind:after="SaveTitleAsync" placeholder="Sem título" />
+                    <div class="doc-edit-actions">
+                        <span class="doc-sync doc-sync--@syncState.Status" role="status" aria-live="polite">
+                            <Icon Name="@SyncIcon()" Class="icon--sm" /> @SyncLabel()
+                        </span>
+                        <button type="button" class="btn btn-sm @(isFinishing ? "is-loading" : "")" disabled="@(isFinishing || syncState.IsError)" @onclick="FinishEditingAsync">Concluir</button>
+                    </div>
+                </div>
+
+                <DocCollabEditor @ref="collabEditor" WorkspaceId="WorkspaceId" DocId="doc.Id" OnStateChanged="OnSyncStateChanged" />
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
+                }
+                @if (syncState.IsError)
+                {
+                    <div class="alert alert-danger doc-sync-error" role="alert">
+                        <Icon Name="alert-circle" />
+                        <div>
+                            <p><strong>@(syncState.Message ?? "A edição foi interrompida.")</strong></p>
+                            @if (!string.IsNullOrEmpty(syncState.Recovery))
+                            {
+                                <p>Suas últimas alterações não puderam ser juntadas ao documento. O texto que você tinha está abaixo — copie o que precisar antes de recarregar.</p>
+                                <label for="doc-recovery" class="sr-only">Texto não sincronizado</label>
+                                <textarea id="doc-recovery" class="doc-recovery" readonly rows="8">@syncState.Recovery</textarea>
+                            }
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="ReloadPage">Recarregar o documento</button>
+                        </div>
+                    </div>
+                }
             </div>
         }
         else if (doc is not null)
@@ -142,6 +185,9 @@
     private bool canDelete;
     private string? errorMessage;
     private ConfirmDialog? confirm;
+    private DocCollabEditor? collabEditor;
+    private DocSyncState syncState = DocSyncState.Initial;
+    private bool isFinishing;
 
     // O HTML do documento é sanitizado e não traz ids nos títulos; o sumário rola até o
     // N-ésimo h1–h3 do conteúdo.
@@ -154,6 +200,40 @@
     private IJSObjectReference? module;
 
     private bool isCreating => DocId is null;
+
+    // Quem está só lendo vê o texto novo quando alguém que está editando sincroniza, sem recarregar.
+    protected override void OnInitialized() => DocChanges.Changed += OnDocChanged;
+
+    private void OnDocChanged(DocChange change)
+    {
+        if (change.Kind != DocChangeKind.Content || doc is null || change.DocPageId != doc.Id)
+        {
+            return;
+        }
+        _ = InvokeAsync(async () =>
+        {
+            if (doc is null || change.DocPageId != doc.Id)
+            {
+                return;
+            }
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var fresh = await db.DocPages
+                .AsNoTracking()
+                .Include(d => d.CreatedByUser)
+                .Include(d => d.UpdatedByUser)
+                .FirstOrDefaultAsync(d => d.Id == change.DocPageId && d.WorkspaceId == WorkspaceId);
+            if (fresh is null)
+            {
+                return;
+            }
+            doc = fresh;
+            if (!isEditing)
+            {
+                titleInput = fresh.Title;
+            }
+            StateHasChanged();
+        });
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -170,8 +250,10 @@
         doc = null;
         isEditing = false;
         isSaving = false;
+        isFinishing = false;
         canDelete = false;
         errorMessage = null;
+        syncState = DocSyncState.Initial;
 
         var authState = await AuthStateTask!;
         userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -243,7 +325,8 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (isEditing && !editorMounted)
+        // Só a criação usa o editor simples; um documento existente é editado pelo DocCollabEditor.
+        if (isEditing && isCreating && !editorMounted)
         {
             // Set before awaiting: if another render triggers OnAfterRenderAsync again while
             // the JS calls below are still in flight, this closes the window where the guard
@@ -252,13 +335,133 @@
             module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/doc-editor-interop.js");
             await module.InvokeVoidAsync("initEditor", editorElementId, doc?.ContentHtml);
         }
+
+        // A página voltou (recarga, ou circuito novo depois de uma queda) com alterações deste
+        // documento que não chegaram ao servidor: reabre a edição, que as restaura e envia.
+        if (doc is not null && !isEditing && pendingCheckedFor != doc.Id)
+        {
+            pendingCheckedFor = doc.Id;
+            try
+            {
+                await using var collab = await JS.InvokeAsync<IJSObjectReference>("import", "/js/doc-collab-interop.js");
+                if (await collab.InvokeAsync<bool>("hasPending", doc.Id))
+                {
+                    EnterEditMode();
+                    Toasts.Show("Recuperamos alterações que ainda não tinham sido salvas.", ToastKind.Info);
+                    StateHasChanged();
+                }
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
     }
+
+    private Guid? pendingCheckedFor;
 
     private void EnterEditMode()
     {
         titleInput = doc!.Title;
+        errorMessage = null;
+        syncState = DocSyncState.Initial;
         isEditing = true;
     }
+
+    private void OnSyncStateChanged(DocSyncState state) => syncState = state;
+
+    private string SyncLabel() => syncState.Status switch
+    {
+        "synced" => "Salvo",
+        "offline" when syncState.Pending > 0 => "Sem conexão · as alterações ficam neste navegador até voltar",
+        "offline" => "Sem conexão",
+        "error" => "Edição interrompida",
+        _ => "Salvando…",
+    };
+
+    private string SyncIcon() => syncState.Status switch
+    {
+        "synced" => "check",
+        "offline" => "wifi-off",
+        "error" => "alert-circle",
+        _ => "refresh",
+    };
+
+    /// <summary>
+    /// Sai da edição ao vivo depois que tudo chegou ao servidor. Sem conexão, continua editando:
+    /// sair descartaria o que ainda está só no navegador.
+    /// </summary>
+    private async Task FinishEditingAsync()
+    {
+        if (collabEditor is null)
+        {
+            return;
+        }
+
+        isFinishing = true;
+        errorMessage = null;
+        var synced = await collabEditor.FinishAsync();
+        isFinishing = false;
+
+        if (!synced)
+        {
+            errorMessage = "Ainda há alterações sem sincronizar. Verifique a conexão e tente concluir de novo.";
+            return;
+        }
+
+        isEditing = false;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        doc = await db.DocPages
+            .AsNoTracking()
+            .Include(d => d.CreatedByUser)
+            .Include(d => d.UpdatedByUser)
+            .FirstOrDefaultAsync(d => d.Id == doc!.Id && d.WorkspaceId == WorkspaceId);
+        notFound = doc is null;
+    }
+
+    /// <summary>
+    /// O título fica fora do Delta e segue "vence o último": é um campo curto, editado raramente,
+    /// e mesclar dois títulos digitados ao mesmo tempo produziria um terceiro que ninguém escreveu.
+    /// </summary>
+    private async Task SaveTitleAsync()
+    {
+        if (doc is null)
+        {
+            return;
+        }
+
+        var title = titleInput.Trim();
+        if (title.Length == 0 || title == doc.Title)
+        {
+            titleInput = doc.Title;
+            return;
+        }
+        if (title.Length > 200)
+        {
+            title = title[..200];
+        }
+
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member))
+        {
+            errorMessage = "Você não tem mais acesso a este workspace.";
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        // ExecuteUpdate não toca em Revision, o token de concorrência das operações: renomear não
+        // disputa com quem está digitando.
+        await db.DocPages
+            .Where(d => d.Id == doc.Id && d.WorkspaceId == WorkspaceId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.Title, title)
+                .SetProperty(d => d.UpdatedByUserId, userId)
+                .SetProperty(d => d.UpdatedAtUtc, DateTime.UtcNow));
+
+        doc.Title = title;
+        titleInput = title;
+        await DocChanges.PublishAsync(new DocChange(doc.Id, doc.Revision, Guid.Empty, DocChangeKind.Content));
+    }
+
+    private void ReloadPage() => NavigationManager.Refresh(forceReload: true);
 
     private async Task DestroyEditorIfMountedAsync()
     {
@@ -276,6 +479,7 @@
     // DisposeAsync pattern for the same "JS-owned DOM outside Blazor's own render tree" issue.
     public async ValueTask DisposeAsync()
     {
+        DocChanges.Changed -= OnDocChanged;
         try
         {
             await DestroyEditorIfMountedAsync();
@@ -289,17 +493,13 @@
     private async Task HandleCancel()
     {
         await DestroyEditorIfMountedAsync();
-
-        if (isCreating)
-        {
-            NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
-            return;
-        }
-
-        isEditing = false;
-        errorMessage = null;
+        NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
     }
 
+    /// <summary>
+    /// Cria o documento com o HTML do editor simples. Na primeira vez que alguém abrir a edição,
+    /// o DocCollabEditor converte esse HTML e semeia o Delta (ver DocCollabService).
+    /// </summary>
     private async Task HandleSave()
     {
         if (string.IsNullOrWhiteSpace(titleInput))
@@ -334,43 +534,20 @@
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
-        if (isCreating)
+        var newDoc = new DocPage
         {
-            var newDoc = new DocPage
-            {
-                Id = Guid.NewGuid(),
-                WorkspaceId = WorkspaceId,
-                Title = titleInput.Trim(),
-                ContentHtml = sanitized,
-                CreatedByUserId = userId,
-                CreatedAtUtc = DateTime.UtcNow
-            };
-            db.DocPages.Add(newDoc);
-            await db.SaveChangesAsync();
-
-            await DestroyEditorIfMountedAsync();
-            NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs/{newDoc.Id}");
-            return;
-        }
-
-        // WorkspaceId is part of the predicate as well as the Id: the authorization above is
-        // scoped to this workspace, so the row being written must be too.
-        await db.DocPages
-            .Where(d => d.Id == doc!.Id && d.WorkspaceId == WorkspaceId)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(d => d.Title, titleInput.Trim())
-                .SetProperty(d => d.ContentHtml, sanitized)
-                .SetProperty(d => d.UpdatedByUserId, userId)
-                .SetProperty(d => d.UpdatedAtUtc, DateTime.UtcNow));
+            Id = Guid.NewGuid(),
+            WorkspaceId = WorkspaceId,
+            Title = titleInput.Trim(),
+            ContentHtml = sanitized,
+            CreatedByUserId = userId,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.DocPages.Add(newDoc);
+        await db.SaveChangesAsync();
 
         await DestroyEditorIfMountedAsync();
-        isSaving = false;
-        isEditing = false;
-
-        doc = await db.DocPages
-            .Include(d => d.CreatedByUser)
-            .Include(d => d.UpdatedByUser)
-            .FirstOrDefaultAsync(d => d.Id == doc!.Id);
+        NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs/{newDoc.Id}");
     }
 
     private List<(string Level, string Text)> GetOutline()
