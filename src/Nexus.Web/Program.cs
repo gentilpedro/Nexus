@@ -65,6 +65,7 @@ builder.Services.AddAuthorizationCore(options =>
 builder.Services.AddScoped<IAuthorizationHandler, WorkspaceAuthorizationHandler>();
 builder.Services.AddScoped<WorkspaceAccessGuard>();
 builder.Services.AddScoped<WorkItemQueryService>();
+builder.Services.AddScoped<ListViewLoader>();
 builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddScoped<NotificationBadgeService>();
 builder.Services.AddScoped<ToastService>();

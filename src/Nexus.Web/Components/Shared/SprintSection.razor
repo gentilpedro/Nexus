@@ -82,10 +82,10 @@
                             <span class="sr-only">@DueDateLabel.Describe(due, item.Status.Category == StatusCategory.Done)</span>
                         </span>
                     }
-                    @if (item.Comments.Count > 0)
+                    @if (CommentCounts.GetValueOrDefault(item.Id) is > 0 and var commentCount)
                     {
-                        <span class="backlog-row-comments" title="@($"{item.Comments.Count} comentário(s)")">
-                            <Icon Name="chat" Class="icon--sm" /> @item.Comments.Count
+                        <span class="backlog-row-comments" title="@($"{commentCount} comentário(s)")">
+                            <Icon Name="chat" Class="icon--sm" /> @commentCount
                             <span class="sr-only">comentários</span>
                         </span>
                     }
@@ -118,6 +118,10 @@
 
     [Parameter]
     public bool CanManage { get; set; }
+
+    /// <summary>Comentários por tarefa; tarefa ausente = nenhum comentário.</summary>
+    [Parameter]
+    public IReadOnlyDictionary<Guid, int> CommentCounts { get; set; } = new Dictionary<Guid, int>();
 
     [Parameter]
     public bool AnotherSprintActive { get; set; }

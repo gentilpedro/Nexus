@@ -11,7 +11,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
-@inject IAuthorizationService AuthorizationService
+@inject ListViewLoader ListLoader
 @inject NavigationContextService NavContext
 @inject ToastService Toasts
 
@@ -143,6 +143,7 @@
                 <SprintSection Sprint="sprint"
                                Items="FilteredItems(sprint.WorkItems.OrderBy(w => w.SortOrder))"
                                CanManage="canManage"
+                               CommentCounts="commentCounts"
                                AnotherSprintActive="hasActiveSprint && sprint.Status != SprintStatus.Active"
                                OnCardClick="OpenEdit"
                                OnCardMoved="HandleCardMoved"
@@ -153,6 +154,7 @@
             <SprintSection Sprint="null"
                            Items="FilteredItems(backlogItems ?? [])"
                            CanManage="canManage"
+                           CommentCounts="commentCounts"
                            OnCardClick="OpenEdit"
                            OnCardMoved="HandleCardMoved" />
 
@@ -203,6 +205,7 @@
     private Guid workspaceId;
     private List<Sprint>? sprints;
     private List<Sprint>? completedSprints;
+    private Dictionary<Guid, int> commentCounts = [];
     private List<WorkItem>? backlogItems;
     // True when the backlog holds more items than WorkItemQueryService.MaxItemsPerView.
     private bool itemsTruncated;
@@ -293,65 +296,42 @@
         var authStateForUser = await AuthStateTask!;
         currentUserId = authStateForUser.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        var resolvedWorkspaceId = await QueryService.GetWorkspaceIdForListAsync(ListId);
-        if (resolvedWorkspaceId is null)
-        {
-            notFound = true;
-            return;
-        }
-        workspaceId = resolvedWorkspaceId.Value;
-
-        var authState = await AuthStateTask!;
-        var authResult = await AuthorizationService.AuthorizeAsync(
-            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
-
-        if (!authResult.Succeeded)
+        var shell = await ListLoader.LoadAsync(ListId, authStateForUser.User, ReloadAsync);
+        if (shell is null)
         {
             notFound = true;
             return;
         }
         canManage = true;
 
-        var adminResult = await AuthorizationService.AuthorizeAsync(
-            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
-        canManageFields = adminResult.Succeeded;
-
-        await using (var db = await DbFactory.CreateDbContextAsync())
-        {
-            taskList = await db.TaskLists
-                .Include(l => l.Space)
-                .ThenInclude(s => s.Workspace)
-                .FirstOrDefaultAsync(l => l.Id == ListId);
-        }
-
-        if (taskList is null)
-        {
-            notFound = true;
-            return;
-        }
-
+        taskList = shell.TaskList;
+        workspaceId = shell.WorkspaceId;
         workspaceName = taskList.Space.Workspace.Name;
         spaceName = taskList.Space.Name;
+        canManageFields = shell.CanManage;
+        statuses = shell.Statuses;
+        assigneeOptions = shell.AssigneeOptions;
+        customFieldDefinitions = shell.CustomFieldDefinitions;
+        statusTransitions = shell.StatusTransitions;
+        labels = shell.Labels;
 
         NavContext.SetList(workspaceId, workspaceName, taskList.SpaceId, ListId);
-
-        statuses = await QueryService.GetStatusesForListAsync(ListId);
-        assigneeOptions = await QueryService.GetWorkspaceMemberOptionsAsync(workspaceId);
-        epics = await QueryService.GetEpicsForListAsync(ListId);
-        customFieldDefinitions = await QueryService.GetCustomFieldDefinitionsForListAsync(ListId);
-        statusTransitions = await QueryService.GetStatusTransitionsForListAsync(ListId);
-        labels = await QueryService.GetLabelsForListAsync(ListId);
-        await ReloadAsync();
     }
 
     private async Task ReloadAsync()
     {
-        sprints = await QueryService.GetSprintsForListAsync(ListId);
-        completedSprints = await QueryService.GetCompletedSprintsForListAsync(ListId);
-        var backlogPage = await QueryService.GetBacklogItemsAsync(ListId);
-        backlogItems = backlogPage.Items;
-        itemsTruncated = backlogPage.IsTruncated;
-        epics = await QueryService.GetEpicsForListAsync(ListId);
+        var sprintsTask = QueryService.GetSprintsForListAsync(ListId);
+        var completedTask = QueryService.GetCompletedSprintsForListAsync(ListId);
+        var backlogTask = QueryService.GetBacklogItemsAsync(ListId);
+        var epicsTask = QueryService.GetEpicsForListAsync(ListId);
+        var commentCountsTask = QueryService.GetCommentCountsForListAsync(ListId);
+        await Task.WhenAll(sprintsTask, completedTask, backlogTask, epicsTask, commentCountsTask);
+        sprints = sprintsTask.Result;
+        completedSprints = completedTask.Result;
+        backlogItems = backlogTask.Result.Items;
+        itemsTruncated = backlogTask.Result.IsTruncated;
+        epics = epicsTask.Result;
+        commentCounts = commentCountsTask.Result;
         StateHasChanged();
     }
 
