@@ -6,6 +6,17 @@ export function initColumn(bodyEl, dotNetRef, groupName) {
     bodyEl._sortableInstance = Sortable.create(bodyEl, {
         group: groupName || 'board',
         animation: 150,
+        // Only work items move (board cards and backlog rows) — not the "drop tasks here"
+        // placeholder of an empty column.
+        draggable: '[data-workitem-id]',
+        ghostClass: 'is-drag-ghost',
+        chosenClass: 'is-drag-chosen',
+        dragClass: 'is-dragging',
+        // On touch, a short press-and-hold starts the drag; a plain swipe keeps scrolling the
+        // board/page instead of grabbing whatever card the finger landed on.
+        delay: 180,
+        delayOnTouchOnly: true,
+        touchStartThreshold: 6,
         onEnd: async function (evt) {
             const workItemId = evt.item.getAttribute('data-workitem-id');
             const targetContainer = evt.to.closest('[data-drop-id]');
@@ -20,9 +31,12 @@ export function initColumn(bodyEl, dotNetRef, groupName) {
             // diff is based on what IT last rendered, which never learned about Sortable's
             // direct DOM manipulation, so a rejected move that leaves the model unchanged
             // produces no patches and the card stays stranded in the wrong column.
-            const allowed = await dotNetRef.invokeMethodAsync('OnCardDropped', workItemId, newDropId, evt.newIndex);
+            const newIndex = typeof evt.newDraggableIndex === 'number' ? evt.newDraggableIndex : evt.newIndex;
+            const allowed = await dotNetRef.invokeMethodAsync('OnCardDropped', workItemId, newDropId, newIndex);
             if (!allowed) {
                 evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] || null);
+                evt.item.classList.add('is-rejected');
+                setTimeout(function () { evt.item.classList.remove('is-rejected'); }, 600);
             }
         }
     });

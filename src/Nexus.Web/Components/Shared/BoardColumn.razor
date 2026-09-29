@@ -2,47 +2,54 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div class="board-column" data-drop-id="@Status.Id" style="@(string.IsNullOrEmpty(Status.Color) ? "" : $"border-top: 3px solid {Status.Color};")">
-    <div class="board-column-header">
+<section class="board-column" data-drop-id="@Status.Id" style="--column-color: @(string.IsNullOrEmpty(Status.Color) ? "var(--status-todo)" : Status.Color)"
+         aria-label="@($"{Status.Name}, {Items.Count} {(Items.Count == 1 ? "tarefa" : "tarefas")}")">
+    <header class="board-column-header">
         @if (isRenaming)
         {
-            <input class="board-column-rename-input" value="@renameValue" @oninput="@(e => renameValue = e.Value?.ToString() ?? "")" @onkeydown="HandleRenameKeyDown" @ref="renameInputRef" />
-            <button type="button" class="btn-link" @onclick="SaveRename">✓</button>
-            <button type="button" class="btn-link" @onclick="CancelRename">✕</button>
+            <label class="sr-only" for="@($"rename-{Status.Id}")">Novo nome da coluna</label>
+            <input id="@($"rename-{Status.Id}")" class="board-column-rename-input" value="@renameValue"
+                   @oninput="@(e => renameValue = e.Value?.ToString() ?? "")" @onkeydown="HandleRenameKeyDown" @ref="renameInputRef" />
+            <button type="button" class="icon-btn icon-btn--sm" @onclick="SaveRename"><Icon Name="check" Label="Salvar nome" /></button>
+            <button type="button" class="icon-btn icon-btn--sm" @onclick="CancelRename"><Icon Name="x" Label="Cancelar" /></button>
         }
         else
         {
-            <span class="board-column-title-group">
-                <StatusBadge Name="@Status.Name" Category="Status.Category" Color="Status.Color" />
-                <span class="board-column-count">@Items.Count</span>
-            </span>
+            <h2 class="board-column-title">
+                <span class="board-column-dot" aria-hidden="true"></span>
+                <span class="board-column-name">@Status.Name</span>
+                <span class="board-column-count" aria-hidden="true">@Items.Count</span>
+            </h2>
             @if (CanManage)
             {
-                <div class="board-column-menu">
-                    <button type="button" class="board-column-menu-btn" @onclick="ToggleMenu" aria-label="Opções da coluna">⋮</button>
+                <div class="menu-anchor" @onkeydown="HandleMenuKey">
+                    <button type="button" class="icon-btn icon-btn--sm" @onclick="ToggleMenu"
+                            aria-haspopup="menu" aria-expanded="@(menuOpen ? "true" : "false")">
+                        <Icon Name="more" Label="@($"Opções da coluna {Status.Name}")" />
+                    </button>
                     @if (menuOpen)
                     {
-                        <div class="board-column-menu-backdrop" @onclick="CloseMenu"></div>
-                        <div class="board-column-menu-dropdown">
-                            <button type="button" @onclick="StartRename">Renomear</button>
-                            <button type="button" @onclick="HandleDeleteClick">Excluir</button>
+                        <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                        <div class="menu" role="menu">
+                            <button type="button" role="menuitem" @onclick="StartRename"><Icon Name="edit" /> Renomear</button>
+                            <button type="button" role="menuitem" class="is-danger" @onclick="HandleDeleteClick"><Icon Name="trash" /> Excluir coluna</button>
                         </div>
                     }
                 </div>
             }
         }
-    </div>
+    </header>
     <div class="board-column-body" @ref="bodyRef">
         @foreach (var item in Items)
         {
-            <TaskCard WorkItem="item" OnClick="OnCardClick" />
+            <TaskCard WorkItem="item" OnClick="OnCardClick" @key="item.Id" />
         }
         @if (Items.Count == 0)
         {
-            <div class="board-column-empty">Vazio</div>
+            <div class="board-column-empty">Solte tarefas aqui</div>
         }
     </div>
-</div>
+</section>
 
 @code {
     [Parameter, EditorRequired]
@@ -96,6 +103,14 @@
     private void ToggleMenu() => menuOpen = !menuOpen;
 
     private void CloseMenu() => menuOpen = false;
+
+    private void HandleMenuKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            menuOpen = false;
+        }
+    }
 
     private async Task StartRename()
     {

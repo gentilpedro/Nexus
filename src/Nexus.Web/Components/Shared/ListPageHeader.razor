@@ -1,0 +1,81 @@
+@* Cabeçalho comum às cinco visões de uma lista (Lista, Kanban, Backlog, Calendário, Gantt):
+   caminho, nome, ação principal e as configurações da lista agrupadas num menu só — antes eram
+   três botões secundários competindo com "Nova tarefa". *@
+
+<PageHeader Title="@ListName" Class="list-page-header">
+    <Breadcrumbs>
+        <a href="/workspaces">Workspaces</a>
+        <span class="breadcrumb-sep" aria-hidden="true">/</span>
+        <a href="@($"/workspaces/{WorkspaceId}")">@WorkspaceName</a>
+        <span class="breadcrumb-sep" aria-hidden="true">/</span>
+        <a href="@($"/workspaces/{WorkspaceId}/spaces/{SpaceId}")">@SpaceName</a>
+    </Breadcrumbs>
+    <Actions>
+        @ExtraActions
+        @if (CanManage)
+        {
+            <div class="menu-anchor" @onkeydown="HandleMenuKey">
+                <button type="button" class="btn btn-secondary" @onclick="ToggleMenu"
+                        aria-haspopup="menu" aria-expanded="@(menuOpen ? "true" : "false")" aria-controls="@menuId">
+                    <Icon Name="settings" />
+                    <span class="label-collapsible">Configurar lista</span>
+                    <Icon Name="chevron-down" Class="icon--sm" />
+                </button>
+                @if (menuOpen)
+                {
+                    <div class="menu-backdrop" @onclick="CloseMenu"></div>
+                    <div id="@menuId" class="menu" role="menu">
+                        <a role="menuitem" href="@($"/lists/{ListId}/workflow")"><Icon Name="refresh" /> Status e fluxo</a>
+                        <a role="menuitem" href="@($"/lists/{ListId}/labels")"><Icon Name="tag" /> Labels</a>
+                        <a role="menuitem" href="@($"/lists/{ListId}/fields")"><Icon Name="list" /> Campos customizados</a>
+                    </div>
+                }
+            </div>
+        }
+        @if (ShowCreate && OnCreate.HasDelegate)
+        {
+            <button type="button" class="btn" @onclick="OnCreate">
+                <Icon Name="plus" /> Nova tarefa
+            </button>
+        }
+    </Actions>
+</PageHeader>
+
+<ViewSwitcher ListId="ListId" ActiveView="@ActiveView" />
+
+@code {
+    [Parameter, EditorRequired] public Guid ListId { get; set; }
+    [Parameter, EditorRequired] public string ListName { get; set; } = "";
+    [Parameter, EditorRequired] public Guid WorkspaceId { get; set; }
+    [Parameter, EditorRequired] public string WorkspaceName { get; set; } = "";
+    [Parameter, EditorRequired] public Guid SpaceId { get; set; }
+    [Parameter, EditorRequired] public string SpaceName { get; set; } = "";
+    [Parameter, EditorRequired] public string ActiveView { get; set; } = "list";
+
+    /// <summary>Admin do workspace: mostra o menu "Configurar lista".</summary>
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>Quando definido, mostra o botão primário "Nova tarefa".</summary>
+    [Parameter] public EventCallback OnCreate { get; set; }
+
+    /// <summary>false esconde "Nova tarefa" mesmo com OnCreate (ex.: sem permissão no Backlog).</summary>
+    [Parameter] public bool ShowCreate { get; set; } = true;
+
+    /// <summary>Ações específicas da visão (ex.: "Criar sprint" no Backlog), antes das comuns.</summary>
+    [Parameter] public RenderFragment? ExtraActions { get; set; }
+
+    private bool menuOpen;
+    private readonly string menuId = $"list-menu-{Guid.NewGuid():N}";
+
+    private void ToggleMenu() => menuOpen = !menuOpen;
+
+    private void CloseMenu() => menuOpen = false;
+
+    private void HandleMenuKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            menuOpen = false;
+        }
+    }
+}

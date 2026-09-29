@@ -1,31 +1,73 @@
+@using System.Globalization
 @using Nexus.Domain.Entities
 
+@* Burndown em SVG puro. Coordenadas sempre com InvariantCulture: com a cultura pt-BR do
+   servidor, ToString("F1") gerava "50,0" e o navegador lia os pontos do <polyline> errado. *@
 <div class="burndown-chart">
     @if (Snapshots.Count == 0)
     {
-        <p class="topnav-user">Ainda não há dados de progresso para este sprint.</p>
+        <EmptyState Compact="true" Title="Ainda sem dados de progresso"
+                    Description="O Nexus registra quantas tarefas faltam uma vez por dia enquanto a sprint está ativa. O gráfico aparece depois do primeiro registro." />
     }
     else
     {
-        <svg viewBox="0 0 640 300" class="burndown-svg">
-            <line x1="50" y1="10" x2="50" y2="260" class="burndown-axis" />
-            <line x1="50" y1="260" x2="620" y2="260" class="burndown-axis" />
+        <svg viewBox="0 0 640 300" class="burndown-svg" role="img" aria-labelledby="@titleId">
+            <title id="@titleId">@Summary</title>
 
-            <text x="42" y="16" text-anchor="end" class="burndown-axis-label">@maxCount</text>
-            <text x="42" y="264" text-anchor="end" class="burndown-axis-label">0</text>
+            @foreach (var (value, y) in gridLines)
+            {
+                <g>
+                    <line x1="@F(ChartLeft)" y1="@F(y)" x2="@F(ChartRight)" y2="@F(y)" class="burndown-grid" />
+                    <text x="@F(ChartLeft - 8)" y="@F(y + 4)" text-anchor="end" class="burndown-axis-label">@value</text>
+                </g>
+            }
+
+            <line x1="@F(ChartLeft)" y1="@F(ChartBottom)" x2="@F(ChartRight)" y2="@F(ChartBottom)" class="burndown-axis" />
+
+            <text x="@F(ChartLeft)" y="@F(ChartBottom + 22)" text-anchor="start" class="burndown-axis-label">@Sprint.StartDateUtc.ToString("dd/MM")</text>
+            <text x="@F(ChartRight)" y="@F(ChartBottom + 22)" text-anchor="end" class="burndown-axis-label">@Sprint.EndDateUtc.ToString("dd/MM")</text>
+
+            @if (todayX is double tx)
+            {
+                <g>
+                    <line x1="@F(tx)" y1="@F(ChartTop)" x2="@F(tx)" y2="@F(ChartBottom)" class="burndown-today" />
+                    <text x="@F(tx)" y="@F(ChartBottom + 22)" text-anchor="middle" class="burndown-axis-label burndown-today-label">hoje</text>
+                </g>
+            }
 
             <polyline points="@idealPoints" fill="none" class="burndown-line-ideal" />
             <polyline points="@actualPoints" fill="none" class="burndown-line-actual" />
 
             @foreach (var (x, y) in actualDots)
             {
-                <circle cx="@x.ToString("F1")" cy="@y.ToString("F1")" r="3.5" class="burndown-dot" />
+                <circle cx="@F(x)" cy="@F(y)" r="3.5" class="burndown-dot" />
             }
         </svg>
-        <div class="burndown-legend">
-            <span><span class="burndown-legend-swatch burndown-legend-swatch--ideal"></span> Ideal</span>
-            <span><span class="burndown-legend-swatch burndown-legend-swatch--actual"></span> Real</span>
+        <div class="burndown-legend" aria-hidden="true">
+            <span><span class="burndown-legend-swatch burndown-legend-swatch--actual"></span> Tarefas restantes</span>
+            <span><span class="burndown-legend-swatch burndown-legend-swatch--ideal"></span> Ritmo ideal</span>
         </div>
+
+        <details class="burndown-data">
+            <summary>Ver os dados em tabela</summary>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Dia</th><th class="is-numeric">Total</th><th class="is-numeric">Restantes</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var snap in Snapshots.OrderBy(s => s.SnapshotDateUtc))
+                        {
+                            <tr>
+                                <td>@snap.SnapshotDateUtc.ToString("dd/MM/yyyy")</td>
+                                <td class="is-numeric">@snap.TotalCount</td>
+                                <td class="is-numeric">@snap.RemainingCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </details>
     }
 </div>
 
@@ -36,12 +78,28 @@
     [Parameter, EditorRequired]
     public List<SprintBurndownSnapshot> Snapshots { get; set; } = [];
 
-    private const double ChartLeft = 50, ChartRight = 620, ChartTop = 10, ChartBottom = 260;
+    private const double ChartLeft = 50, ChartRight = 620, ChartTop = 14, ChartBottom = 262;
 
+    private readonly string titleId = $"burndown-{Guid.NewGuid():N}";
     private string idealPoints = "";
     private string actualPoints = "";
     private List<(double X, double Y)> actualDots = [];
+    private List<(int Value, double Y)> gridLines = [];
+    private double? todayX;
     private int maxCount = 1;
+
+    private string Summary
+    {
+        get
+        {
+            var last = Snapshots.OrderBy(s => s.SnapshotDateUtc).LastOrDefault();
+            return last is null
+                ? "Burndown da sprint"
+                : $"Burndown de {Sprint.Name}: {last.RemainingCount} de {last.TotalCount} tarefas restantes em {last.SnapshotDateUtc:dd/MM}.";
+        }
+    }
+
+    private static string F(double value) => value.ToString("F1", CultureInfo.InvariantCulture);
 
     protected override void OnParametersSet()
     {
@@ -68,10 +126,15 @@
             return ChartBottom - ratio * (ChartBottom - ChartTop);
         }
 
-        idealPoints = $"{XFor(Sprint.StartDateUtc).ToString("F1")},{YFor(ordered[0].TotalCount).ToString("F1")} " +
-                      $"{XFor(Sprint.EndDateUtc).ToString("F1")},{YFor(0).ToString("F1")}";
+        // Linhas de grade em 0, metade e máximo — o suficiente para ler o gráfico sem poluir.
+        gridLines = new[] { maxCount, maxCount / 2, 0 }.Distinct().Select(v => (v, YFor(v))).ToList();
+
+        var today = DateTime.UtcNow.Date;
+        todayX = today > Sprint.StartDateUtc.Date && today < Sprint.EndDateUtc.Date ? XFor(today) : null;
+
+        idealPoints = $"{F(XFor(Sprint.StartDateUtc))},{F(YFor(ordered[0].TotalCount))} {F(XFor(Sprint.EndDateUtc))},{F(YFor(0))}";
 
         actualDots = ordered.Select(s => (XFor(s.SnapshotDateUtc), YFor(s.RemainingCount))).ToList();
-        actualPoints = string.Join(" ", actualDots.Select(p => $"{p.X.ToString("F1")},{p.Y.ToString("F1")}"));
+        actualPoints = string.Join(" ", actualDots.Select(p => $"{F(p.X)},{F(p.Y)}"));
     }
 }

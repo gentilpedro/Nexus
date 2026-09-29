@@ -6,6 +6,7 @@
 @using Nexus.Web.Authorization
 @using Nexus.Web.Components.Shared
 @using Nexus.Web.Services
+@using Nexus.Web.Extensions
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
@@ -18,125 +19,122 @@
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Lista não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Lista não encontrada"
+                    Description="Ela pode ter sido excluída, ou você não tem mais acesso ao workspace dela.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (taskList is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando a lista…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
-            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
-            @taskList.Name
-        </div>
-
-        <div class="page-header">
-            <h1>@taskList.Name</h1>
-            <div class="form-actions">
-                @if (canManageFields)
-                {
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/labels")">Labels</a>
-                }
-                <button class="btn" @onclick="OpenCreate">+ Nova task</button>
-            </div>
-        </div>
-
-        <ViewSwitcher ListId="ListId" ActiveView="list" />
+        <ListPageHeader ListId="ListId" ListName="@taskList.Name"
+                        WorkspaceId="workspaceId" WorkspaceName="@workspaceName"
+                        SpaceId="taskList.SpaceId" SpaceName="@spaceName"
+                        ActiveView="list" CanManage="canManageFields"
+                        OnCreate="OpenCreate" />
 
         @if (workItems is null)
         {
-            <p>Carregando tasks...</p>
+            <Skeleton Count="8" Label="Carregando tarefas…" />
         }
         else if (workItems.Count == 0)
         {
-            <div class="empty-state">
-                <p>Nenhuma task criada ainda.</p>
-            </div>
+            <EmptyState Icon="tasks" Title="Nenhuma tarefa nesta lista ainda"
+                        Description="Crie a primeira tarefa. Depois você pode vê-la aqui, no Kanban, no calendário ou no Gantt.">
+                <button type="button" class="btn" @onclick="OpenCreate"><Icon Name="plus" /> Nova tarefa</button>
+            </EmptyState>
         }
         else
         {
             @if (itemsTruncated)
             {
-                <div class="empty-state">
-                    <p>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tasks. Mostrando as @WorkItemQueryService.MaxItemsPerView primeiras — use os filtros ou divida a lista.</p>
+                <div class="alert alert-warning" role="status">
+                    <Icon Name="alert" />
+                    <span>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tarefas. Mostrando as @WorkItemQueryService.MaxItemsPerView primeiras — divida a lista para ver todas.</span>
                 </div>
             }
 
-            <div class="pill-tabs">
-                <button type="button" class="@(rowFilter == "all" ? "active" : "")" @onclick='() => rowFilter = "all"'>Todas <span class="tab-count">@workItems.Count</span></button>
-                <button type="button" class="@(rowFilter == "mine" ? "active" : "")" @onclick='() => rowFilter = "mine"'>Minhas <span class="tab-count">@workItems.Count(w => w.AssigneeId == currentUserId)</span></button>
-                <button type="button" class="@(rowFilter == "urgent" ? "active" : "")" @onclick='() => rowFilter = "urgent"'>Urgentes <span class="tab-count">@workItems.Count(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest)</span></button>
-                <button type="button" class="@(rowFilter == "done" ? "active" : "")" @onclick='() => rowFilter = "done"'>Concluídas <span class="tab-count">@workItems.Count(w => w.Status.Category == StatusCategory.Done)</span></button>
+            <div class="list-toolbar">
+                <div class="pill-tabs" role="group" aria-label="Filtrar tarefas">
+                    <button type="button" aria-pressed="@(rowFilter == "all" ? "true" : "false")" class="@(rowFilter == "all" ? "active" : "")" @onclick='() => rowFilter = "all"'>Todas <span class="tab-count">@workItems.Count</span></button>
+                    <button type="button" aria-pressed="@(rowFilter == "mine" ? "true" : "false")" class="@(rowFilter == "mine" ? "active" : "")" @onclick='() => rowFilter = "mine"'>Minhas <span class="tab-count">@workItems.Count(w => w.AssigneeId == currentUserId)</span></button>
+                    <button type="button" aria-pressed="@(rowFilter == "urgent" ? "true" : "false")" class="@(rowFilter == "urgent" ? "active" : "")" @onclick='() => rowFilter = "urgent"'>Urgentes <span class="tab-count">@workItems.Count(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest)</span></button>
+                    <button type="button" aria-pressed="@(rowFilter == "done" ? "true" : "false")" class="@(rowFilter == "done" ? "active" : "")" @onclick='() => rowFilter = "done"'>Concluídas <span class="tab-count">@workItems.Count(w => w.Status.Category == StatusCategory.Done)</span></button>
+                </div>
+                <p class="list-summary">
+                    <span><strong>@workItems.Count(w => w.Status.Category == StatusCategory.InProgress)</strong> em andamento</span>
+                    <span class="@(OverdueCount > 0 ? "text-danger" : "")"><strong>@OverdueCount</strong> atrasada@(OverdueCount == 1 ? "" : "s")</span>
+                    <span><strong>@workItems.Count(w => w.Status.Category == StatusCategory.Done)</strong> concluída@(workItems.Count(w => w.Status.Category == StatusCategory.Done) == 1 ? "" : "s")</span>
+                </p>
             </div>
 
-            <div class="table-scroll">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th>Título</th>
-                            <th>Status</th>
-                            <th>Prioridade</th>
-                            <th>Responsável</th>
-                            <th>Prazo</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @* Virtualize instead of a plain foreach: rendering every row put 10.3 MB of
-                           HTML on the wire for a large list and kept the entire DOM alive in the
-                           circuit. Virtualize renders only the rows in view. ItemSize matches the
-                           row height in app.css so the scrollbar is proportioned correctly. *@
-                        <Virtualize Items="FilteredWorkItems" Context="item" ItemSize="48">
-                            <tr class="data-table-row" @onclick="() => OpenEdit(item)">
-                                <td><WorkItemTypeIcon Type="item.Type" /></td>
-                                <td>@item.Title</td>
-                                <td><StatusBadge Name="@item.Status.Name" Category="item.Status.Category" Color="item.Status.Color" /></td>
-                                <td><PriorityBadge Priority="item.Priority" /></td>
-                                <td>@(item.Assignee?.DisplayName is { Length: > 0 } dn ? dn : (item.Assignee?.Email ?? "—"))</td>
-                                <td>@(item.DueDateUtc?.ToString("dd/MM/yyyy") ?? "—")</td>
+            @if (FilteredWorkItems.Count == 0)
+            {
+                <div class="card">
+                    <EmptyState Compact="true" Title="Nenhuma tarefa neste filtro">
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick='() => rowFilter = "all"'>Ver todas</button>
+                    </EmptyState>
+                </div>
+            }
+            else
+            {
+                <div class="table-scroll">
+                    <table class="data-table task-table">
+                        <thead>
+                            <tr>
+                                <th class="col-type"><span class="sr-only">Tipo</span></th>
+                                <th>Título</th>
+                                <th>Status</th>
+                                <th>Prioridade</th>
+                                <th>Responsável</th>
+                                <th>Prazo</th>
                             </tr>
-                        </Virtualize>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="stat-grid" style="margin-top:1.25rem;">
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Concluídas</span>
-                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category == StatusCategory.Done)</span>
-                    </div>
-                    <span class="stat-card-icon is-success">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                    </span>
+                        </thead>
+                        <tbody>
+                            @* Virtualize instead of a plain foreach: rendering every row put 10.3 MB of
+                               HTML on the wire for a large list and kept the entire DOM alive in the
+                               circuit. Virtualize renders only the rows in view. ItemSize matches the
+                               row height in views-tasks.css (.task-table td) so the scrollbar is proportioned
+                               correctly. *@
+                            <Virtualize Items="FilteredWorkItems" Context="item" ItemSize="48">
+                                <tr class="data-table-row @(item.Status.Category == StatusCategory.Done ? "is-done" : "")" @onclick="() => OpenEdit(item)">
+                                    <td class="col-type"><WorkItemTypeIcon Type="item.Type" /></td>
+                                    <td class="cell-title">
+                                        <button type="button" class="row-link" @onclick="() => OpenEdit(item)" @onclick:stopPropagation="true">@item.Title</button>
+                                    </td>
+                                    <td><StatusBadge Name="@item.Status.Name" Category="item.Status.Category" Color="@item.Status.Color" /></td>
+                                    <td><PriorityBadge Priority="item.Priority" /></td>
+                                    <td>
+                                        @if (item.Assignee is null)
+                                        {
+                                            <span class="cell-muted">—</span>
+                                        }
+                                        else
+                                        {
+                                            var assigneeName = item.Assignee.DisplayName is { Length: > 0 } dn ? dn : (item.Assignee.Email ?? "");
+                                            <span class="cell-person"><Avatar Name="@assigneeName" Size="xs" /> @assigneeName</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (item.DueDateUtc is DateTime due)
+                                        {
+                                            var overdue = item.Status.Category != StatusCategory.Done && DueDateLabel.IsOverdue(due);
+                                            <span class="@(overdue ? "text-danger" : "")" title="@DueDateLabel.Describe(due, item.Status.Category == StatusCategory.Done)">@due.ToString("dd/MM/yyyy")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="cell-muted">—</span>
+                                        }
+                                    </td>
+                                </tr>
+                            </Virtualize>
+                        </tbody>
+                    </table>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Atrasadas</span>
-                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is not null && w.DueDateUtc.Value.Date < DateTime.UtcNow.Date)</span>
-                    </div>
-                    <span class="stat-card-icon is-danger">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Em andamento</span>
-                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category == StatusCategory.InProgress)</span>
-                    </div>
-                    <span class="stat-card-icon is-warning">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
-                    </span>
-                </div>
-            </div>
+            }
         }
 
         <TaskDetailPanel @ref="panel"
@@ -154,6 +152,13 @@
 @code {
     [Parameter]
     public Guid ListId { get; set; }
+
+    // Link direto para uma tarefa: /lists/{id}/list?tarefa={workItemId} abre o painel dela
+    // (usado pelo dashboard, busca e notificações).
+    [SupplyParameterFromQuery(Name = "tarefa")]
+    public Guid? TaskIdToOpen { get; set; }
+
+    private Guid? pendingOpenTaskId;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
@@ -179,6 +184,8 @@
     private string rowFilter = "all";
     private string? currentUserId;
 
+    private int OverdueCount => workItems?.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is DateTime d && DueDateLabel.IsOverdue(d)) ?? 0;
+
     private List<WorkItem> FilteredWorkItems => rowFilter switch
     {
         "mine" => workItems!.Where(w => w.AssigneeId == currentUserId).ToList(),
@@ -189,6 +196,11 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        if (TaskIdToOpen is Guid requested)
+        {
+            pendingOpenTaskId = requested;
+        }
+
         if (loadedListId == ListId) return;
         loadedListId = ListId;
 
@@ -262,6 +274,19 @@
         // Refresh in case a new Epic was just created via the panel — it should be
         // selectable immediately, not only after a full page reload.
         epics = await QueryService.GetEpicsForListAsync(ListId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (pendingOpenTaskId is Guid taskId && panel is not null && workItems is not null)
+        {
+            pendingOpenTaskId = null;
+            var item = workItems.FirstOrDefault(w => w.Id == taskId);
+            if (item is not null)
+            {
+                await panel.OpenForEdit(item);
+            }
+        }
     }
 
     private void OpenCreate() => panel?.OpenForCreate();
