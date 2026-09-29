@@ -1,9 +1,32 @@
 @using Nexus.Domain.Entities
 @using Nexus.Web.Extensions
 
-<span class="badge badge-priority-@Priority.ToString().ToLowerInvariant()">@Priority.ToDisplayLabel()</span>
+@* Três barras (baixa → 1, média → 2, alta → 3, urgente → 3 em vermelho) + o rótulo em texto:
+   a prioridade se lê pela forma e pela palavra, não só pela cor. *@
+<span class="badge badge-priority badge-priority-@Priority.ToString().ToLowerInvariant() @(Filled ? "is-filled" : "")">
+    @if (!Filled)
+    {
+        <span class="priority-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+    }
+    @if (!IconOnly)
+    {
+        @Priority.ToDisplayLabel()
+    }
+    else
+    {
+        <span class="sr-only">Prioridade @Priority.ToDisplayLabel()</span>
+    }
+</span>
 
 @code {
     [Parameter, EditorRequired]
     public WorkItemPriority Priority { get; set; }
+
+    /// <summary>Pílula colorida em vez de barras — para calendário e legendas.</summary>
+    [Parameter]
+    public bool Filled { get; set; }
+
+    /// <summary>Só as barras (cards compactos); o rótulo fica para o leitor de tela.</summary>
+    [Parameter]
+    public bool IconOnly { get; set; }
 }

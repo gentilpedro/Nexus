@@ -17,154 +17,132 @@
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Lista não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Lista não encontrada"
+                    Description="Ela pode ter sido excluída, ou você não tem mais acesso ao workspace dela.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (taskList is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando a lista…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
-            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
-            @taskList.Name
-        </div>
-
-        <div class="page-header">
-            <h1>@taskList.Name</h1>
-            <div class="form-actions">
-                @if (canManageFields)
-                {
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/labels")">Labels</a>
-                }
-                <button class="btn" @onclick="OpenCreate">+ Nova task</button>
-            </div>
-        </div>
-
-        <ViewSwitcher ListId="ListId" ActiveView="gantt" />
+        <ListPageHeader ListId="ListId" ListName="@taskList.Name"
+                        WorkspaceId="workspaceId" WorkspaceName="@workspaceName"
+                        SpaceId="taskList.SpaceId" SpaceName="@spaceName"
+                        ActiveView="gantt" CanManage="canManageFields"
+                        OnCreate="OpenCreate" />
 
         @if (workItems is null)
         {
-            <p>Carregando...</p>
+            <Skeleton Count="8" Label="Carregando o cronograma…" />
         }
         else
         {
             @if (itemsTruncated)
             {
-                <div class="empty-state">
-                    <p>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tasks. O gráfico mostra as @WorkItemQueryService.MaxItemsPerView primeiras.</p>
+                <div class="alert alert-warning" role="status">
+                    <Icon Name="alert" />
+                    <span>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tarefas. O cronograma mostra as @WorkItemQueryService.MaxItemsPerView primeiras.</span>
                 </div>
             }
 
             var items = GanttItems;
             @if (items.Count == 0)
             {
-                <div class="empty-state">
-                    <p>Nenhuma task com prazo definido ainda.</p>
-                </div>
+                <EmptyState Icon="gantt" Title="Nenhuma tarefa com prazo ainda"
+                            Description="O Gantt desenha cada tarefa da data de início até o prazo. Defina um prazo em uma tarefa para ela aparecer aqui.">
+                    <button type="button" class="btn" @onclick="OpenCreate"><Icon Name="plus" /> Nova tarefa</button>
+                </EmptyState>
             }
             else
             {
                 var ticks = GetTicks();
                 var todayPct = TodayLeftPct;
+                var overdueCount = items.Count(i => i.WorkItem.Status.Category != StatusCategory.Done && i.WorkItem.DueDateUtc!.Value.Date < DateTime.UtcNow.Date);
 
-                <div class="gantt-toolbar">
-                    <p class="topnav-user" style="margin:0;">Período: @rangeStart.ToString("dd/MM/yyyy") a @rangeEnd.ToString("dd/MM/yyyy")</p>
-                    <label class="gantt-group-select">
-                        Agrupar por:
-                        <select @bind="groupBy">
-                            <option value="none">Nenhum</option>
+                <div class="list-toolbar">
+                    <p class="list-summary">
+                        <span><Icon Name="calendar" Class="icon--sm" /> @rangeStart.ToString("dd/MM/yyyy") a @rangeEnd.ToString("dd/MM/yyyy")</span>
+                        <span><strong>@items.Count</strong> com prazo</span>
+                        <span><strong>@OnTrackPercent(items)%</strong> em dia</span>
+                        <span class="@(overdueCount > 0 ? "text-danger" : "")"><strong>@overdueCount</strong> atrasada@(overdueCount == 1 ? "" : "s")</span>
+                    </p>
+                    <div class="toolbar-field">
+                        <label for="gantt-group">Agrupar por</label>
+                        <select id="gantt-group" @bind="groupBy">
+                            <option value="none">Nada</option>
                             <option value="assignee">Responsável</option>
                         </select>
-                    </label>
-                </div>
-                <div class="gantt-legend">
-                    <span class="gantt-legend-item"><span class="gantt-legend-dot gantt-legend-dot-todo"></span> A Fazer</span>
-                    <span class="gantt-legend-item"><span class="gantt-legend-dot gantt-legend-dot-inprogress"></span> Em Andamento</span>
-                    <span class="gantt-legend-item"><span class="gantt-legend-dot gantt-legend-dot-done"></span> Concluído</span>
-                </div>
-                <div class="gantt-chart">
-                    <div class="gantt-header-row">
-                        <div class="gantt-header-label"></div>
-                        <div class="gantt-header-track">
-                            @foreach (var tick in ticks)
-                            {
-                                <span class="gantt-tick-label" style="left: @(tick.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%">@tick.Date.ToString("dd/MM")</span>
-                            }
-                        </div>
-                    </div>
-                    <div class="gantt-body">
-                        @foreach (var tick in ticks)
-                        {
-                            <div class="gantt-gridline" style="left: calc(200px + (100% - 200px) * @(tick.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture)) / 100)"></div>
-                        }
-                        @if (todayPct is { } pct)
-                        {
-                            <div class="gantt-today-line" style="left: calc(200px + (100% - 200px) * @(pct.ToString(System.Globalization.CultureInfo.InvariantCulture)) / 100)" title="Hoje"></div>
-                        }
-                        @foreach (var group in GroupItems(items))
-                        {
-                            @if (!string.IsNullOrEmpty(group.Label))
-                            {
-                                <div class="gantt-group-header">@group.Label <span class="tab-count">@group.Items.Count</span></div>
-                            }
-                            @foreach (var item in group.Items)
-                            {
-                                <div class="gantt-row">
-                                    <div class="gantt-row-label" @onclick="() => OpenEdit(item.WorkItem)">
-                                        <WorkItemTypeIcon Type="item.WorkItem.Type" />
-                                        <span class="gantt-row-title">@item.WorkItem.Title</span>
-                                        <span class="task-row-avatar" title="@AssigneeLabel(item.WorkItem)">@AssigneeInitial(item.WorkItem)</span>
-                                    </div>
-                                    <div class="gantt-row-track">
-                                        <div class="gantt-bar badge-status-@item.WorkItem.Status.Category.ToString().ToLowerInvariant()"
-                                             style="left: @(item.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%; width: @(item.WidthPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"
-                                             title="@item.WorkItem.Title"
-                                             @onclick="() => OpenEdit(item.WorkItem)">
-                                            <span class="gantt-bar-label">@item.WorkItem.Title</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            }
-                        }
                     </div>
                 </div>
 
-                <div class="stat-grid" style="margin-top:1.25rem;">
-                    <div class="stat-card">
-                        <div class="stat-card-body">
-                            <span class="stat-card-label">Tarefas com prazo</span>
-                            <span class="stat-card-value">@items.Count</span>
+                <div class="gantt-chart" role="region" aria-label="Cronograma das tarefas" tabindex="0">
+                    <div class="gantt-inner">
+                        <div class="gantt-header-row" aria-hidden="true">
+                            <div class="gantt-header-label">Tarefa</div>
+                            <div class="gantt-header-track">
+                                @foreach (var tick in ticks)
+                                {
+                                    <span class="gantt-tick-label" style="left: @(tick.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%">@tick.Date.ToString("dd/MM")</span>
+                                }
+                            </div>
                         </div>
-                        <span class="stat-card-icon">
-                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-                        </span>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-card-body">
-                            <span class="stat-card-label">Em dia</span>
-                            <span class="stat-card-value">@OnTrackPercent(items)%</span>
+                        <div class="gantt-body">
+                            @foreach (var tick in ticks)
+                            {
+                                <div class="gantt-gridline" style="--x: @(tick.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))"></div>
+                            }
+                            @if (todayPct is { } pct)
+                            {
+                                <div class="gantt-today-line" style="--x: @(pct.ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                                    <span class="gantt-today-label">Hoje</span>
+                                </div>
+                            }
+                            @foreach (var group in GroupItems(items))
+                            {
+                                @if (!string.IsNullOrEmpty(group.Label))
+                                {
+                                    <div class="gantt-group-header">@group.Label <span class="tab-count">@group.Items.Count</span></div>
+                                }
+                                @foreach (var item in group.Items)
+                                {
+                                    var wi = item.WorkItem;
+                                    var category = wi.Status.Category.ToString().ToLowerInvariant();
+                                    var late = wi.Status.Category != StatusCategory.Done && wi.DueDateUtc!.Value.Date < DateTime.UtcNow.Date;
+                                    <div class="gantt-row">
+                                        <button type="button" class="gantt-row-label" @onclick="() => OpenEdit(wi)">
+                                            <WorkItemTypeIcon Type="wi.Type" />
+                                            <span class="gantt-row-title">@wi.Title</span>
+                                            @if (wi.Assignee is not null)
+                                            {
+                                                <Avatar Name="@AssigneeLabel(wi)" Size="xs" />
+                                            }
+                                        </button>
+                                        <div class="gantt-row-track">
+                                            <button type="button" class="gantt-bar gantt-bar--@category @(late ? "is-late" : "")"
+                                                    style="left: @(item.LeftPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%; width: @(item.WidthPct.ToString(System.Globalization.CultureInfo.InvariantCulture))%;"
+                                                    aria-label="@($"{wi.Title}: {(wi.StartDateUtc ?? wi.DueDateUtc)!.Value:dd/MM} a {wi.DueDateUtc!.Value:dd/MM}, {wi.Status.Name}{(late ? ", atrasada" : "")}")"
+                                                    title="@($"{wi.Title} · {wi.Status.Name}")"
+                                                    tabindex="-1"
+                                                    @onclick="() => OpenEdit(wi)">
+                                                <span class="gantt-bar-label">@wi.Title</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            }
                         </div>
-                        <span class="stat-card-icon is-success">
-                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                        </span>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-card-body">
-                            <span class="stat-card-label">Prazos críticos</span>
-                            <span class="stat-card-value">@items.Count(i => i.WorkItem.Status.Category != StatusCategory.Done && i.WorkItem.DueDateUtc!.Value.Date < DateTime.UtcNow.Date)</span>
-                        </div>
-                        <span class="stat-card-icon is-danger">
-                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                        </span>
-                    </div>
+                </div>
+
+                <div class="priority-legend" aria-label="Legenda">
+                    <span class="priority-legend-title">Status</span>
+                    <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--status-todo);"></span>A fazer</span>
+                    <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--status-inprogress);"></span>Em andamento</span>
+                    <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--status-done);"></span>Concluída</span>
+                    <span class="priority-legend-item"><span class="priority-legend-dot is-late-dot"></span>Atrasada</span>
                 </div>
             }
         }

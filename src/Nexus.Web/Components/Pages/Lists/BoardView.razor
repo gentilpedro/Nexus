@@ -11,64 +11,57 @@
 @inject WorkItemQueryService QueryService
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
+@inject ToastService Toasts
 
 <PageTitle>@(taskList?.Name ?? "Board")</PageTitle>
 
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Lista não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Lista não encontrada"
+                    Description="Ela pode ter sido excluída, ou você não tem mais acesso ao workspace dela.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (taskList is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando a lista…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
-            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
-            @taskList.Name
-        </div>
-
-        <div class="page-header">
-            <h1>@taskList.Name</h1>
-            <div class="form-actions">
-                @if (canManageFields)
-                {
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/labels")">Labels</a>
-                }
-                <button class="btn" @onclick="OpenCreate">+ Nova task</button>
-            </div>
-        </div>
-
-        <ViewSwitcher ListId="ListId" ActiveView="board" />
+        <ListPageHeader ListId="ListId" ListName="@taskList.Name"
+                        WorkspaceId="workspaceId" WorkspaceName="@workspaceName"
+                        SpaceId="taskList.SpaceId" SpaceName="@spaceName"
+                        ActiveView="board" CanManage="canManageFields"
+                        OnCreate="OpenCreate" />
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
-            <div class="alert alert-danger">@errorMessage</div>
+            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
         }
 
         @if (statuses is null || workItems is null)
         {
-            <p>Carregando board...</p>
+            <Skeleton Variant="card" Count="4" Label="Carregando o quadro…" />
         }
         else
         {
             @if (itemsTruncated)
             {
-                <div class="empty-state">
-                    <p>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tasks. O board mostra as @WorkItemQueryService.MaxItemsPerView primeiras.</p>
+                <div class="alert alert-warning" role="status">
+                    <Icon Name="alert" />
+                    <span>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tarefas. O quadro mostra as @WorkItemQueryService.MaxItemsPerView primeiras.</span>
                 </div>
             }
 
-            <div class="board">
+            <p class="list-summary list-summary--board">
+                <span><strong>@workItems.Count(w => w.Status.Category == StatusCategory.InProgress)</strong> em andamento</span>
+                <span class="@(OverdueCount > 0 ? "text-danger" : "")"><strong>@OverdueCount</strong> atrasada@(OverdueCount == 1 ? "" : "s")</span>
+                <span><strong>@workItems.Count(w => w.Status.Category == StatusCategory.Done)</strong> concluída@(workItems.Count(w => w.Status.Category == StatusCategory.Done) == 1 ? "" : "s")</span>
+                <span class="list-summary-hint">Arraste os cards entre as colunas para mudar o status.</span>
+            </p>
+
+            <div class="board" role="region" aria-label="Quadro Kanban" tabindex="0">
                 @foreach (var status in statuses)
                 {
                     <BoardColumn Status="status"
@@ -84,66 +77,45 @@
                     <div class="board-add-column">
                         @if (showAddColumnForm)
                         {
-                            <div class="board-add-column-form">
-                                <label style="font-size:0.75rem;font-weight:600;color:var(--color-text-muted);">Nome da coluna (escreva o que quiser)</label>
-                                <input type="text" placeholder="Ex: Revisão, Bloqueado, Aguardando cliente..." @bind="newColumnName" @bind:event="oninput" />
-                                <label style="font-size:0.75rem;font-weight:600;color:var(--color-text-muted);">Cor da coluna</label>
-                                <div class="color-swatch-row">
-                                    @foreach (var color in ColumnColors)
-                                    {
-                                        <button type="button" class="color-swatch @(newColumnColor == color ? "is-selected" : "")"
-                                                style="background:@color;" @onclick="() => newColumnColor = color"
-                                                aria-label="Selecionar cor @color"></button>
-                                    }
+                            <form class="board-add-column-form" @onsubmit="HandleCreateColumn" @onsubmit:preventDefault="true">
+                                <div class="form-field">
+                                    <label for="new-column-name">Nome da coluna</label>
+                                    <input id="new-column-name" type="text" placeholder="Ex.: Revisão, Bloqueado…" @bind="newColumnName" @bind:event="oninput" autofocus />
                                 </div>
+                                <fieldset class="form-fieldset">
+                                    <legend class="field-label">Cor</legend>
+                                    <div class="color-swatch-row">
+                                        @foreach (var (color, colorName) in ColumnColors)
+                                        {
+                                            <button type="button" class="color-swatch @(newColumnColor == color ? "is-selected" : "")"
+                                                    style="background:@color;" @onclick="() => newColumnColor = color"
+                                                    aria-pressed="@(newColumnColor == color ? "true" : "false")"
+                                                    aria-label="@colorName"></button>
+                                        }
+                                    </div>
+                                </fieldset>
                                 @if (!string.IsNullOrEmpty(columnErrorMessage))
                                 {
-                                    <div class="alert alert-danger" style="padding:0.4rem 0.6rem;font-size:0.8rem;">@columnErrorMessage</div>
+                                    <p class="validation-message" role="alert">@columnErrorMessage</p>
                                 }
-                                <div class="form-actions" style="margin-top:0;">
-                                    <button type="button" class="btn" style="flex:1;" @onclick="HandleCreateColumn">Adicionar</button>
-                                    <button type="button" class="btn btn-secondary" @onclick="ToggleAddColumnForm">Cancelar</button>
+                                <div class="button-row">
+                                    <button type="submit" class="btn btn-sm">Adicionar coluna</button>
+                                    <button type="button" class="btn btn-ghost btn-sm" @onclick="ToggleAddColumnForm">Cancelar</button>
                                 </div>
-                            </div>
+                            </form>
                         }
                         else
                         {
-                            <button type="button" class="board-add-column-btn" @onclick="ToggleAddColumnForm">+ Nova coluna</button>
+                            <button type="button" class="board-add-column-btn" @onclick="ToggleAddColumnForm">
+                                <Icon Name="plus" /> Nova coluna
+                            </button>
                         }
                     </div>
                 }
             </div>
-
-            <div class="stat-grid" style="margin-top:1.25rem;">
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Concluídas</span>
-                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category == StatusCategory.Done)</span>
-                    </div>
-                    <span class="stat-card-icon is-success">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Atrasadas</span>
-                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is not null && w.DueDateUtc.Value.Date < DateTime.UtcNow.Date)</span>
-                    </div>
-                    <span class="stat-card-icon is-danger">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Em andamento</span>
-                        <span class="stat-card-value">@workItems.Count(w => w.Status.Category == StatusCategory.InProgress)</span>
-                    </div>
-                    <span class="stat-card-icon is-warning">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
-                    </span>
-                </div>
-            </div>
         }
+
+        <ConfirmDialog @ref="confirm" />
 
         <TaskDetailPanel @ref="panel"
                           TaskListId="ListId"
@@ -185,9 +157,23 @@
     private Guid? loadedListId;
     private bool showAddColumnForm;
     private string newColumnName = "";
-    private string newColumnColor = ColumnColors[0];
+    private string newColumnColor = ColumnColors[0].Hex;
     private string? columnErrorMessage;
-    private static readonly string[] ColumnColors = ["#2563EB", "#16A34A", "#7C3AED", "#DC2626", "#EA580C", "#0D9488"];
+    // Mesma família de cores de status do paletadecor.md (Kanban), com nome para o leitor de tela.
+    private static readonly (string Hex, string Name)[] ColumnColors =
+    [
+        ("#5B5CEB", "Índigo"),
+        ("#3B82F6", "Azul"),
+        ("#A855F7", "Roxo"),
+        ("#F59E0B", "Âmbar"),
+        ("#22C55E", "Verde"),
+        ("#EF4444", "Vermelho"),
+        ("#94A3B8", "Cinza")
+    ];
+
+    private ConfirmDialog? confirm;
+
+    private int OverdueCount => workItems?.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is DateTime d && d.Date < DateTime.UtcNow.Date) ?? 0;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -276,7 +262,7 @@
     {
         showAddColumnForm = !showAddColumnForm;
         newColumnName = "";
-        newColumnColor = ColumnColors[0];
+        newColumnColor = ColumnColors[0].Hex;
         columnErrorMessage = null;
     }
 
@@ -331,6 +317,21 @@
         errorMessage = null;
         await using var db = await DbFactory.CreateDbContextAsync();
 
+        // Checa antes de apagar qualquer coisa: antes, as transições do fluxo eram excluídas e só
+        // depois a exclusão da coluna falhava (por ainda ter tarefas), deixando o fluxo mutilado.
+        if (await db.WorkItems.AnyAsync(w => w.StatusId == statusId))
+        {
+            errorMessage = "Mova as tarefas dessa coluna para outra antes de excluí-la.";
+            return;
+        }
+
+        var statusName = statuses?.FirstOrDefault(st => st.Id == statusId)?.Name;
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("coluna", statusName,
+                "As regras do fluxo de status que usam essa coluna também serão removidas.")))
+        {
+            return;
+        }
+
         // StatusTransition's FKs to TaskStatusDefinition are Restrict — clear any transitions
         // referencing this column first, or the delete below fails.
         await db.StatusTransitions
@@ -344,10 +345,11 @@
         catch (System.Data.Common.DbException)
         {
             // Restrict FK violation — a task still uses this column.
-            errorMessage = "Mova as tarefas dessa coluna pra outra antes de excluí-la.";
+            errorMessage = "Mova as tarefas dessa coluna para outra antes de excluí-la.";
             return;
         }
 
+        Toasts.Show("Coluna excluída");
         await ReloadStatusesAsync();
         await ReloadWorkItemsAsync();
     }

@@ -13,207 +13,179 @@
 @inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 
-<PageTitle>Colunas e Workflow</PageTitle>
+<PageTitle>Status e fluxo · Nexus</PageTitle>
 
 <div class="page-container">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Lista não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Configurações indisponíveis"
+                    Description="A lista não existe mais, ou você não é administrador do workspace dela.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (taskList is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando configurações…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
-            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
-            <a href="@($"/lists/{ListId}/list")">@taskList.Name</a> /
-            Colunas e Workflow
-        </div>
+        <ListSettingsHeader ListId="ListId" ListName="@taskList.Name"
+                            WorkspaceId="workspaceId" WorkspaceName="@workspaceName"
+                            SpaceId="taskList.SpaceId" SpaceName="@spaceName" Active="workflow" />
 
-        <div class="page-header">
-            <h1>Colunas e Workflow</h1>
-        </div>
-
-        <h2>Colunas</h2>
-
-        <EditForm Model="createStatusModel" OnValidSubmit="HandleCreateStatus" class="card" style="margin: 1rem 0 1.5rem;">
-            <div class="form-row">
-                <div class="form-field">
-                    <label for="status-name">Nome da coluna (escreva o que quiser)</label>
-                    <InputText id="status-name" @bind-Value="createStatusModel.Name" placeholder="Ex: Em Revisão, Bloqueado, Aguardando cliente..." />
+        <section class="section" aria-labelledby="statuses-title">
+            <div class="section-header">
+                <div>
+                    <h2 id="statuses-title" class="section-title">Status</h2>
+                    <p class="form-section-description">Cada status vira uma coluna do Kanban, na ordem abaixo. O status padrão é o de toda tarefa nova.</p>
                 </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(deleteStatusErrorMessage))
+            {
+                <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@deleteStatusErrorMessage</span></div>
+            }
+
+            @if (statuses is null || statuses.Count == 0)
+            {
+                <div class="card"><EmptyState Compact="true" Title="Nenhum status ainda" /></div>
+            }
+            else
+            {
+                <ol class="card card--flush row-list settings-rows status-rows">
+                    @for (var i = 0; i < statuses.Count; i++)
+                    {
+                        var s = statuses[i];
+                        var index = i;
+                        <li class="settings-row">
+                            <span class="status-order" style="--column-color: @(s.Color ?? "var(--status-todo)")" aria-hidden="true">@(index + 1)</span>
+                            <div class="settings-row-main">
+                                <span class="settings-row-title">
+                                    @s.Name
+                                    @if (s.IsDefault)
+                                    {
+                                        <span class="badge badge--accent">Padrão</span>
+                                    }
+                                </span>
+                            </div>
+                            <label class="status-done-toggle">
+                                <span class="switch">
+                                    <input type="checkbox" class="switch-input" checked="@(s.Category == StatusCategory.Done)"
+                                           @onchange="@(e => HandleToggleDone(s, (bool)e.Value!))" />
+                                    <span class="switch-slider"></span>
+                                </span>
+                                <span>Conta como concluída</span>
+                            </label>
+                            <div class="table-row-actions">
+                                <button type="button" class="icon-btn icon-btn--sm" disabled="@(index == 0)" @onclick="() => HandleMoveStatus(s, -1)">
+                                    <Icon Name="arrow-up" Label="@($"Mover {s.Name} para cima")" />
+                                </button>
+                                <button type="button" class="icon-btn icon-btn--sm" disabled="@(index == statuses.Count - 1)" @onclick="() => HandleMoveStatus(s, 1)">
+                                    <Icon Name="arrow-down" Label="@($"Mover {s.Name} para baixo")" />
+                                </button>
+                                @if (!s.IsDefault)
+                                {
+                                    <button type="button" class="btn-set-default" @onclick="() => HandleMakeDefault(s)">Tornar padrão</button>
+                                }
+                                <button type="button" class="icon-btn icon-btn--sm is-danger" @onclick="() => HandleDeleteStatus(s)">
+                                    <Icon Name="trash" Label="@($"Excluir status {s.Name}")" />
+                                </button>
+                            </div>
+                        </li>
+                    }
+                </ol>
+            }
+
+            <EditForm Model="createStatusModel" OnValidSubmit="HandleCreateStatus" class="card inline-add-form">
                 <div class="form-field">
-                    <label>Cor da coluna</label>
+                    <label for="status-name">Novo status</label>
+                    <InputText id="status-name" @bind-Value="createStatusModel.Name" placeholder="Ex.: Em revisão, Bloqueado, Aguardando cliente" />
+                </div>
+                <fieldset class="form-fieldset">
+                    <legend class="field-label">Cor</legend>
                     <div class="color-swatch-row">
-                        @foreach (var color in ColumnColors)
+                        @foreach (var (color, colorName) in ColumnColors)
                         {
                             <button type="button" class="color-swatch @(createStatusModel.Color == color ? "is-selected" : "")"
                                     style="background:@color;" @onclick="() => createStatusModel.Color = color"
-                                    aria-label="Selecionar cor @color"></button>
+                                    aria-pressed="@(createStatusModel.Color == color ? "true" : "false")" aria-label="@colorName"></button>
                         }
                     </div>
+                </fieldset>
+                <button type="submit" class="btn @(isSavingStatus ? "is-loading" : "")" disabled="@isSavingStatus"><Icon Name="plus" /> Adicionar status</button>
+                @if (!string.IsNullOrEmpty(statusErrorMessage))
+                {
+                    <p class="validation-message" role="alert">@statusErrorMessage</p>
+                }
+                <p class="field-hint inline-add-hint">O status novo entra como "a fazer". Ligue "Conta como concluída" se ele representar trabalho terminado — isso vale para o burndown e o progresso.</p>
+            </EditForm>
+        </section>
+
+        <section class="section" aria-labelledby="transitions-title">
+            <div class="section-header">
+                <div>
+                    <h2 id="transitions-title" class="section-title">Regras de transição</h2>
+                    <p class="form-section-description">Sem regras, uma tarefa pode ir de qualquer status para qualquer outro. Com regras, só os caminhos listados são permitidos.</p>
                 </div>
             </div>
-            <p class="topnav-user">A coluna nasce como "a fazer" — se quiser que ela conte como concluída nos relatórios (ex: burndown), marque isso depois na tabela abaixo.</p>
-            @if (!string.IsNullOrEmpty(statusErrorMessage))
+
+            @if (transitions is null)
             {
-                <div class="alert alert-danger">@statusErrorMessage</div>
+                <Skeleton Count="3" />
             }
-            <div class="form-actions">
-                <button type="submit" class="btn" disabled="@isSavingStatus">Adicionar coluna</button>
-            </div>
-        </EditForm>
+            else if (transitions.Count == 0)
+            {
+                <div class="card">
+                    <EmptyState Compact="true" Title="Nenhuma regra — tudo liberado" Description="Adicione uma regra abaixo para restringir os caminhos." />
+                </div>
+            }
+            else
+            {
+                <ul class="card card--flush row-list settings-rows">
+                    @foreach (var t in transitions)
+                    {
+                        <li class="settings-row">
+                            <div class="settings-row-main transition-row">
+                                <StatusBadge Name="@t.FromStatus.Name" Category="t.FromStatus.Category" Color="@t.FromStatus.Color" />
+                                <Icon Name="arrow-right" Class="icon--sm" />
+                                <StatusBadge Name="@t.ToStatus.Name" Category="t.ToStatus.Category" Color="@t.ToStatus.Color" />
+                            </div>
+                            <button type="button" class="icon-btn icon-btn--sm is-danger" @onclick="() => HandleDelete(t.Id)">
+                                <Icon Name="trash" Label="@($"Excluir regra de {t.FromStatus.Name} para {t.ToStatus.Name}")" />
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
 
-        @if (statuses is null || statuses.Count == 0)
-        {
-            <div class="empty-state">
-                <p>Nenhuma coluna ainda.</p>
-            </div>
-        }
-        else
-        {
-            <div class="table-scroll">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Nome</th>
-                            <th>Conta como concluída?</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var s in statuses)
-                        {
-                            <tr>
-                                <td>
-                                    <span class="dashboard-workspace-avatar" style="width:1.6rem;height:1.6rem;font-size:0.75rem;margin-right:0.5rem;background:@(s.Color ?? "var(--color-primary)");">@(statuses.IndexOf(s) + 1)</span>
-                                    @s.Name @(s.IsDefault ? "(padrão)" : "")
-                                </td>
-                                <td>
-                                    <label class="switch" title="Conta como concluída nos relatórios">
-                                        <input type="checkbox" class="switch-input" checked="@(s.Category == StatusCategory.Done)" @onchange="@(e => HandleToggleDone(s, (bool)e.Value!))" />
-                                        <span class="switch-slider"></span>
-                                    </label>
-                                </td>
-                                <td>
-                                    <div class="table-row-actions">
-                                        <button type="button" class="btn-link" disabled="@(s == statuses.First())" @onclick="() => HandleMoveStatus(s, -1)">‹</button>
-                                        <button type="button" class="btn-link" disabled="@(s == statuses.Last())" @onclick="() => HandleMoveStatus(s, 1)">›</button>
-                                        @if (!s.IsDefault)
-                                        {
-                                            <button type="button" class="btn-set-default" @onclick="() => HandleMakeDefault(s)">
-                                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
-                                                Tornar padrão
-                                            </button>
-                                        }
-                                        <button type="button" class="btn-link is-danger btn-link-icon" @onclick="() => HandleDeleteStatus(s)">
-                                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
-                                            Excluir
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-        @if (!string.IsNullOrEmpty(deleteStatusErrorMessage))
-        {
-            <div class="alert alert-danger">@deleteStatusErrorMessage</div>
-        }
-
-        <h2 style="margin-top: 2rem;">Transições</h2>
-        <p class="topnav-user">Se nenhuma transição for definida, qualquer mudança de status é permitida.</p>
-
-        <EditForm Model="createModel" OnValidSubmit="HandleCreate" class="card" style="margin: 1rem 0 1.5rem;">
-            <div class="form-row">
+            <EditForm Model="createModel" OnValidSubmit="HandleCreate" class="card inline-add-form">
                 <div class="form-field">
                     <label for="transition-from">De</label>
                     <InputSelect id="transition-from" @bind-Value="createModel.FromStatusId">
-                        @foreach (var s in statuses ?? [])
+                        @foreach (var st in statuses ?? [])
                         {
-                            <option value="@s.Id">@s.Name</option>
+                            <option value="@st.Id">@st.Name</option>
                         }
                     </InputSelect>
                 </div>
                 <div class="form-field">
                     <label for="transition-to">Para</label>
                     <InputSelect id="transition-to" @bind-Value="createModel.ToStatusId">
-                        @foreach (var s in statuses ?? [])
+                        @foreach (var st in statuses ?? [])
                         {
-                            <option value="@s.Id">@s.Name</option>
+                            <option value="@st.Id">@st.Name</option>
                         }
                     </InputSelect>
                 </div>
-            </div>
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger">@errorMessage</div>
-            }
-            <div class="form-actions">
-                <button type="submit" class="btn" disabled="@isSaving">Adicionar transição</button>
-            </div>
-        </EditForm>
+                <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving"><Icon Name="plus" /> Adicionar regra</button>
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <p class="validation-message" role="alert">@errorMessage</p>
+                }
+            </EditForm>
+        </section>
 
-        @if (transitions is null)
-        {
-            <p>Carregando transições...</p>
-        }
-        else if (transitions.Count == 0)
-        {
-            <div class="empty-state">
-                <p>Nenhuma transição definida — todas as mudanças de status estão liberadas.</p>
-            </div>
-        }
-        else
-        {
-            <div class="table-scroll">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>De</th>
-                            <th>Para</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var t in transitions)
-                        {
-                            <tr>
-                                <td>@t.FromStatus.Name</td>
-                                <td>@t.ToStatus.Name</td>
-                                <td>
-                                    <button type="button" class="btn-link is-danger btn-link-icon" @onclick="() => HandleDelete(t.Id)">
-                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
-                                        Excluir
-                                    </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-
-        <h2 style="margin-top: 2rem;">Automações de transição <span class="coming-soon-badge">Em breve</span></h2>
-        <div class="card coming-soon">
-            <div class="form-field" style="flex-direction:row;align-items:center;justify-content:space-between;">
-                <span>Atribuir automaticamente ao mover para "Em Andamento"</span>
-                <div class="toggle-switch"></div>
-            </div>
-        </div>
-
-        <div class="card" style="margin-top:1rem;">
-            <a class="btn-link" href="@($"/lists/{ListId}/fields")">Gerenciar campos customizados desta lista →</a>
-        </div>
+        <ConfirmDialog @ref="confirm" />
     }
 </div>
 
@@ -239,7 +211,19 @@
     private bool isSavingStatus;
     private string? statusErrorMessage;
     private string? deleteStatusErrorMessage;
-    private static readonly string[] ColumnColors = ["#2563EB", "#16A34A", "#7C3AED", "#DC2626", "#EA580C", "#0D9488"];
+    // Mesma família de cores de status do paletadecor.md (Kanban), com nome para o leitor de tela.
+    private static readonly (string Hex, string Name)[] ColumnColors =
+    [
+        ("#5B5CEB", "Índigo"),
+        ("#3B82F6", "Azul"),
+        ("#A855F7", "Roxo"),
+        ("#F59E0B", "Âmbar"),
+        ("#22C55E", "Verde"),
+        ("#EF4444", "Vermelho"),
+        ("#94A3B8", "Cinza")
+    ];
+
+    private ConfirmDialog? confirm;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -366,6 +350,15 @@
 
     private async Task HandleDelete(Guid transitionId)
     {
+        var rule = transitions?.FirstOrDefault(t => t.Id == transitionId);
+        if (confirm is null || !await confirm.AskAsync(new ConfirmRequest(
+                Title: rule is null ? "Excluir regra?" : $"Excluir a regra \"{rule.FromStatus.Name} → {rule.ToStatus.Name}\"?",
+                Message: "Se esta for a última regra, qualquer mudança de status volta a ser permitida.",
+                ConfirmLabel: "Excluir regra")))
+        {
+            return;
+        }
+
         if (!await StillAdminAsync())
         {
             return;
@@ -488,13 +481,28 @@
 
     private async Task HandleDeleteStatus(TaskStatusDefinition status)
     {
+        deleteStatusErrorMessage = null;
+
         if (!await StillAdminAsync())
         {
             return;
         }
 
-        deleteStatusErrorMessage = null;
         await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Checa antes de apagar qualquer coisa: antes, as regras do fluxo eram excluídas e só
+        // depois a exclusão do status falhava (por ainda ter tarefas), deixando o fluxo mutilado.
+        if (await db.WorkItems.AnyAsync(w => w.StatusId == status.Id))
+        {
+            deleteStatusErrorMessage = $"Ainda há tarefas em \"{status.Name}\". Mova-as para outro status antes de excluí-lo.";
+            return;
+        }
+
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("status", status.Name,
+                "A coluna sai do Kanban e as regras de transição que usam esse status também são removidas.")))
+        {
+            return;
+        }
 
         // StatusTransition.FromStatusId/ToStatusId are both Restrict (see
         // StatusTransitionConfiguration) — clear any transitions referencing this status
@@ -511,7 +519,7 @@
         {
             // ExecuteDeleteAsync bypasses SaveChanges, so a Restrict FK violation (a WorkItem
             // still using this status) surfaces as the provider's own exception, not DbUpdateException.
-            deleteStatusErrorMessage = "Mova as tasks desse status pra outro antes de excluir.";
+            deleteStatusErrorMessage = "Mova as tarefas desse status para outro antes de excluí-lo.";
             return;
         }
 
@@ -528,6 +536,6 @@
     private class CreateStatusModel
     {
         public string Name { get; set; } = "";
-        public string Color { get; set; } = ColumnColors[0];
+        public string Color { get; set; } = ColumnColors[0].Hex;
     }
 }

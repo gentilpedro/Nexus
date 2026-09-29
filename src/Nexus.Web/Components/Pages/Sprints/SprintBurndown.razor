@@ -11,67 +11,77 @@
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
 
-<PageTitle>@(sprint?.Name ?? "Burndown")</PageTitle>
+<PageTitle>Burndown · @(sprint?.Name ?? "Sprint") · Nexus</PageTitle>
 
 <div class="page-container">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Sprint não encontrado ou você não tem acesso a ele.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="trending-down" Title="Sprint não encontrada"
+                    Description="Ela pode ter sido excluída, ou você não tem mais acesso ao workspace dela.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (sprint is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Variant="card" Count="2" Label="Carregando sprint…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="@($"/lists/{sprint.TaskListId}/backlog")">Voltar pro backlog</a>
-        </div>
-        <div class="page-header">
-            <h1>@sprint.Name</h1>
-        </div>
+        var total = sprint.WorkItems.Count;
+        var done = sprint.WorkItems.Count(w => w.Status.Category == StatusCategory.Done);
+        var pct = total == 0 ? 0 : done * 100 / total;
+        var daysLeft = (sprint.EndDateUtc.Date - DateTime.UtcNow.Date).Days;
+
+        <PageHeader Title="@sprint.Name">
+            <Breadcrumbs>
+                <a href="@($"/workspaces/{sprint.TaskList.Space.WorkspaceId}")">@sprint.TaskList.Space.Workspace.Name</a>
+                <span class="breadcrumb-sep" aria-hidden="true">/</span>
+                <a href="@($"/lists/{sprint.TaskListId}/backlog")">@sprint.TaskList.Name — Backlog</a>
+            </Breadcrumbs>
+            <Details>
+                <span class="badge @(sprint.Status == SprintStatus.Active ? "badge--accent" : sprint.Status == SprintStatus.Completed ? "badge--success" : "")">@statusLabel</span>
+                <span><Icon Name="calendar" Class="icon--sm" /> @sprint.StartDateUtc.ToString("dd/MM/yyyy") a @sprint.EndDateUtc.ToString("dd/MM/yyyy")</span>
+            </Details>
+            <Actions>
+                <a class="btn btn-secondary" href="@($"/lists/{sprint.TaskListId}/backlog")"><Icon Name="arrow-left" /> Voltar ao backlog</a>
+            </Actions>
+        </PageHeader>
+
         @if (!string.IsNullOrWhiteSpace(sprint.Goal))
         {
-            <p class="topnav-user">@sprint.Goal</p>
+            <p class="sprint-goal-callout"><Icon Name="target" /> <span><strong>Meta:</strong> @sprint.Goal</span></p>
         }
-        <p class="topnav-user">
-            @sprint.StartDateUtc.ToString("dd/MM/yyyy") a @sprint.EndDateUtc.ToString("dd/MM/yyyy") · @statusLabel
-        </p>
 
         <div class="stat-grid">
             <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Tarefas na sprint</span>
-                    <span class="stat-card-value">@sprint.WorkItems.Count</span>
-                </div>
-                <span class="stat-card-icon">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-                </span>
+                <span class="stat-card-label">Tarefas na sprint</span>
+                <span class="stat-card-value">@total</span>
             </div>
             <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Entregues</span>
-                    <span class="stat-card-value">@sprint.WorkItems.Count(w => w.Status.Category == StatusCategory.Done)</span>
-                </div>
-                <span class="stat-card-icon is-success">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                </span>
+                <span class="stat-card-label"><span class="stat-dot" style="--dot: var(--color-success)"></span>Entregues</span>
+                <span class="stat-card-value">@done <small class="stat-card-of">(@pct%)</small></span>
             </div>
             <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Status</span>
-                    <span class="stat-card-value" style="font-size:1.1rem;">@statusLabel</span>
-                </div>
-                <span class="stat-card-icon">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                <span class="stat-card-label">Restantes</span>
+                <span class="stat-card-value">@(total - done)</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-card-label">@(sprint.Status == SprintStatus.Completed ? "Situação" : daysLeft >= 0 ? "Dias restantes" : "Prazo")</span>
+                <span class="stat-card-value @(daysLeft < 0 && sprint.Status == SprintStatus.Active ? "text-danger" : "")">
+                    @(sprint.Status == SprintStatus.Completed ? "Encerrada" : daysLeft >= 0 ? daysLeft.ToString() : $"{-daysLeft}d de atraso")
                 </span>
             </div>
         </div>
 
-        <BurndownChart Sprint="sprint" Snapshots="snapshots ?? []" />
+        <section class="card" aria-labelledby="burndown-title">
+            <div class="card-header">
+                <div>
+                    <h2 id="burndown-title" class="card-title">Burndown</h2>
+                    <p class="card-subtitle">Quantas tarefas ainda faltavam em cada dia, comparado a um ritmo constante até o fim da sprint.</p>
+                </div>
+            </div>
+            <BurndownChart Sprint="sprint" Snapshots="snapshots ?? []" />
+        </section>
     }
 </div>
 
