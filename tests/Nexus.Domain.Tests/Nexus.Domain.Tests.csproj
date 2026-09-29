@@ -22,6 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Vetores gerados do quill-delta oficial por tests/collab-js/gen-vectors.mjs. -->
+    <None Include="Collab\delta-vectors.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Nexus.Domain\Nexus.Domain.csproj" />
   </ItemGroup>
 
