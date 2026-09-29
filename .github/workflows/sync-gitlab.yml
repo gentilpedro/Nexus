@@ -15,9 +15,15 @@ name: Sincronizar com o GitLab
 on:
   # Toda branch, não só a main: o TCC precisa mostrar o trabalho como ele aconteceu (branches de
   # feature, PRs, merges), não só o resultado final na main.
+  #
+  # Exceto sync/**: essa branch é empurrada pelo job sync-github do GitLab justamente quando a
+  # main de lá está À FRENTE da daqui (o PR de volta ainda não foi mergeado). Espelhar nesse
+  # momento sempre falharia no push não-fast-forward da main — falso alarme a cada MR mergeado
+  # no GitLab. O script abaixo já não empurra refs/heads/sync/*; o gatilho segue a mesma regra.
   push:
     branches:
       - '**'
+      - '!sync/**'
     tags:
       - 'v*'
 
@@ -42,6 +48,11 @@ permissions:
 
 jobs:
   espelhar:
+    # O workflow_run só interessa quando o Deploy rodou por push na main — é aí que o job
+    # `release` cria a tag. O Deploy também roda em pull_request (quality gate), inclusive no PR
+    # aberto pelo sync-github, quando a main daqui ainda está atrás da do GitLab: espelhar nessa
+    # hora falharia pelo mesmo motivo do sync/** acima.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
 
     env:
