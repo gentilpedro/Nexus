@@ -63,6 +63,34 @@ Se o Redis estiver indisponível, cai para o limitador em memória. **Não** lib
 por instância é mais fraco que limitar globalmente, mas é a mesma garantia que o app tinha antes,
 e uma queda do Redis é um momento plausível para o tráfego estar anormal.
 
+### Docs: edição colaborativa
+
+Os Docs deixaram de ser last-write-wins (#32). Cada documento é um Delta do Quill com uma revisão,
+e o servidor só aceita uma alteração escrita sobre a revisão atual (`DocSequencer`); quem estava
+atrás recebe o que perdeu, transforma as próprias pendências e reenvia. O desenho completo, com
+a prova de convergência, está nos comentários de `src/Nexus.Domain/Collab` e em
+`doc-collab-core.js`.
+
+Com várias instâncias, três peças garantem que isso continue certo:
+
+- **Ordem total no banco, não na memória.** `DocPage.Revision` é token de concorrência: duas
+  instâncias que aceitem uma operação sobre a mesma revisão não conseguem gravar as duas — a
+  segunda recebe `DbUpdateConcurrencyException`, relê e passa a se ver atrasada. O índice único
+  em `(DocPageId, Revision)` é a segunda barreira. `DocCollabPostgresTests` prova isso com oito
+  editores em conexões separadas contra um PostgreSQL real.
+- **Aviso pelo Redis, conteúdo pelo banco.** Uma operação aceita publica
+  `instância|documento|revisão|cliente|tipo` em `nexus:docs:changed`. Quem recebe não aplica
+  nada do aviso: o editor pede o que falta pelo catch-up, o mesmo caminho que já trata ordem,
+  buraco e reconexão. Perder um aviso (Redis fora do ar) só atrasa o outro lado até o próximo
+  envio ou catch-up.
+- **Presença com prazo.** Quem está editando fica num hash do Redis por documento
+  (`nexus:docs:presence:{id}`), com o prazo dentro de cada campo e renovação a cada 30 s. A
+  presença sai quando a conexão do circuito cai (`DocPresenceCircuitHandler`), não quando o
+  Blazor finalmente descarta o circuito minutos depois; e expira sozinha se a instância morrer
+  sem avisar.
+
+Sem `Redis:ConnectionString`, os avisos e a presença ficam na memória do processo, como no chat.
+
 ## Como ligar
 
 Configuração única, `Redis:ConnectionString` (ou `Redis__ConnectionString` como variável de
@@ -108,7 +136,9 @@ código:
 
 ## O que este backplane não resolve
 
-Edição colaborativa de Docs continua last-write-wins: `DocPage` não tem token de concorrência —
-ao contrário de `WorkItem`, que tem `RowVersion`. Dois usuários editando o mesmo documento, o
-último salva por cima do outro em silêncio. Resolver isso exige reconciliação distribuída
-(CRDT ou OT) e é assunto de outra frente de trabalho, que se apoia neste transporte.
+- **Título e planilhas continuam "vence o último".** O título fica fora do Delta de propósito
+  (mesclar dois títulos digitados ao mesmo tempo produziria um terceiro que ninguém escreveu).
+  As planilhas não entraram na #32.
+- **Cursores dos outros editores.** A presença mostra quem está editando, não onde. Mostrar o
+  cursor exigiria vendorizar o `quill-cursors` e transformar a posição de cada pessoa a cada
+  operação.

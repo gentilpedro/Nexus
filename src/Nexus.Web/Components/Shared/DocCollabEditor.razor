@@ -4,7 +4,9 @@
    de mudança de outras pessoas descem para o navegador. *@
 @implements IAsyncDisposable
 @using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
 @using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
 @using Nexus.Web.Services.Backplane
 @using Nexus.Web.Services.Collab
@@ -12,6 +14,9 @@
 @inject DocChangeNotifier Notifier
 @inject WorkspaceAccessGuard AccessGuard
 @inject ICircuitActionRateLimiter RateLimiter
+@inject IDocPresenceStore Presence
+@inject DocPresenceCircuitHandler PresenceCircuit
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject IJSRuntime JS
 
 @* O Quill transforma o elemento-alvo no .ql-container e põe a barra de ferramentas como irmã
@@ -45,6 +50,12 @@
     private bool hasAccess;
     private DateTime accessCheckedUntilUtc;
 
+    // Presença: esta aba é uma sessão de edição, anunciada ao entrar, renovada periodicamente e
+    // removida ao sair. Se o circuito morrer sem sair, ela expira sozinha (IDocPresenceStore).
+    private readonly Guid presenceSessionId = Guid.NewGuid();
+    private DocEditor? presence;
+    private PeriodicTimer? heartbeat;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
@@ -60,6 +71,53 @@
         module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/doc-collab-interop.js");
         Notifier.Changed += OnDocChanged;
         await module.InvokeVoidAsync("start", elementId, selfRef, new { docId = DocId, snapshot });
+
+        await JoinPresenceAsync();
+    }
+
+    private async Task JoinPresenceAsync()
+    {
+        if (userId is null)
+        {
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var user = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.DisplayName, u.Email })
+                .FirstOrDefaultAsync();
+            var name = string.IsNullOrWhiteSpace(user?.DisplayName) ? user?.Email ?? "Alguém" : user.DisplayName;
+            presence = new DocEditor(userId, name);
+        }
+
+        PresenceCircuit.Register(presenceSessionId, DocId, presence);
+        await Presence.JoinAsync(DocId, presenceSessionId, presence);
+        await Notifier.PublishAsync(new DocChange(DocId, 0, Guid.Empty, DocChangeKind.Presence));
+
+        heartbeat = new PeriodicTimer(IDocPresenceStore.Heartbeat);
+        _ = RenewPresenceAsync(heartbeat, presence);
+    }
+
+    private async Task RenewPresenceAsync(PeriodicTimer timer, DocEditor editor)
+    {
+        try
+        {
+            while (await timer.WaitForNextTickAsync())
+            {
+                // Com a conexão caída, a presença já saiu (DocPresenceCircuitHandler); renovar
+                // aqui a traria de volta para alguém que fechou a aba.
+                if (PresenceCircuit.IsConnected)
+                {
+                    await Presence.JoinAsync(DocId, presenceSessionId, editor);
+                }
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Timer descartado ao sair do documento.
+        }
     }
 
     [JSInvokable]
@@ -167,6 +225,13 @@
     public async ValueTask DisposeAsync()
     {
         Notifier.Changed -= OnDocChanged;
+        heartbeat?.Dispose();
+        if (presence is not null)
+        {
+            PresenceCircuit.Unregister(presenceSessionId);
+            await Presence.LeaveAsync(DocId, presenceSessionId);
+            await Notifier.PublishAsync(new DocChange(DocId, 0, Guid.Empty, DocChangeKind.Presence));
+        }
         try
         {
             if (module is not null)
