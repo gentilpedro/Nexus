@@ -1,0 +1,312 @@
+@* Página pública (visitante não logado), renderizada por Home.razor.
+   A prova é o próprio produto: a janela do hero mostra as visões reais do Nexus com dados de
+   exemplo (rotulados como tal). Nada de depoimentos, clientes ou números inventados. *@
+
+<div class="landing">
+    <section class="landing-hero" aria-labelledby="landing-title">
+        <div class="landing-hero-copy">
+            <h1 id="landing-title" class="landing-title">Tarefas, documentos e a conversa do time. Num lugar só, em português.</h1>
+            <p class="landing-lead">
+                O Nexus organiza o trabalho de equipes pequenas e médias: quadro Kanban, sprints, calendário e Gantt,
+                documentos e planilhas, e um chat ligado às tarefas. Seu time usa no primeiro dia, sem treinamento.
+            </p>
+            <div class="landing-actions">
+                <a class="btn btn-lg" href="Account/Register" data-enhance-nav="false">Criar conta grátis</a>
+                <a class="btn btn-lg btn-secondary" href="Account/Login" data-enhance-nav="false">Já tenho conta</a>
+            </div>
+            <ul class="landing-facts">
+                <li><Icon Name="check" Class="icon--sm" /> Plano gratuito para até 5 pessoas</li>
+                <li><Icon Name="check" Class="icon--sm" /> Tudo em português, do botão ao e-mail</li>
+                <li><Icon Name="check" Class="icon--sm" /> Sem fidelidade: cancele quando quiser</li>
+            </ul>
+        </div>
+
+        <div class="product-window">
+            <div class="product-window-bar" aria-hidden="true">
+                <span class="product-window-path"><span class="path-parent">Agência Norte <i>/</i> Clientes <i>/</i> </span><b>Lançamento do site</b></span>
+                <span class="product-window-people"><em style="--h:300">JF</em><em style="--h:160">CL</em><em style="--h:25">AS</em><em style="--h:210">+2</em></span>
+            </div>
+            @* Abas sem depender do circuito Blazor: visitante deslogado não tem interatividade
+               (a política global de login também cobre /_blazor). Todos os painéis vêm do
+               servidor; theme-interop.js troca a aba visível ([data-nexus-tabs]). *@
+            <div class="product-tabs" role="tablist" aria-label="Visões do Nexus" data-nexus-tabs>
+                @foreach (var (key, label, icon) in Views)
+                {
+                    var selected = key == "board";
+                    <button type="button" role="tab" id="@($"tab-{key}")" aria-controls="@($"panel-{key}")"
+                            aria-selected="@(selected ? "true" : "false")" tabindex="@(selected ? "0" : "-1")"
+                            class="@(selected ? "active" : "")">
+                        <Icon Name="@icon" /> @label
+                    </button>
+                }
+            </div>
+            @foreach (var (key, _, _) in Views)
+            {
+                <div class="product-panel" id="@($"panel-{key}")" role="tabpanel" aria-labelledby="@($"tab-{key}")" hidden="@(key != "board")">
+                    @Panel(key)
+                </div>
+            }
+            <p class="product-caption">Tela ilustrativa, com dados de exemplo.</p>
+        </div>
+    </section>
+
+    <section class="landing-section landing-why" aria-labelledby="why-title">
+        <div class="landing-why-intro">
+            <h2 id="why-title" class="landing-h2">Feito para o jeito que times brasileiros trabalham</h2>
+            <p class="landing-muted">Menos ferramentas abertas, menos explicação, menos idas e vindas. O que importa para o time fica no mesmo lugar.</p>
+            <a class="btn btn-secondary" href="Account/Register" data-enhance-nav="false">Criar conta grátis</a>
+        </div>
+        <ol class="landing-why-list">
+            <li>
+                <Icon Name="chat" />
+                <div>
+                    <h3>Português de verdade</h3>
+                    <p>Da tela ao e-mail de convite, o Nexus fala como o seu time fala. Sem jargão em inglês, sem tradução torta.</p>
+                </div>
+            </li>
+            <li>
+                <Icon Name="board" />
+                <div>
+                    <h3>Tudo num lugar só</h3>
+                    <p>Tarefas, documentos, planilhas e chat no mesmo workspace. Uma mensagem cita o documento; o documento vive ao lado das tarefas.</p>
+                </div>
+            </li>
+            <li>
+                <Icon Name="zap" />
+                <div>
+                    <h3>Sem curva de aprendizado</h3>
+                    <p>Crie um workspace, uma lista e as primeiras tarefas em minutos. Quem entra por convite já cai no lugar certo.</p>
+                </div>
+            </li>
+            <li>
+                <Icon Name="team" />
+                <div>
+                    <h3>Suporte de quem constrói</h3>
+                    <p>Dúvida ou sugestão vai direto para quem desenvolve o produto, sem central de atendimento no meio.</p>
+                </div>
+            </li>
+        </ol>
+    </section>
+
+    <section class="landing-section" id="precos" aria-labelledby="pricing-title">
+        <div class="landing-section-head">
+            <h2 id="pricing-title" class="landing-h2">Planos</h2>
+            <p class="landing-muted">Comece grátis e mude de plano quando o time crescer.</p>
+        </div>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <h3>Starter</h3>
+                <p class="pricing-price">Grátis</p>
+                <p class="pricing-desc">Para times pequenos experimentarem o Nexus.</p>
+                <ul class="pricing-features">
+                    <li><Icon Name="check" Class="icon--sm" /> 1 workspace</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Até 5 membros</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Kanban, lista e calendário</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Chat e documentos</li>
+                </ul>
+                <a class="btn btn-secondary btn-block" href="Account/Register" data-enhance-nav="false">Criar conta grátis</a>
+            </div>
+            <div class="pricing-card is-featured">
+                <span class="pricing-flag">Mais completo</span>
+                <h3>Pro</h3>
+                <p class="pricing-price">R$ 29<span>/usuário/mês</span></p>
+                <p class="pricing-desc">Para equipes que usam todos os recursos do Nexus.</p>
+                <ul class="pricing-features">
+                    <li><Icon Name="check" Class="icon--sm" /> Workspaces e membros ilimitados</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Sprints, Gantt e burndown</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Planilhas colaborativas</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Suporte prioritário</li>
+                </ul>
+                <a class="btn btn-block" href="Account/Register" data-enhance-nav="false">Começar com o Pro</a>
+            </div>
+            <div class="pricing-card">
+                <h3>Business</h3>
+                <p class="pricing-price">Sob consulta</p>
+                <p class="pricing-desc">Para empresas com necessidades de contrato ou volume.</p>
+                <ul class="pricing-features">
+                    <li><Icon Name="check" Class="icon--sm" /> Tudo do plano Pro</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Onboarding dedicado</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Contrato e nota fiscal personalizados</li>
+                </ul>
+                <a class="btn btn-secondary btn-block" href="Account/Register" data-enhance-nav="false">Criar conta grátis</a>
+            </div>
+        </div>
+        <p class="pricing-note">Preços de referência, sujeitos a alteração. Confira os valores no momento da contratação.</p>
+    </section>
+
+    <section class="landing-close" aria-labelledby="close-title">
+        <div class="landing-close-inner">
+            <h2 id="close-title">Coloque o trabalho do time num lugar só ainda hoje.</h2>
+            <a class="btn btn-lg landing-close-btn" href="Account/Register" data-enhance-nav="false">Criar conta grátis</a>
+        </div>
+    </section>
+
+    <footer class="landing-footer">
+        <div class="landing-footer-inner">
+            <div class="landing-footer-brand">
+                <img src="@Assets["IconNexus.png"]" alt="" />
+                <span>Nexus</span>
+                <p>Gestão de projetos para equipes brasileiras.</p>
+            </div>
+            <nav class="landing-footer-links" aria-label="Rodapé">
+                <a href="Account/Register" data-enhance-nav="false">Criar conta</a>
+                <a href="Account/Login" data-enhance-nav="false">Entrar</a>
+                <a href="/privacidade" data-enhance-nav="false">Privacidade</a>
+                <a href="/termos-de-uso" data-enhance-nav="false">Termos de uso</a>
+            </nav>
+        </div>
+        <p class="landing-copyright">© @DateTime.Now.Year Nexus</p>
+    </footer>
+</div>
+
+@code {
+
+    private static readonly (string Key, string Label, string Icon)[] Views =
+    [
+        ("board", "Kanban", "board"),
+        ("list", "Lista", "list"),
+        ("calendar", "Calendário", "calendar"),
+        ("gantt", "Gantt", "gantt"),
+        ("docs", "Docs", "doc"),
+        ("chat", "Chat", "chat")
+    ];
+
+    private static readonly (string Col, string Color, (string Title, string Meta, string Who, int Prio)[] Cards)[] BoardDemo =
+    [
+        ("A fazer", "--status-todo", [("Revisar proposta comercial", "Amanhã", "MC", 2), ("Planejar sprint 12", "Sex", "JF", 1), ("Fotos da equipe para o site", "9 out", "AS", 1)]),
+        ("Em andamento", "--status-inprogress", [("Ajustar tela de login no celular", "Hoje", "CL", 3), ("Texto da página de preços", "Qui", "AS", 2), ("Formulário de contato", "Sex", "RS", 2)]),
+        ("Concluído", "--status-done", [("Configurar domínio", "Ontem", "RS", 1), ("Paleta e tipografia", "23 set", "JF", 1)])
+    ];
+
+    private static readonly Dictionary<string, (string Name, string Color)> DemoLabels = new()
+    {
+        ["Revisar proposta comercial"] = ("Cliente VIP", "#B91C1C"),
+        ["Ajustar tela de login no celular"] = ("Design", "#7C3AED"),
+        ["Texto da página de preços"] = ("Texto", "#1D4ED8"),
+        ["Paleta e tipografia"] = ("Design", "#7C3AED")
+    };
+
+    private static readonly (string Title, string Status, string Dot, string Who, string Due)[] ListDemo =
+    [
+        ("Ajustar tela de login no celular", "Em andamento", "--status-inprogress", "CL", "Hoje"),
+        ("Revisar proposta comercial", "A fazer", "--status-todo", "MC", "Amanhã"),
+        ("Texto da página de preços", "Em andamento", "--status-inprogress", "AS", "Qui"),
+        ("Planejar sprint 12", "A fazer", "--status-todo", "JF", "Sex"),
+        ("Configurar domínio", "Concluído", "--status-done", "RS", "Ontem")
+    ];
+
+    private static readonly Dictionary<int, (string Title, string Color)> CalendarDemo = new()
+    {
+        [16] = ("Configurar domínio", "--status-done"),
+        [17] = ("Tela de login", "--priority-high"),
+        [18] = ("Proposta comercial", "--priority-medium"),
+        [19] = ("Página de preços", "--priority-medium"),
+        [20] = ("Planejar sprint", "--priority-low"),
+        [23] = ("Publicar site", "--priority-highest")
+    };
+
+    private static readonly (string Title, int Start, int Width, string Color)[] GanttDemo =
+    [
+        ("Identidade visual", 0, 30, "--status-done"),
+        ("Páginas do site", 18, 42, "--status-inprogress"),
+        ("Tela de login", 34, 20, "--status-inprogress"),
+        ("Revisão do cliente", 55, 22, "--status-todo"),
+        ("Publicação", 78, 14, "--status-todo")
+    ];
+
+    private RenderFragment Panel(string view) => __builder =>
+    {
+        switch (view)
+        {
+            case "board":
+                <div class="demo-board">
+                    @foreach (var (col, color, cards) in BoardDemo)
+                    {
+                        <div class="demo-col">
+                            <span class="demo-col-head"><i style="background:var(@color)"></i>@col <b>@cards.Length</b></span>
+                            @foreach (var (title, meta, who, prio) in cards)
+                            {
+                                <div class="demo-card">
+                                    @if (DemoLabels.TryGetValue(title, out var tag))
+                                    {
+                                        <span class="demo-label" style="--c:@tag.Color">@tag.Name</span>
+                                    }
+                                    <span>@title</span>
+                                    <span class="demo-meta"><i class="demo-bars demo-bars--@prio"></i>@meta<em>@who</em></span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                break;
+            case "list":
+                <table class="demo-table">
+                    <thead><tr><th>Tarefa</th><th>Status</th><th>Responsável</th><th>Prazo</th></tr></thead>
+                    <tbody>
+                        @foreach (var (title, status, dot, who, due) in ListDemo)
+                        {
+                            <tr>
+                                <td>@title</td>
+                                <td><span class="demo-status"><i style="background:var(@dot)"></i>@status</span></td>
+                                <td><em class="demo-avatar">@who</em></td>
+                                <td>@due</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                break;
+            case "calendar":
+                <div class="demo-calendar">
+                    @foreach (var d in new[] { "Seg", "Ter", "Qua", "Qui", "Sex" })
+                    {
+                        <span class="demo-cal-head">@d</span>
+                    }
+                    @for (var day = 15; day <= 24; day++)
+                    {
+                        var today = day == 17;
+                        <div class="demo-cal-day @(today ? "is-today" : "")">
+                            <span class="demo-cal-num">@day</span>
+                            @if (CalendarDemo.TryGetValue(day, out var pill))
+                            {
+                                <span class="demo-pill" style="--c: var(@pill.Color)">@pill.Title</span>
+                            }
+                        </div>
+                    }
+                </div>
+                break;
+            case "gantt":
+                <div class="demo-gantt">
+                    @foreach (var (title, start, width, color) in GanttDemo)
+                    {
+                        <div class="demo-gantt-row">
+                            <span>@title</span>
+                            <div class="demo-gantt-track"><i style="left:@(start)%;width:@(width)%;background:var(@color)"></i></div>
+                        </div>
+                    }
+                    <div class="demo-gantt-today" aria-hidden="true"></div>
+                </div>
+                break;
+            case "docs":
+                <article class="demo-doc">
+                    <span class="demo-doc-path">Documentos / Processos</span>
+                    <h3>Checklist de publicação do site</h3>
+                    <p>Antes de cada publicação, alguém do time confere os itens abaixo e marca a tarefa como concluída no quadro.</p>
+                    <ul>
+                        <li>Textos revisados pelo cliente</li>
+                        <li>Formulário de contato testado no celular</li>
+                        <li>Backup feito na véspera</li>
+                    </ul>
+                    <span class="demo-doc-foot">Editado por Juliana há 2 h · visível para todo o workspace</span>
+                </article>
+                break;
+            default:
+                <div class="demo-chat">
+                    <div class="demo-msg"><em class="demo-avatar">JF</em><div><b>Juliana</b> <span>09:12</span><p>Bom dia! <mark>@@Carlos</mark>, a tela de login no celular ficou para hoje?</p></div></div>
+                    <div class="demo-msg"><em class="demo-avatar" style="--h:160">CL</em><div><b>Carlos</b> <span>09:15</span><p>Isso, já está em andamento. Subo até o fim da tarde.</p></div></div>
+                    <div class="demo-msg"><em class="demo-avatar" style="--h:25">AS</em><div><b>Ana</b> <span>09:20</span><p>Deixei o passo a passo do deploy no doc:</p><span class="demo-docref"><Icon Name="doc" Class="icon--sm" /> Checklist de publicação do site</span></div></div>
+                    <div class="demo-compose">Mensagem para Lançamento do site…</div>
+                </div>
+                break;
+        }
+    };
+}

@@ -1,4 +1,4 @@
-﻿@page "/Account/Manage/ResetAuthenticator"
+@page "/Account/Manage/ResetAuthenticator"
 
 @using Microsoft.AspNetCore.Identity
 @using Nexus.Domain.Entities
@@ -8,26 +8,22 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<ResetAuthenticator> Logger
 
-<PageTitle>Reset authenticator key</PageTitle>
+<PageTitle>Redefinir chave do autenticador · Nexus</PageTitle>
 
-<StatusMessage />
-<h3>Reset authenticator key</h3>
-<div class="alert alert-warning" role="alert">
-    <p>
-        <span class="glyphicon glyphicon-warning-sign"></span>
-        <strong>If you reset your authenticator key your authenticator app will not work until you reconfigure it.</strong>
-    </p>
-    <p>
-        This process disables 2FA until you verify your authenticator app.
-        If you do not complete your authenticator app configuration you may lose access to your account.
-    </p>
-</div>
-<div>
-    <form @formname="reset-authenticator" @onsubmit="OnSubmitAsync" method="post">
-        <AntiforgeryToken />
-        <button class="btn btn-danger" type="submit">Reset authenticator key</button>
-    </form>
-</div>
+<AccountSection Title="Redefinir chave do autenticador" Description="Gera uma chave nova; o aplicativo atual para de funcionar até ser configurado de novo.">
+    <StatusMessage />
+    <div class="alert alert-warning" role="status">
+        <Icon Name="alert" />
+        <span><strong>A verificação em duas etapas fica desativada até você configurar o aplicativo com a nova chave.</strong> Se não terminar essa configuração, pode perder o acesso à conta.</span>
+    </div>
+    <div class="button-row">
+        <a href="Account/Manage/TwoFactorAuthentication" class="btn btn-ghost">Cancelar</a>
+        <form @formname="reset-authenticator" @onsubmit="OnSubmitAsync" method="post">
+            <AntiforgeryToken />
+            <button class="btn btn-danger" type="submit">Redefinir chave</button>
+        </form>
+    </div>
+</AccountSection>
 
 @code {
     [CascadingParameter]
@@ -51,7 +47,7 @@
 
         RedirectManager.RedirectToWithStatus(
             "Account/Manage/EnableAuthenticator",
-            "Your authenticator app key has been reset, you will need to configure your authenticator app using the new key.",
+            "A chave do app autenticador foi redefinida. Configure o app de novo com a nova chave.",
             HttpContext);
     }
 }

@@ -1,0 +1,29 @@
+@* Cabeçalho padrão de cada seção de "Minha conta": título, uma frase explicando para que serve e
+   o conteúdo em cards. Mantém todas as seções com a mesma forma. *@
+
+<section class="account-section" aria-labelledby="account-section-title">
+    <header class="account-section-header">
+        <h2 id="account-section-title" class="account-section-title">
+            @Title
+            @if (Status is not null)
+            {
+                @Status
+            }
+        </h2>
+        @if (Description is not null)
+        {
+            <p class="account-section-description">@Description</p>
+        }
+    </header>
+    @ChildContent
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Selo ao lado do título (ex.: "Ativada" / "Desativada").</summary>
+    [Parameter] public RenderFragment? Status { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

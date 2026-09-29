@@ -1,4 +1,4 @@
-﻿@page "/Account/Manage/Disable2fa"
+@page "/Account/Manage/Disable2fa"
 
 @using Microsoft.AspNetCore.Identity
 @using Nexus.Domain.Entities
@@ -7,27 +7,26 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<Disable2fa> Logger
 
-<PageTitle>Disable two-factor authentication (2FA)</PageTitle>
+<PageTitle>Desativar verificação em duas etapas · Nexus</PageTitle>
 
-<StatusMessage />
-<h3>Disable two-factor authentication (2FA)</h3>
-
-<div class="alert alert-warning" role="alert">
-    <p>
-        <strong>This action only disables 2FA.</strong>
-    </p>
-    <p>
-        Disabling 2FA does not change the keys used in authenticator apps. If you wish to change the key
-        used in an authenticator app you should <a href="Account/Manage/ResetAuthenticator">reset your authenticator keys.</a>
-    </p>
-</div>
-
-<div>
-    <form @formname="disable-2fa" @onsubmit="OnSubmitAsync" method="post">
-        <AntiforgeryToken />
-        <button class="btn btn-danger" type="submit">Disable 2FA</button>
-    </form>
-</div>
+<AccountSection Title="Desativar verificação em duas etapas" Description="Sua conta volta a pedir só a senha para entrar.">
+    <StatusMessage />
+    <div class="card settings-card danger-zone">
+        <div class="settings-card-text">
+            <p class="form-section-description">
+                Isso não muda a chave cadastrada no seu aplicativo autenticador. Se quiser trocar essa chave,
+                use <a href="Account/Manage/ResetAuthenticator">Redefinir chave do autenticador</a>.
+            </p>
+        </div>
+        <div class="button-row">
+            <a href="Account/Manage/TwoFactorAuthentication" class="btn btn-ghost">Cancelar</a>
+            <form @formname="disable-2fa" @onsubmit="OnSubmitAsync" method="post">
+                <AntiforgeryToken />
+                <button class="btn btn-danger" type="submit">Desativar</button>
+            </form>
+        </div>
+    </div>
+</AccountSection>
 
 @code {
     private ApplicationUser? user;

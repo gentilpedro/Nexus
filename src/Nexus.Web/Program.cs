@@ -84,6 +84,11 @@ builder.Services.AddAuthentication(options =>
     })
     .AddIdentityCookies();
 
+// Mensagens do Identity (regras de senha, e-mail duplicado, link expirado) em português. Registrado
+// depois da infraestrutura: AddIdentityCore usa TryAdd para o describer padrão, e a última
+// registração de um serviço é a que o container resolve.
+builder.Services.AddScoped<IdentityErrorDescriber, Nexus.Web.Components.Account.PortugueseIdentityErrorDescriber>();
+
 // Explicit hardening of the Identity.Application cookie — without this, SecurePolicy
 // defaults to SameAsRequest, so the session cookie could be issued/accepted over a plain
 // HTTP request if ForwardedHeaders ever misreports the original scheme (misconfigured
