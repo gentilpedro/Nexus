@@ -1,4 +1,4 @@
-﻿@page "/Account/Login"
+@page "/Account/Login"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("auth")]
 @layout AuthLayout
@@ -14,61 +14,41 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Entrar</PageTitle>
+<PageTitle>Entrar · Nexus</PageTitle>
 
-<div class="auth-split">
-    <div class="auth-split-visual" style="background-image:linear-gradient(rgba(15,23,42,.6),rgba(15,23,42,.8)), url('@Assets["LoginImage.png"]');">
-        <div class="auth-split-visual-brand">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
-            Nexus
+<AuthShell Title="Bem-vindo de volta" Subtitle="Entre para ver as tarefas e conversas do seu time." ActiveTab="login"
+           RegisterHref="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">
+    <StatusMessage Message="@errorMessage" />
+
+    <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login" class="auth-form">
+        <DataAnnotationsValidator />
+
+        <div class="form-field">
+            <label for="Input.Email">E-mail</label>
+            <InputText @bind-Value="Input.Email" id="Input.Email" type="email" autocomplete="username" aria-required="true" placeholder="nome@empresa.com.br" />
+            <ValidationMessage For="() => Input.Email" />
         </div>
-        <h1>Gerencie seus projetos com precisão</h1>
-        <p>A plataforma de gestão de projetos para equipes que buscam centralizar tarefas, documentos e colaboração em um só lugar.</p>
-    </div>
-    <div class="auth-split-form">
-        <div class="auth-split-form-inner">
-            <a href="/" class="auth-back-link" data-enhance-nav="false">
-                <svg class="icon" style="width:1rem;height:1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
-                Voltar
-            </a>
-            <div class="auth-tabs">
-                <a class="active" href="Account/Login" data-enhance-nav="false">Entrar</a>
-                <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))" data-enhance-nav="false">Criar Conta</a>
+        <div class="form-field">
+            <div class="field-label-row">
+                <label for="Input.Password">Senha</label>
+                <a href="Account/ForgotPassword" class="field-label-link">Esqueci a senha</a>
             </div>
-
-            <h1 style="font-size:1.4rem;margin:0 0 0.25rem;">Bem-vindo de volta</h1>
-            <p style="color:var(--color-text-muted);font-size:0.9rem;margin:0 0 1.5rem;">Acesse sua conta para continuar.</p>
-
-            <StatusMessage Message="@errorMessage" />
-
-            <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
-                <DataAnnotationsValidator />
-                <ValidationSummary class="validation-errors" role="alert" />
-
-                <div class="form-field">
-                    <label for="Input.Email">Email</label>
-                    <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
-                    <ValidationMessage For="() => Input.Email" />
-                </div>
-                <div class="form-field">
-                    <label for="Input.Password">Senha</label>
-                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" autocomplete="current-password" aria-required="true" placeholder="Sua senha" />
-                    <ValidationMessage For="() => Input.Password" />
-                </div>
-                <label class="checkbox-field">
-                    <InputCheckbox @bind-Value="Input.RememberMe" />
-                    Lembrar de mim
-                </label>
-
-                <button type="submit" class="btn">Entrar</button>
-            </EditForm>
-
-            <div class="auth-links">
-                <a href="Account/ForgotPassword">Esqueceu sua senha?</a>
-            </div>
+            <InputText type="password" @bind-Value="Input.Password" id="Input.Password" autocomplete="current-password" aria-required="true" placeholder="Sua senha" />
+            <ValidationMessage For="() => Input.Password" />
         </div>
-    </div>
-</div>
+        <label class="checkbox-field">
+            <InputCheckbox @bind-Value="Input.RememberMe" />
+            Manter conectado neste dispositivo
+        </label>
+
+        <button type="submit" class="btn btn-lg btn-block">Entrar</button>
+    </EditForm>
+
+    <p class="auth-alt">
+        Ainda não tem conta?
+        <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))" data-enhance-nav="false">Criar conta grátis</a>
+    </p>
+</AuthShell>
 
 @code {
     private string? errorMessage;
@@ -134,21 +114,21 @@
         }
         else
         {
-            errorMessage = "Error: e-mail ou senha inválidos.";
+            errorMessage = "Erro: e-mail ou senha incorretos.";
         }
     }
 
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "Informe seu e-mail.")]
+        [EmailAddress(ErrorMessage = "Esse e-mail não parece válido.")]
         public string Email { get; set; } = "";
 
-        [Required]
+        [Required(ErrorMessage = "Informe sua senha.")]
         [DataType(DataType.Password)]
         public string Password { get; set; } = "";
 
-        [Display(Name = "Remember me?")]
+        [Display(Name = "Manter conectado")]
         public bool RememberMe { get; set; }
     }
 }

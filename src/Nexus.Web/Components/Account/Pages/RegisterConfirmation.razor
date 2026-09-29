@@ -1,4 +1,4 @@
-﻿@page "/Account/RegisterConfirmation"
+@page "/Account/RegisterConfirmation"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 
 @using Microsoft.AspNetCore.Identity
@@ -40,7 +40,7 @@
         if (user is null)
         {
             HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-            statusMessage = "Error finding user for unspecified email";
+            statusMessage = "Erro: não encontramos uma conta para este e-mail.";
         }
     }
 }

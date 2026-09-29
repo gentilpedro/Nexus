@@ -1,0 +1,91 @@
+@* Moldura das telas de entrada (Entrar, Criar conta, recuperar senha…).
+   À esquerda, o produto em si — uma miniatura do quadro com o tipo de trabalho que as equipes
+   organizam no Nexus — no lugar de uma ilustração genérica. À direita, o formulário.
+   Renderizado em SSR estático: nada aqui depende de interatividade. *@
+
+<div class="auth-split">
+    <aside class="auth-split-visual" aria-label="Sobre o Nexus">
+        <a href="/" class="auth-brand" data-enhance-nav="false">
+            <img src="@Assets["IconNexus.png"]" alt="" />
+            <span>Nexus</span>
+        </a>
+
+        <div class="auth-pitch">
+            <p class="auth-pitch-title">Tarefas, documentos e a conversa do time — num lugar só, em português.</p>
+            <ul class="auth-pitch-points">
+                <li><Icon Name="board" /> Kanban, lista, backlog, calendário e Gantt</li>
+                <li><Icon Name="doc" /> Documentos e planilhas do workspace</li>
+                <li><Icon Name="chat" /> Chat com menções, ligado às tarefas</li>
+            </ul>
+        </div>
+
+        <div class="auth-preview" aria-hidden="true">
+            <div class="auth-preview-column">
+                <span class="auth-preview-heading"><i style="--c: var(--status-todo)"></i>A fazer <b>3</b></span>
+                <div class="auth-preview-card">
+                    <span>Revisar proposta comercial</span>
+                    <span class="auth-preview-meta"><i class="bars bars--2"></i>Amanhã<em>MC</em></span>
+                </div>
+                <div class="auth-preview-card">
+                    <span>Planejar sprint 12</span>
+                    <span class="auth-preview-meta"><i class="bars bars--1"></i>Sex<em>JF</em></span>
+                </div>
+            </div>
+            <div class="auth-preview-column">
+                <span class="auth-preview-heading"><i style="--c: var(--status-inprogress)"></i>Em andamento <b>2</b></span>
+                <div class="auth-preview-card is-lifted">
+                    <span>Ajustar tela de login no celular</span>
+                    <span class="auth-preview-meta"><i class="bars bars--3"></i>Hoje<em>CL</em></span>
+                </div>
+            </div>
+        </div>
+
+        <p class="auth-footnote">
+            <a href="/privacidade" data-enhance-nav="false">Privacidade</a>
+            <span aria-hidden="true">·</span>
+            <a href="/termos-de-uso" data-enhance-nav="false">Termos de uso</a>
+        </p>
+    </aside>
+
+    <main class="auth-split-form">
+        <div class="auth-split-form-inner">
+            <div class="auth-topbar">
+                <a href="/" class="auth-back-link" data-enhance-nav="false">
+                    <Icon Name="arrow-left" Class="icon--sm" /> Início
+                </a>
+                <ThemeSwitch />
+            </div>
+
+            @if (ShowTabs)
+            {
+                <nav class="auth-tabs" aria-label="Acesso">
+                    <a class="@(ActiveTab == "login" ? "active" : "")" href="@LoginHref" data-enhance-nav="false" aria-current="@(ActiveTab == "login" ? "page" : null)">Entrar</a>
+                    <a class="@(ActiveTab == "register" ? "active" : "")" href="@RegisterHref" data-enhance-nav="false" aria-current="@(ActiveTab == "register" ? "page" : null)">Criar conta</a>
+                </nav>
+            }
+
+            <h1 class="auth-title">@Title</h1>
+            @if (Subtitle is not null)
+            {
+                <p class="auth-subtitle">@Subtitle</p>
+            }
+
+            @ChildContent
+        </div>
+    </main>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>"login", "register" ou null (sem as abas Entrar/Criar conta).</summary>
+    [Parameter] public string? ActiveTab { get; set; }
+
+    [Parameter] public string LoginHref { get; set; } = "Account/Login";
+    [Parameter] public string RegisterHref { get; set; } = "Account/Register";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool ShowTabs => ActiveTab is not null;
+}

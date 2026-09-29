@@ -1,0 +1,162 @@
+/* Tela inicial (painel do usuário logado). Usa só tokens e as classes de components.css. */
+
+/* =========================================================================================
+   Dashboard
+   ========================================================================================= */
+.dashboard-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    gap: var(--space-6);
+    align-items: start;
+}
+
+/* Sem isto, um filho largo em qualquer coluna (breadcrumb sem quebra, linha flex) impede a
+   coluna de encolher e empurra a página para rolagem horizontal. */
+.dashboard-layout > * {
+    min-width: 0;
+}
+
+.dashboard-rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    position: sticky;
+    top: calc(var(--topbar-height) + var(--space-6));
+}
+
+.dashboard-tasks-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-divider);
+}
+
+.dashboard-tasks-header .pill-tabs {
+    margin: 0;
+}
+
+.dashboard-tasks-body {
+    padding: var(--space-2) 0 var(--space-3);
+    min-height: 12rem;
+}
+
+.dashboard-tasks-body > .skeleton {
+    padding: var(--space-3) var(--space-5);
+}
+
+.dashboard-chart {
+    position: relative;
+    height: 10rem;
+}
+
+.task-group + .task-group {
+    margin-top: var(--space-2);
+}
+
+.task-group-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    padding: var(--space-3) var(--space-5) var(--space-1);
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+    font-weight: var(--weight-semibold);
+    scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
+}
+
+.task-group-title.is-danger {
+    color: var(--color-danger-text);
+}
+
+.task-group:target .task-group-title {
+    color: var(--color-text);
+}
+
+.workspace-progress-list {
+    list-style: none;
+    margin: 0 calc(-1 * var(--space-2));
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.workspace-progress-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    color: inherit;
+}
+
+.workspace-progress-item:hover {
+    background: var(--color-hover);
+    text-decoration: none;
+}
+
+.workspace-progress-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1-5);
+    flex: 1;
+    min-width: 0;
+}
+
+.workspace-progress-top {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+    font-size: var(--text-body);
+}
+
+.workspace-progress-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--weight-medium);
+    color: var(--color-text);
+}
+
+.workspace-progress-pct {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-small);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1100px) {
+    .dashboard-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-rail {
+        position: static;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .dashboard-tasks-header {
+        padding: var(--space-3) var(--space-4);
+    }
+
+    .dashboard-tasks-header .pill-tabs {
+        width: 100%;
+    }
+
+    .dashboard-tasks-header .pill-tabs button {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .task-group-title {
+        padding-inline: var(--space-4);
+    }
+}

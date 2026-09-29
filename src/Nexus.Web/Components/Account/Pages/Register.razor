@@ -20,88 +20,69 @@
 @inject Nexus.Web.Services.WorkspaceInviteService InviteService
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Criar conta</PageTitle>
+<PageTitle>Criar conta · Nexus</PageTitle>
 
-<div class="auth-split">
-    <div class="auth-split-visual" style="background-image:linear-gradient(rgba(15,23,42,.6),rgba(15,23,42,.8)), url('@Assets["LoginImage.png"]');">
-        <div class="auth-split-visual-brand">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
-            Nexus
+<AuthShell Title="Crie sua conta" Subtitle="Grátis para começar. Seu time usa no primeiro dia, sem treinamento." ActiveTab="register"
+           LoginHref="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">
+    <StatusMessage Message="@Message" />
+
+    <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register" class="auth-form">
+        <DataAnnotationsValidator />
+
+        <div class="form-field">
+            <label for="Input.Name">Nome</label>
+            <InputText @bind-Value="Input.Name" id="Input.Name" autocomplete="name" aria-required="true" placeholder="Como o time vai te chamar" />
+            <ValidationMessage For="() => Input.Name" />
         </div>
-        <h1>Comece a organizar sua equipe hoje</h1>
-        <p>Crie sua conta gratuita e centralize tarefas, documentos e colaboração em um só lugar.</p>
-    </div>
-    <div class="auth-split-form">
-        <div class="auth-split-form-inner">
-            <a href="/" class="auth-back-link" data-enhance-nav="false">
-                <svg class="icon" style="width:1rem;height:1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
-                Voltar
-            </a>
-            <div class="auth-tabs">
-                <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))" data-enhance-nav="false">Entrar</a>
-                <a class="active" href="Account/Register" data-enhance-nav="false">Criar Conta</a>
-            </div>
-
-            <h1 style="font-size:1.4rem;margin:0 0 0.25rem;">Crie sua conta</h1>
-            <p style="color:var(--color-text-muted);font-size:0.9rem;margin:0 0 1.5rem;">Comece a organizar seus projetos.</p>
-
-            <StatusMessage Message="@Message" />
-
-            <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
-                <DataAnnotationsValidator />
-                <ValidationSummary class="validation-errors" role="alert" />
-
-                <div class="form-field">
-                    <label for="Input.Name">Nome</label>
-                    <InputText @bind-Value="Input.Name" id="Input.Name" autocomplete="name" aria-required="true" placeholder="Seu nome" />
-                    <ValidationMessage For="() => Input.Name" />
-                </div>
-                <div class="form-field">
-                    <label for="Input.Email">Email</label>
-                    @if (invitedEmail is not null)
-                    {
-                        @* Locked to the address the invite was sent to: the account has to be the
-                           invited one, otherwise accepting at /convite/{token} would just fail with
-                           an e-mail mismatch. RegisterUser re-applies it server-side anyway. *@
-                        <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" readonly />
-                        <span style="color:var(--color-text-muted);font-size:0.8rem;">Você foi convidado com este e-mail, então a conta precisa usar ele.</span>
-                    }
-                    else
-                    {
-                        <InputText @bind-Value="Input.Email" id="Input.Email" autocomplete="username" aria-required="true" placeholder="nome@exemplo.com" />
-                    }
-                    <ValidationMessage For="() => Input.Email" />
-                </div>
-                <div class="form-field">
-                    <label for="Input.Password">Senha</label>
-                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" autocomplete="new-password" aria-required="true" placeholder="Crie uma senha" />
-                    <ValidationMessage For="() => Input.Password" />
-                </div>
-                <div class="form-field">
-                    <label for="Input.ConfirmPassword">Confirmar senha</label>
-                    <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" autocomplete="new-password" aria-required="true" placeholder="Repita a senha" />
-                    <ValidationMessage For="() => Input.ConfirmPassword" />
-                </div>
-                <div class="form-field" style="flex-direction:row;align-items:flex-start;gap:0.5rem;">
-                    <InputCheckbox @bind-Value="Input.AcceptedPrivacyPolicy" id="Input.AcceptedPrivacyPolicy" style="width:auto;margin-top:0.2rem;" />
-                    <label for="Input.AcceptedPrivacyPolicy" style="font-weight:normal;">
-                        Li e aceito a <a href="/privacidade" target="_blank" data-enhance-nav="false">Política de Privacidade</a>.
-                    </label>
-                </div>
-                <ValidationMessage For="() => Input.AcceptedPrivacyPolicy" />
-                <div class="form-field" style="flex-direction:row;align-items:flex-start;gap:0.5rem;">
-                    <InputCheckbox @bind-Value="Input.AcceptedTermsOfService" id="Input.AcceptedTermsOfService" style="width:auto;margin-top:0.2rem;" />
-                    <label for="Input.AcceptedTermsOfService" style="font-weight:normal;">
-                        Li e aceito os <a href="/termos-de-uso" target="_blank" data-enhance-nav="false">Termos de Uso</a>.
-                    </label>
-                </div>
-                <ValidationMessage For="() => Input.AcceptedTermsOfService" />
-
-                <button type="submit" class="btn">Criar conta</button>
-            </EditForm>
+        <div class="form-field">
+            <label for="Input.Email">E-mail</label>
+            @if (invitedEmail is not null)
+            {
+                @* Locked to the address the invite was sent to: the account has to be the
+                   invited one, otherwise accepting at /convite/{token} would just fail with
+                   an e-mail mismatch. RegisterUser re-applies it server-side anyway. *@
+                <InputText @bind-Value="Input.Email" id="Input.Email" type="email" autocomplete="username" aria-required="true" readonly aria-describedby="invite-email-hint" />
+                <span id="invite-email-hint" class="field-hint">Você foi convidado com este e-mail, então a conta precisa usá-lo.</span>
+            }
+            else
+            {
+                <InputText @bind-Value="Input.Email" id="Input.Email" type="email" autocomplete="username" aria-required="true" placeholder="nome@empresa.com.br" />
+            }
+            <ValidationMessage For="() => Input.Email" />
         </div>
-    </div>
-</div>
+        <div class="form-field">
+            <label for="Input.Password">Senha</label>
+            <InputText type="password" @bind-Value="Input.Password" id="Input.Password" autocomplete="new-password" aria-required="true" aria-describedby="password-rules" placeholder="Crie uma senha" />
+            <span id="password-rules" class="field-hint">Pelo menos 10 caracteres, com letra maiúscula, minúscula, número e símbolo.</span>
+            <ValidationMessage For="() => Input.Password" />
+        </div>
+        <div class="form-field">
+            <label for="Input.ConfirmPassword">Confirme a senha</label>
+            <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" autocomplete="new-password" aria-required="true" placeholder="Repita a senha" />
+            <ValidationMessage For="() => Input.ConfirmPassword" />
+        </div>
+
+        <div class="auth-consents">
+            <label class="checkbox-field" for="Input.AcceptedPrivacyPolicy">
+                <InputCheckbox @bind-Value="Input.AcceptedPrivacyPolicy" id="Input.AcceptedPrivacyPolicy" />
+                <span>Li e aceito a <a href="/privacidade" target="_blank" rel="noopener" data-enhance-nav="false">Política de Privacidade</a></span>
+            </label>
+            <ValidationMessage For="() => Input.AcceptedPrivacyPolicy" />
+            <label class="checkbox-field" for="Input.AcceptedTermsOfService">
+                <InputCheckbox @bind-Value="Input.AcceptedTermsOfService" id="Input.AcceptedTermsOfService" />
+                <span>Li e aceito os <a href="/termos-de-uso" target="_blank" rel="noopener" data-enhance-nav="false">Termos de Uso</a></span>
+            </label>
+            <ValidationMessage For="() => Input.AcceptedTermsOfService" />
+        </div>
+
+        <button type="submit" class="btn btn-lg btn-block">Criar conta</button>
+    </EditForm>
+
+    <p class="auth-alt">
+        Já tem conta?
+        <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))" data-enhance-nav="false">Entrar</a>
+    </p>
+</AuthShell>
 
 @code {
     private IEnumerable<IdentityError>? identityErrors;
@@ -119,7 +100,7 @@
 
     private string? invitedEmail;
 
-    private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
+    private string? Message => identityErrors is null ? null : $"Erro: {string.Join(" ", identityErrors.Select(error => error.Description))}";
 
     protected override async Task OnInitializedAsync()
     {
@@ -221,20 +202,20 @@
         [Display(Name = "Nome")]
         public string Name { get; set; } = "";
 
-        [Required]
-        [EmailAddress]
-        [Display(Name = "Email")]
+        [Required(ErrorMessage = "Informe seu e-mail.")]
+        [EmailAddress(ErrorMessage = "Esse e-mail não parece válido.")]
+        [Display(Name = "E-mail")]
         public string Email { get; set; } = "";
 
-        [Required]
-        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [Required(ErrorMessage = "Crie uma senha.")]
+        [StringLength(100, ErrorMessage = "A senha precisa ter entre {2} e {1} caracteres.", MinimumLength = 10)]
         [DataType(DataType.Password)]
-        [Display(Name = "Password")]
+        [Display(Name = "Senha")]
         public string Password { get; set; } = "";
 
         [DataType(DataType.Password)]
-        [Display(Name = "Confirm password")]
-        [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
+        [Display(Name = "Confirmação da senha")]
+        [Compare("Password", ErrorMessage = "A confirmação não é igual à senha.")]
         public string ConfirmPassword { get; set; } = "";
 
         [Range(typeof(bool), "true", "true", ErrorMessage = "É preciso aceitar a Política de Privacidade para criar uma conta.")]
