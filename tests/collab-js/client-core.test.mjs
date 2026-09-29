@@ -163,9 +163,11 @@ async function runScenario(seed) {
         network.fireTimers();
         await settle();
         if (editors.every((e) => !e.client.hasPending && e.client.revision === server.head) && network.queue.length === 0) break;
+        // Só o que o servidor faria: avisar que o documento mudou. Nada de chamar resume() aqui —
+        // isso destravaria por fora um cliente que tivesse ficado parado, e o teste de vivacidade
+        // passaria sem provar nada.
         for (const e of editors) {
             e.client.notify(server.head);
-            e.client.resume();
         }
         await settle();
     }

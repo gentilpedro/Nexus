@@ -162,6 +162,14 @@ export class CollabClient {
         if (this.stopped) return;
         this.setOffline(false);
         this.handleSubmit(result, sent.seq);
+
+        // Enquanto esperávamos, um catch-up pode ter confirmado esta alteração pelo log e o
+        // buffer ter virado uma nova alteração em voo — cujo send() voltou na hora, porque este
+        // ainda estava em andamento. A resposta que acabou de chegar é da antiga e não dispara
+        // nada; sem isto a nova ficaria parada para sempre, com a tela em "Salvando…".
+        if (this.inFlight && !this.sending && (this.inFlight.seq !== sent.seq || this.inFlight.baseRevision !== sentBase)) {
+            this.send();
+        }
     }
 
     handleSubmit(result, seq) {
