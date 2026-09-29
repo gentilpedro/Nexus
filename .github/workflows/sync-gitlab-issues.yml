@@ -1,0 +1,52 @@
+name: Espelhar issues do GitLab
+
+# As issues do projeto vivem no GitLab (o repositório do TCC). Este workflow mantém uma cópia
+# delas aqui, do mesmo jeito que o código já é espelhado nos dois sentidos: cria as que faltam e
+# atualiza título, descrição, rótulos, estado e comentários. É uma via só — editar a issue aqui
+# não volta para o GitLab e é sobrescrito na sincronização seguinte.
+#
+# O script não confia em nada do evento que o disparou: lê tudo da API do GitLab. Um evento
+# forjado, no máximo, provoca uma sincronização a mais. Detalhes em docs/sincronizacao-issues.md.
+
+on:
+  # Disparado pelo webhook do projeto no GitLab (eventos de issue e de comentário), que chama a
+  # API de repository_dispatch com event_type gitlab-issue.
+  repository_dispatch:
+    types: [gitlab-issue]
+
+  # Rede de segurança: pega qualquer evento que o webhook tenha perdido. Uma vez por dia, porque
+  # consultar o GitLab de tempos em tempos gastaria a cota de minutos do Actions (cada execução
+  # conta pelo menos um minuto).
+  schedule:
+    - cron: '23 9 * * *'
+
+  workflow_dispatch:
+
+# Uma sincronização por vez: duas em paralelo poderiam criar a mesma issue duas vezes antes de uma
+# ver o marcador da outra. Cada execução sincroniza tudo, então as que chegam enquanto uma roda
+# podem esperar na fila (o GitHub mantém só a mais recente pendente).
+concurrency:
+  group: sync-gitlab-issues
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  espelhar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sincronizar issues e comentários
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLAB_PROJECT: senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus
+          # Opcional, só com escopo read_api. Sem ele, os comentários não são espelhados: a API do
+          # GitLab exige autenticação para lê-los mesmo em projeto público.
+          GITLAB_READ_TOKEN: ${{ secrets.GITLAB_READ_TOKEN }}
+        run: python3 .github/scripts/sync-gitlab-issues.py
