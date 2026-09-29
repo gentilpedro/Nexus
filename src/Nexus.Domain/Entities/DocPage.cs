@@ -38,4 +38,19 @@ public class DocPage
     public string? UpdatedByUserId { get; set; }
     public ApplicationUser? UpdatedByUser { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }
+
+    // Edição colaborativa (Type == Text). O documento de verdade passa a ser DeltaJson, no formato
+    // do Quill, e Revision conta as operações aceitas (ver DocSequencer). ContentHtml vira dado
+    // derivado para o modo leitura, o sumário e a busca, e HtmlRevision diz de qual revisão ele é.
+    //
+    // DeltaJson nulo com Revision 0 é um documento de antes da edição colaborativa: o primeiro
+    // editor que abrir converte o ContentHtml e semeia o Delta.
+    public const int MaxDeltaJsonLength = 4_000_000;
+
+    public string? DeltaJson { get; set; }
+    public long Revision { get; set; }
+    public long HtmlRevision { get; set; }
+
+    /// <summary>Ainda não semeado: tem conteúdo em HTML antigo e nenhuma operação.</summary>
+    public bool NeedsSeed => Revision == 0 && DeltaJson is null && !string.IsNullOrWhiteSpace(ContentHtml);
 }
