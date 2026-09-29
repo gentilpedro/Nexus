@@ -1,0 +1,221 @@
+/* Inter, auto-hospedada (a CSP só aceita fontes do próprio domínio). Fonte e pesos definidos em
+   paletadecor.md › Typography. Licença: wwwroot/fonts/OFL-Inter.txt. */
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/inter-latin-wght-normal.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../fonts/inter-latin-ext-wght-normal.woff2") format("woff2");
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Nexus design tokens.
+   Paleta de origem: paletadecor.md (primário #5B5CEB). Cada cor é declarada uma única vez com
+   light-dark(): o valor da esquerda vale no tema claro, o da direita no escuro. Quem decide o
+   tema é `color-scheme` — o sistema operacional por padrão, ou o data-theme que theme-interop.js
+   grava quando a pessoa escolhe um tema. Assim o tema escuro não precisa ser repetido em blocos
+   @media e [data-theme] separados.
+
+   Onde este arquivo se afasta do paletadecor.md é por contraste (WCAG AA, compromisso do
+   PRODUCT.md): texto em primário sobre fundo tingido usa --color-accent-text, e o botão de
+   perigo usa #DC2626 porque branco sobre #EF4444 fica em 3,8:1. */
+
+:root {
+    color-scheme: light dark;
+
+    /* ---- Superfícies ---- */
+    --color-bg: light-dark(#F7F8FC, #111827);
+    --color-surface: light-dark(#FFFFFF, #1A2235);
+    --color-surface-raised: light-dark(#FFFFFF, #202A3C);   /* cards, menus, diálogos */
+    --color-surface-sunken: light-dark(#F1F3F8, #161E2F);   /* colunas do quadro, trilhas */
+    --color-sidebar: light-dark(#FFFFFF, #161E2F);
+    --color-hover: light-dark(#F1F3F8, #293548);
+    --color-selected: light-dark(#EEF0FF, #323F63);
+    --color-table-header: light-dark(#F9FAFB, #1A2235);
+    --color-overlay: light-dark(rgb(17 24 39 / 0.40), rgb(3 7 18 / 0.62));
+
+    /* ---- Texto ---- */
+    --color-text: light-dark(#111827, #F9FAFB);
+    --color-text-secondary: light-dark(#4B5563, #D1D5DB);
+    --color-text-muted: light-dark(#6B7280, #9CA3AF);
+    --color-text-disabled: light-dark(#9CA3AF, #6B7280);
+    --color-text-on-accent: #FFFFFF;
+
+    /* ---- Bordas ---- */
+    --color-border: light-dark(#E5E7EB, #334155);
+    --color-border-strong: light-dark(#D1D5DB, #475569);
+    --color-divider: light-dark(#EEF2F7, #293548);
+
+    /* ---- Marca ---- */
+    --color-accent: #5B5CEB;
+    --color-accent-hover: #4B4CD8;
+    --color-accent-active: #3F40BF;
+    --color-accent-soft: light-dark(#EEF0FF, #2A3060);
+    --color-accent-text: light-dark(#4B4CD8, #A5A8FF);      /* links e item ativo: ≥4,5:1 nas duas superfícies */
+    --color-focus: light-dark(#5B5CEB, #8B8FFF);
+
+    /* ---- Semânticas (preenchimento/ícone, texto e fundo suave) ---- */
+    --color-success: #22C55E;
+    --color-success-text: light-dark(#15803D, #86EFAC);
+    --color-success-soft: light-dark(#F0FDF4, rgb(34 197 94 / 0.14));
+    --color-success-border: light-dark(#BBF7D0, rgb(34 197 94 / 0.35));
+
+    --color-warning: #F59E0B;
+    --color-warning-text: light-dark(#92400E, #FCD34D);
+    --color-warning-soft: light-dark(#FFFBEB, rgb(245 158 11 / 0.14));
+    --color-warning-border: light-dark(#FDE68A, rgb(245 158 11 / 0.35));
+
+    --color-danger: #EF4444;
+    --color-danger-fill: #DC2626;
+    --color-danger-fill-hover: #B91C1C;
+    --color-danger-text: light-dark(#B91C1C, #FCA5A5);
+    --color-danger-soft: light-dark(#FEF2F2, rgb(239 68 68 / 0.14));
+    --color-danger-border: light-dark(#FECACA, rgb(239 68 68 / 0.38));
+
+    --color-info: #3B82F6;
+    --color-info-text: light-dark(#1D4ED8, #93C5FD);
+    --color-info-soft: light-dark(#EFF6FF, rgb(59 130 246 / 0.14));
+    --color-info-border: light-dark(#BFDBFE, rgb(59 130 246 / 0.35));
+
+    /* ---- Status do fluxo (paletadecor.md › Kanban) ---- */
+    --status-todo: #94A3B8;
+    --status-inprogress: #3B82F6;
+    --status-review: #A855F7;
+    --status-done: #22C55E;
+    --status-blocked: #EF4444;
+
+    --badge-status-todo-bg: light-dark(#F1F5F9, rgb(148 163 184 / 0.16));
+    --badge-status-todo-fg: light-dark(#475569, #CBD5E1);
+    --badge-status-inprogress-bg: light-dark(#DBEAFE, rgb(96 165 250 / 0.18));
+    --badge-status-inprogress-fg: light-dark(#1D4ED8, #93C5FD);
+    --badge-status-done-bg: light-dark(#DCFCE7, rgb(74 222 128 / 0.16));
+    --badge-status-done-fg: light-dark(#15803D, #86EFAC);
+
+    /* ---- Prioridade (paletadecor.md › Priority) ---- */
+    --priority-low: #10B981;
+    --priority-medium: #FBBF24;
+    --priority-high: #F97316;
+    --priority-highest: #DC2626;
+
+    --badge-priority-low-bg: light-dark(#D1FAE5, rgb(16 185 129 / 0.18));
+    --badge-priority-low-fg: light-dark(#047857, #6EE7B7);
+    --badge-priority-medium-bg: light-dark(#FEF3C7, rgb(251 191 36 / 0.18));
+    --badge-priority-medium-fg: light-dark(#92400E, #FCD34D);
+    --badge-priority-high-bg: light-dark(#FFEDD5, rgb(249 115 22 / 0.18));
+    --badge-priority-high-fg: light-dark(#C2410C, #FDBA74);
+    --badge-priority-highest-bg: light-dark(#FEE2E2, rgb(220 38 38 / 0.20));
+    --badge-priority-highest-fg: light-dark(#B91C1C, #FCA5A5);
+
+    /* ---- Séries de gráfico (paletadecor.md › Charts) ---- */
+    --chart-1: #5B5CEB;
+    --chart-2: #3B82F6;
+    --chart-3: #10B981;
+    --chart-4: #F59E0B;
+    --chart-5: #A855F7;
+
+    /* ---- Tipografia ---- */
+    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+
+    --text-caption: 0.75rem;     /* 12 — metadados, contadores */
+    --text-small: 0.8125rem;     /* 13 — texto auxiliar, rótulos */
+    --text-body: 0.875rem;       /* 14 — corpo da interface */
+    --text-body-lg: 1rem;        /* 16 — prosa (docs, descrições longas) */
+    --text-h4: 0.9375rem;        /* 15 — títulos de card/seção */
+    --text-h3: 1.0625rem;        /* 17 */
+    --text-h2: 1.25rem;          /* 20 */
+    --text-h1: 1.5rem;           /* 24 — título de página */
+    --text-display: 2rem;        /* 32 — número de destaque, telas de entrada */
+
+    --leading-tight: 1.25;
+    --leading-snug: 1.4;
+    --leading-normal: 1.55;
+
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+
+    /* ---- Espaçamento (base 4px) ---- */
+    --space-0-5: 0.125rem;
+    --space-1: 0.25rem;
+    --space-1-5: 0.375rem;
+    --space-2: 0.5rem;
+    --space-2-5: 0.625rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.25rem;
+    --space-6: 1.5rem;
+    --space-8: 2rem;
+    --space-10: 2.5rem;
+    --space-12: 3rem;
+    --space-16: 4rem;
+
+    /* ---- Forma ---- */
+    --radius-sm: 6px;            /* itens de menu, chips quadrados, controles pequenos */
+    --radius-md: 8px;            /* botões, campos, linhas */
+    --radius-lg: 12px;           /* cards, painéis, diálogos */
+    --radius-pill: 999px;
+
+    --control-sm: 1.75rem;       /* 28 */
+    --control-md: 2.25rem;       /* 36 */
+    --control-lg: 2.5rem;        /* 40 */
+
+    /* ---- Profundidade ---- */
+    --shadow-color: light-dark(rgb(16 24 40 / 0.08), rgb(0 0 0 / 0.32));
+    --shadow-color-strong: light-dark(rgb(16 24 40 / 0.14), rgb(0 0 0 / 0.5));
+    --shadow-sm: 0 1px 2px var(--shadow-color);
+    --shadow-md: 0 4px 12px -2px var(--shadow-color-strong), 0 2px 4px -2px var(--shadow-color);
+    --shadow-lg: 0 20px 40px -12px var(--shadow-color-strong), 0 4px 10px -4px var(--shadow-color);
+
+    /* ---- Movimento ---- */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --duration-fast: 120ms;
+    --duration-base: 180ms;
+    --duration-slow: 260ms;
+
+    /* ---- Camadas ---- */
+    --z-sticky: 20;
+    --z-topbar: 60;
+    --z-drawer: 70;
+    --z-overlay: 80;
+    --z-dialog: 90;
+    --z-toast: 100;
+
+    /* ---- Layout ---- */
+    --topbar-height: 3.5rem;
+    --sidebar-width: 15.5rem;
+    --content-max: 72rem;
+    --content-narrow: 48rem;
+    --content-prose: 42rem;
+
+    /* ---- Nomes antigos (compatibilidade com estilos inline remanescentes) ---- */
+    --color-primary: var(--color-accent);
+    --color-primary-hover: var(--color-accent-hover);
+    --color-primary-soft: var(--color-accent-soft);
+    --color-card: var(--color-surface-raised);
+    --color-modal-bg: var(--color-surface-raised);
+    --color-text-on-primary: var(--color-text-on-accent);
+    --radius: var(--radius-md);
+
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}

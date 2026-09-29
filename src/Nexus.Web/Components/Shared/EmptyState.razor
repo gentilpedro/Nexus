@@ -1,0 +1,36 @@
+@* Estado vazio que ensina a próxima ação em vez de só dizer "nada aqui".
+   Compact: versão de uma linha para dentro de colunas, painéis e listas curtas. *@
+
+<div class="empty-state @(Compact ? "empty-state--compact" : "")">
+    @if (!Compact && Icon is not null)
+    {
+        <span class="empty-state-icon" aria-hidden="true"><Icon Name="@Icon" /></span>
+    }
+    <p class="empty-state-title">@Title</p>
+    @if (Description is not null)
+    {
+        <p class="empty-state-description">@Description</p>
+    }
+    @if (ChildContent is not null)
+    {
+        <div class="empty-state-actions">@ChildContent</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public string? Icon { get; set; }
+
+    [Parameter]
+    public bool Compact { get; set; }
+
+    /// <summary>Ação principal (botão ou link) para sair do vazio.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

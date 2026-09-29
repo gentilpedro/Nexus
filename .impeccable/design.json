@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-28T00:00:00Z",
+  "title": "Design System: Nexus",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Índigo Nexus", "canonical": "#5B5CEB", "tonalRamp": ["#2A3060", "#3F40BF", "#4B4CD8", "#5B5CEB", "#6E72FF", "#8B8FFF", "#A5A8FF", "#EEF0FF"] },
+      "primary-hover": { "role": "primary", "displayName": "Índigo Pressionado", "canonical": "#4B4CD8" },
+      "primary-active": { "role": "primary", "displayName": "Índigo Fundo", "canonical": "#3F40BF" },
+      "primary-soft": { "role": "primary", "displayName": "Índigo Névoa", "canonical": "light-dark(#EEF0FF, #2A3060)" },
+      "primary-soft-dark": { "role": "primary", "displayName": "Índigo Névoa (escuro)", "canonical": "light-dark(#EEF0FF, #2A3060)" },
+      "accent-text": { "role": "primary", "displayName": "Índigo de Leitura", "canonical": "light-dark(#4B4CD8, #A5A8FF)", "deviation": "paletadecor usa #5B5CEB (claro) e #6E72FF (escuro) para texto ativo; trocado para atingir 4,5:1." },
+      "accent-text-dark": { "role": "primary", "displayName": "Índigo de Leitura (escuro)", "canonical": "light-dark(#4B4CD8, #A5A8FF)" },
+      "focus": { "role": "primary", "displayName": "Anel de Foco", "canonical": "light-dark(#5B5CEB, #8B8FFF)" },
+      "focus-dark": { "role": "primary", "displayName": "Anel de Foco (escuro)", "canonical": "light-dark(#5B5CEB, #8B8FFF)" },
+      "bg": { "role": "neutral", "displayName": "Papel Frio", "canonical": "light-dark(#F7F8FC, #111827)", "tonalRamp": ["#111827", "#161E2F", "#1A2235", "#202A3C", "#293548", "#E5E7EB", "#F1F3F8", "#F7F8FC"] },
+      "bg-dark": { "role": "neutral", "displayName": "Papel Frio (escuro)", "canonical": "light-dark(#F7F8FC, #111827)" },
+      "surface": { "role": "neutral", "displayName": "Folha", "canonical": "light-dark(#FFFFFF, #1A2235)" },
+      "surface-dark": { "role": "neutral", "displayName": "Folha (escuro)", "canonical": "light-dark(#FFFFFF, #1A2235)" },
+      "surface-raised-dark": { "role": "neutral", "displayName": "Folha Elevada (escuro)", "canonical": "light-dark(#FFFFFF, #202A3C)" },
+      "surface-sunken": { "role": "neutral", "displayName": "Bandeja", "canonical": "light-dark(#F1F3F8, #161E2F)" },
+      "surface-sunken-dark": { "role": "neutral", "displayName": "Bandeja (escuro)", "canonical": "light-dark(#F1F3F8, #161E2F)" },
+      "hover-dark": { "role": "neutral", "displayName": "Hover (escuro)", "canonical": "light-dark(#F1F3F8, #293548)" },
+      "selected-dark": { "role": "neutral", "displayName": "Selecionado (escuro)", "canonical": "light-dark(#EEF0FF, #323F63)" },
+      "text": { "role": "neutral", "displayName": "Tinta", "canonical": "light-dark(#111827, #F9FAFB)", "tonalRamp": ["#111827", "#1F2937", "#374151", "#4B5563", "#6B7280", "#9CA3AF", "#D1D5DB", "#F9FAFB"] },
+      "text-dark": { "role": "neutral", "displayName": "Tinta (escuro)", "canonical": "light-dark(#111827, #F9FAFB)" },
+      "text-secondary": { "role": "neutral", "displayName": "Tinta Secundária", "canonical": "light-dark(#4B5563, #D1D5DB)" },
+      "text-secondary-dark": { "role": "neutral", "displayName": "Tinta Secundária (escuro)", "canonical": "light-dark(#4B5563, #D1D5DB)" },
+      "text-muted": { "role": "neutral", "displayName": "Tinta Apagada", "canonical": "light-dark(#6B7280, #9CA3AF)" },
+      "text-muted-dark": { "role": "neutral", "displayName": "Tinta Apagada (escuro)", "canonical": "light-dark(#6B7280, #9CA3AF)" },
+      "text-disabled": { "role": "neutral", "displayName": "Tinta Desabilitada", "canonical": "light-dark(#9CA3AF, #6B7280)" },
+      "text-on-accent": { "role": "neutral", "displayName": "Branco sobre Acento", "canonical": "#FFFFFF" },
+      "border": { "role": "neutral", "displayName": "Traço", "canonical": "light-dark(#E5E7EB, #334155)", "tonalRamp": ["#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#D1D5DB", "#E5E7EB", "#EEF2F7"] },
+      "border-dark": { "role": "neutral", "displayName": "Traço (escuro)", "canonical": "light-dark(#E5E7EB, #334155)" },
+      "border-strong": { "role": "neutral", "displayName": "Traço Forte", "canonical": "light-dark(#D1D5DB, #475569)" },
+      "border-strong-dark": { "role": "neutral", "displayName": "Traço Forte (escuro)", "canonical": "light-dark(#D1D5DB, #475569)" },
+      "divider": { "role": "neutral", "displayName": "Divisória", "canonical": "light-dark(#EEF2F7, #293548)" },
+      "success": { "role": "tertiary", "displayName": "Verde Sucesso", "canonical": "#22C55E", "tonalRamp": ["#14532D", "#166534", "#15803D", "#16A34A", "#22C55E", "#4ADE80", "#86EFAC", "#DCFCE7"] },
+      "success-text": { "role": "tertiary", "displayName": "Texto de Sucesso", "canonical": "light-dark(#15803D, #86EFAC)" },
+      "success-text-dark": { "role": "tertiary", "displayName": "Texto de Sucesso (escuro)", "canonical": "light-dark(#15803D, #86EFAC)" },
+      "warning": { "role": "tertiary", "displayName": "Âmbar Aviso", "canonical": "#F59E0B", "tonalRamp": ["#78350F", "#92400E", "#B45309", "#D97706", "#F59E0B", "#FBBF24", "#FCD34D", "#FEF3C7"] },
+      "warning-text": { "role": "tertiary", "displayName": "Texto de Aviso", "canonical": "light-dark(#92400E, #FCD34D)" },
+      "warning-text-dark": { "role": "tertiary", "displayName": "Texto de Aviso (escuro)", "canonical": "light-dark(#92400E, #FCD34D)" },
+      "danger": { "role": "tertiary", "displayName": "Vermelho Alerta", "canonical": "#EF4444", "tonalRamp": ["#7F1D1D", "#991B1B", "#B91C1C", "#DC2626", "#EF4444", "#F87171", "#FCA5A5", "#FEE2E2"] },
+      "danger-fill": { "role": "tertiary", "displayName": "Vermelho de Ação", "canonical": "#DC2626", "deviation": "paletadecor define o botão de perigo em #EF4444; branco sobre #EF4444 fica em 3,8:1." },
+      "danger-fill-hover": { "role": "tertiary", "displayName": "Vermelho de Ação (hover)", "canonical": "#B91C1C" },
+      "danger-text": { "role": "tertiary", "displayName": "Texto de Perigo", "canonical": "light-dark(#B91C1C, #FCA5A5)" },
+      "danger-text-dark": { "role": "tertiary", "displayName": "Texto de Perigo (escuro)", "canonical": "light-dark(#B91C1C, #FCA5A5)" },
+      "info": { "role": "tertiary", "displayName": "Azul Informação", "canonical": "#3B82F6", "tonalRamp": ["#1E3A8A", "#1E40AF", "#1D4ED8", "#2563EB", "#3B82F6", "#60A5FA", "#93C5FD", "#DBEAFE"] },
+      "info-text": { "role": "tertiary", "displayName": "Texto de Informação", "canonical": "light-dark(#1D4ED8, #93C5FD)" },
+      "info-text-dark": { "role": "tertiary", "displayName": "Texto de Informação (escuro)", "canonical": "light-dark(#1D4ED8, #93C5FD)" },
+      "status-todo": { "role": "tertiary", "displayName": "Status A Fazer", "canonical": "#94A3B8" },
+      "status-review": { "role": "tertiary", "displayName": "Status Revisão", "canonical": "#A855F7" },
+      "priority-low": { "role": "tertiary", "displayName": "Prioridade Baixa", "canonical": "#10B981" },
+      "priority-medium": { "role": "tertiary", "displayName": "Prioridade Média", "canonical": "#FBBF24" },
+      "priority-high": { "role": "tertiary", "displayName": "Prioridade Alta", "canonical": "#F97316" },
+      "workspace-blue": { "role": "secondary", "displayName": "Workspace Azul", "canonical": "#2563EB", "deviation": "Cores de workspace escurecidas em relação ao paletadecor para 4,5:1 com a inicial branca." },
+      "workspace-petroleum": { "role": "secondary", "displayName": "Workspace Petróleo", "canonical": "#0F766E" },
+      "workspace-green": { "role": "secondary", "displayName": "Workspace Verde", "canonical": "#15803D" },
+      "workspace-orange": { "role": "secondary", "displayName": "Workspace Laranja", "canonical": "#C2410C" },
+      "workspace-magenta": { "role": "secondary", "displayName": "Workspace Magenta", "canonical": "#BE185D" },
+      "workspace-purple": { "role": "secondary", "displayName": "Workspace Roxo", "canonical": "#7C3AED" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Só o título principal da landing (modo Persuade)." },
+      "headline": { "displayName": "Headline", "purpose": "Títulos de seção e da faixa de fechamento da landing." },
+      "page-title": { "displayName": "Título de página", "purpose": "h1 de toda tela do app, via cabeçalho de página." },
+      "title": { "displayName": "Título", "purpose": "h2 do app e itens de diferencial da landing." },
+      "title-sm": { "displayName": "Título pequeno", "purpose": "Título de card, estado vazio e seção dentro de card." },
+      "body": { "displayName": "Corpo", "purpose": "Corpo de toda a interface; descrições até 42rem." },
+      "body-lg": { "displayName": "Corpo grande", "purpose": "Prosa longa (docs, descrições) e parágrafos da landing." },
+      "label": { "displayName": "Rótulo", "purpose": "Texto auxiliar, rótulos, botão pequeno." },
+      "caption": { "displayName": "Legenda", "purpose": "Metadados, contadores e badges; números tabulares." },
+      "mono": { "displayName": "Mono", "purpose": "Código." }
+    },
+    "shadows": [
+      { "name": "shadow-sm (Pouso)", "value": "0 1px 2px light-dark(rgb(16 24 40 / 0.08), rgb(0 0 0 / 0.32))", "purpose": "Botão secundário, card de tarefa em repouso, aba ativa do segmentado." },
+      { "name": "shadow-md (Levantar)", "value": "0 4px 12px -2px light-dark(rgb(16 24 40 / 0.14), rgb(0 0 0 / 0.5)), 0 2px 4px -2px light-dark(rgb(16 24 40 / 0.08), rgb(0 0 0 / 0.32))", "purpose": "Hover de card clicável e de card de tarefa." },
+      { "name": "shadow-lg (Flutuar)", "value": "0 20px 40px -12px light-dark(rgb(16 24 40 / 0.14), rgb(0 0 0 / 0.5)), 0 4px 10px -4px light-dark(rgb(16 24 40 / 0.08), rgb(0 0 0 / 0.32))", "purpose": "Diálogos, toasts, menus." },
+      { "name": "halo-indigo", "value": "0 30px 60px -24px rgb(63 64 191 / 0.35), var(--shadow-lg)", "purpose": "Só a janela de produto da landing." },
+      { "name": "focus-field", "value": "0 0 0 3px color-mix(in srgb, var(--color-focus) 24%, transparent)", "purpose": "Halo de foco em campos, com a borda na cor de foco." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Curva padrão de toda transição e entrada." },
+      { "name": "ease-in-out", "value": "cubic-bezier(0.65, 0, 0.35, 1)", "purpose": "Movimentos de ida e volta." },
+      { "name": "duration-fast", "value": "120ms", "purpose": "Mudanças de estado (hover, cor, borda)." },
+      { "name": "duration-base", "value": "180ms", "purpose": "Diálogo abrindo, chevron girando." },
+      { "name": "duration-slow", "value": "260ms", "purpose": "Entrada de toast e do painel da janela de produto." },
+      { "name": "reduced-motion", "value": "prefers-reduced-motion: reduce", "purpose": "Mantém cor e opacidade, remove deslocamento e escala." }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "640px" },
+      { "name": "tablet", "value": "1024px" },
+      { "name": "touch", "value": "pointer: coarse (alvos de 44px)" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botão primário",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Uma ação principal por região.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Criar tarefa</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-height: 2.25rem; padding: 0 1rem; border: 1px solid transparent; border-radius: 8px; font-family: var(--font-sans, Inter, system-ui, sans-serif); font-size: 0.875rem; font-weight: 500; line-height: 1; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary { background: var(--color-accent, #5B5CEB); color: #FFFFFF; } .ds-btn-primary:hover { background: var(--color-accent-hover, #4B4CD8); } .ds-btn-primary:active { background: var(--color-accent-active, #3F40BF); transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-focus, #5B5CEB); outline-offset: 2px; }"
+    },
+    {
+      "name": "Botão secundário",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Alternativas ao primário.",
+      "html": "<button class=\"ds-btn-secondary\">Cancelar</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; min-height: 2.25rem; padding: 0 1rem; border: 1px solid var(--color-border-strong, #D1D5DB); border-radius: 8px; background: var(--color-surface-raised, #FFFFFF); color: var(--color-text, #111827); box-shadow: var(--shadow-sm, 0 1px 2px rgb(16 24 40 / 0.08)); font-family: var(--font-sans, Inter, system-ui, sans-serif); font-size: 0.875rem; font-weight: 500; line-height: 1; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-secondary:hover { background: var(--color-hover, #F1F3F8); } .ds-btn-secondary:active { background: var(--color-selected, #EEF0FF); transform: translateY(1px); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--color-focus, #5B5CEB); outline-offset: 2px; }"
+    },
+    {
+      "name": "Botão de perigo",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Só para destruir algo; #DC2626 por contraste.",
+      "html": "<button class=\"ds-btn-danger\">Excluir lista</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; min-height: 2.25rem; padding: 0 1rem; border: 1px solid transparent; border-radius: 8px; background: var(--color-danger-fill, #DC2626); color: #FFFFFF; font-family: var(--font-sans, Inter, system-ui, sans-serif); font-size: 0.875rem; font-weight: 500; line-height: 1; cursor: pointer; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-danger:hover, .ds-btn-danger:active { background: var(--color-danger-fill-hover, #B91C1C); } .ds-btn-danger:focus-visible { outline: 2px solid var(--color-focus, #5B5CEB); outline-offset: 2px; }"
+    },
+    {
+      "name": "Campo de texto",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo padrão de formulário, com halo de foco.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Nome da lista\" />",
+      "css": ".ds-input { width: 100%; min-height: 2.25rem; padding: 0 0.75rem; border: 1px solid var(--color-border-strong, #D1D5DB); border-radius: 8px; background: var(--color-surface, #FFFFFF); color: var(--color-text, #111827); font-family: var(--font-sans, Inter, system-ui, sans-serif); font-size: 0.875rem; transition: border-color 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-input::placeholder { color: var(--color-text-disabled, #9CA3AF); } .ds-input:hover { border-color: var(--color-text-disabled, #9CA3AF); } .ds-input:focus-visible { outline: none; border-color: var(--color-focus, #5B5CEB); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus, #5B5CEB) 24%, transparent); }"
+    },
+    {
+      "name": "Item da sidebar",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Linha de navegação lateral; ativo em Índigo Névoa com texto accent-text.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-link is-active\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m9 11 3 3L22 4\"/><path d=\"M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11\"/></svg>Minhas tarefas</a><a class=\"ds-nav-link\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z\"/></svg>Chat<span class=\"ds-nav-count\">3</span></a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 1px; width: 15.5rem; padding: 0.75rem 0.5rem; background: var(--color-sidebar, #FFFFFF); border-right: 1px solid var(--color-border, #E5E7EB); } .ds-nav-link { display: flex; align-items: center; gap: 0.625rem; min-height: 2rem; padding: 0 0.5rem; border-radius: 6px; color: var(--color-text-secondary, #4B5563); font-family: var(--font-sans, Inter, system-ui, sans-serif); font-size: 0.875rem; font-weight: 500; text-decoration: none; transition: background-color 120ms cubic-bezier(0.16, 1, 0.3, 1), color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-nav-link svg { color: var(--color-text-muted, #6B7280); } .ds-nav-link:hover { background: var(--color-hover, #F1F3F8); color: var(--color-text, #111827); } .ds-nav-link.is-active { background: var(--color-selected, #EEF0FF); color: var(--color-accent-text, #4B4CD8); } .ds-nav-link.is-active svg { color: var(--color-accent-text, #4B4CD8); } .ds-nav-link:focus-visible { outline: 2px solid var(--color-focus, #5B5CEB); outline-offset: 2px; } .ds-nav-count { margin-left: auto; min-width: 1.25rem; padding: 0 0.375rem; border-radius: 999px; background: var(--color-danger-fill, #DC2626); color: #FFFFFF; font-size: 0.6875rem; font-weight: 600; line-height: 1.125rem; text-align: center; }"
+    },
+    {
+      "name": "Abas de visão",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Troca entre Lista, Quadro, Calendário e Gantt; a mesma aba da janela de produto da landing.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab is-active\" role=\"tab\" aria-selected=\"true\">Quadro</button><button class=\"ds-tab\" role=\"tab\">Lista</button><button class=\"ds-tab\" role=\"tab\">Calendário</button><button class=\"ds-tab\" role=\"tab\">Gantt</button></div>",
+      "css": ".ds-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--color-border, #E5E7EB); } .ds-tab { min-height: 2.5rem; padding: 0 0.75rem; margin-bottom: -1px; border: none; border-bottom: 2px solid transparent; background: none; color: var(--color-text-muted, #6B7280); font-family: var(--font-sans, Inter, system-ui, sans-serif); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: color 120ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-tab:hover { color: var(--color-text, #111827); } .ds-tab.is-active { color: var(--color-text, #111827); border-bottom-color: var(--color-accent, #5B5CEB); } .ds-tab:focus-visible { outline: 2px solid var(--color-focus, #5B5CEB); outline-offset: -2px; }"
+    },
+    {
+      "name": "Badge de status",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Bolinha da categoria mais nome; a cor é informação.",
+      "html": "<span class=\"ds-badge ds-badge-progress\">Em andamento</span> <span class=\"ds-badge ds-badge-done\">Concluído</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 0.25rem; min-height: 1.25rem; padding: 0 0.5rem; border-radius: 6px; font-family: var(--font-sans, Inter, system-ui, sans-serif); font-size: 0.75rem; font-weight: 500; line-height: 1; } .ds-badge::before { content: \"\"; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--dot); } .ds-badge-progress { --dot: var(--status-inprogress, #3B82F6); background: var(--badge-status-inprogress-bg, #DBEAFE); color: var(--badge-status-inprogress-fg, #1D4ED8); } .ds-badge-done { --dot: var(--status-done, #22C55E); background: var(--badge-status-done-bg, #DCFCE7); color: var(--badge-status-done-fg, #15803D); }"
+    },
+    {
+      "name": "Card de tarefa",
+      "kind": "card",
+      "refersTo": "task-card",
+      "description": "Card arrastável do quadro: repousa em sombra Pouso, sobe a Levantar no hover.",
+      "html": "<article class=\"ds-task\"><span class=\"ds-task-label\">Design</span><h3 class=\"ds-task-title\">Ajustar tela de login no celular</h3><div class=\"ds-task-foot\"><span>12 out</span><span class=\"ds-task-avatar\">A</span></div></article>",
+      "css": ".ds-task { display: flex; flex-direction: column; gap: 0.5rem; width: 16rem; padding: 0.75rem; border: 1px solid var(--color-border, #E5E7EB); border-radius: 8px; background: var(--color-surface-raised, #FFFFFF); box-shadow: var(--shadow-sm, 0 1px 2px rgb(16 24 40 / 0.08)); font-family: var(--font-sans, Inter, system-ui, sans-serif); cursor: grab; transition: border-color 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-task:hover { border-color: var(--color-border-strong, #D1D5DB); box-shadow: var(--shadow-md, 0 4px 12px -2px rgb(16 24 40 / 0.14), 0 2px 4px -2px rgb(16 24 40 / 0.08)); } .ds-task:focus-within { border-color: var(--color-focus, #5B5CEB); } .ds-task-label { align-self: flex-start; padding: 0 0.375rem; min-height: 1.125rem; line-height: 1.125rem; border-radius: 6px; background: #7C3AED; color: #FFFFFF; font-size: 0.6875rem; font-weight: 500; } .ds-task-title { margin: 0; color: var(--color-text, #111827); font-size: 0.875rem; font-weight: 500; line-height: 1.4; } .ds-task-foot { display: flex; align-items: center; justify-content: space-between; color: var(--color-text-muted, #6B7280); font-size: 0.75rem; } .ds-task-avatar { display: inline-flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; border-radius: 50%; background: oklch(0.52 0.13 250); color: #FFFFFF; font-size: 0.525rem; font-weight: 600; }"
+    },
+    {
+      "name": "Janela do produto",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Assinatura da landing: o próprio Nexus em miniatura, com Halo Índigo e abas.",
+      "html": "<figure class=\"ds-window\"><div class=\"ds-window-bar\"><span>Nexus App <i>/</i> Produto <i>/</i> <b>Sprint 14</b></span></div><div class=\"ds-window-tabs\"><button class=\"is-active\">Kanban</button><button>Lista</button><button>Docs</button><button>Chat</button></div><div class=\"ds-window-panel\"></div><figcaption class=\"ds-window-caption\">Tela ilustrativa, com dados de exemplo.</figcaption></figure>",
+      "css": ".ds-window { margin: 0; width: 28rem; border: 1px solid var(--color-border, #E5E7EB); border-radius: 12px; background: var(--color-surface-raised, #FFFFFF); box-shadow: 0 30px 60px -24px rgb(63 64 191 / 0.35), 0 20px 40px -12px rgb(16 24 40 / 0.14), 0 4px 10px -4px rgb(16 24 40 / 0.08); overflow: hidden; font-family: var(--font-sans, Inter, system-ui, sans-serif); } .ds-window-bar { display: flex; align-items: center; height: 2.75rem; padding: 0 1rem; border-bottom: 1px solid var(--color-divider, #EEF2F7); background: var(--color-surface, #FFFFFF); color: var(--color-text-muted, #6B7280); font-size: 0.8125rem; } .ds-window-bar i { margin: 0 0.25rem; font-style: normal; color: var(--color-text-disabled, #9CA3AF); } .ds-window-bar b { color: var(--color-text, #111827); font-weight: 600; } .ds-window-tabs { display: flex; gap: 0.25rem; padding: 0 0.75rem; border-bottom: 1px solid var(--color-divider, #EEF2F7); } .ds-window-tabs button { min-height: 2.5rem; padding: 0 0.75rem; margin-bottom: -1px; border: none; border-bottom: 2px solid transparent; background: none; color: var(--color-text-muted, #6B7280); font: inherit; font-size: 0.8125rem; font-weight: 500; cursor: pointer; } .ds-window-tabs button:hover { color: var(--color-text, #111827); } .ds-window-tabs button.is-active { color: var(--color-text, #111827); border-bottom-color: var(--color-accent, #5B5CEB); } .ds-window-tabs button:focus-visible { outline: 2px solid var(--color-focus, #5B5CEB); outline-offset: -3px; } .ds-window-panel { height: 8rem; background: var(--color-bg, #F7F8FC); } .ds-window-caption { padding: 0.5rem 1rem; border-top: 1px solid var(--color-divider, #EEF2F7); background: var(--color-surface, #FFFFFF); color: var(--color-text-muted, #6B7280); font-size: 0.75rem; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A Mesa de Trabalho Arrumada",
+    "overview": "O Nexus é uma ferramenta de trabalho diário, e o sistema visual se comporta como uma mesa bem arrumada: fundo levemente frio, superfícies brancas delimitadas por bordas finas, um único índigo que marca onde está a ação e onde você está. A densidade é de produto (corpo em 14px, controles de 36px, linhas de 32px na navegação), pensada para quem passa o dia arrastando tarefas, lendo docs e conversando sem trocar de ferramenta.\n\nUm só sistema serve dois modos. No app (modo Operate) a escala tipográfica é fixa em rem, os títulos pesam 600 e a cor aparece só como informação: status, prioridade, tipo, workspace. Na landing pública (modo Persuade) o mesmo mundo ganha títulos fluidos em peso 700, respiros de 64px entre seções e uma peça assinatura, a janela do produto, que mostra o próprio Nexus funcionando em vez de ilustração. Nada na landing usa cor, fonte ou forma que o app não tenha.\n\nOs dois temas, claro e escuro, são obrigatórios e cumprem WCAG AA. Cada cor é declarada uma única vez com `light-dark()` em `tokens.css`; o tema vem do sistema operacional ou do `data-theme` gravado quando a pessoa escolhe. A paleta de `paletadecor.md` é compromisso de marca; os únicos afastamentos dela existem por contraste e estão registrados em Colors.",
+    "keyCharacteristics": [
+      "Índigo #5B5CEB como acento único, em ações primárias, item ativo e foco.",
+      "Superfícies planas com borda de 1px; sombra só para o que flutua ou se arrasta.",
+      "Inter auto-hospedada, quatro pesos (400/500/600/700), escala fixa no app e fluida só nos títulos da landing.",
+      "Cantos 6/8/12px por tamanho do objeto; pílula só para contadores e marcadores.",
+      "Tema claro e escuro por `light-dark()`, ambos em AA.",
+      "Ícones de traço 2px em grade de 24px, de um conjunto único."
+    ],
+    "rules": [
+      { "name": "A Regra do Acento Único", "body": "O índigo é o único acento. Semânticas, status e prioridade são informação, não decoração; nenhuma segunda cor de marca entra em botões, fundos de seção ou títulos.", "section": "colors" },
+      { "name": "A Regra do Texto de Acento", "body": "Texto índigo sempre usa accent-text. #5B5CEB é preenchimento (botão, sublinhado, marcador), nunca cor de texto sobre fundo tingido ou escuro.", "section": "colors" },
+      { "name": "A Regra da Cor com Nome", "body": "Status é bolinha mais nome; prioridade é barras mais rótulo. A cor nunca é o único portador da informação.", "section": "colors" },
+      { "name": "A Regra da Escala Fixa", "body": "No app os tamanhos são fixos em rem; um h1 não muda com a largura da janela. `clamp()` existe só nos títulos da landing.", "section": "typography" },
+      { "name": "A Regra dos Quatro Pesos", "body": "Só 400, 500, 600 e 700. Títulos do app em 600, títulos da landing e wordmark em 700, controles e rótulos em 500.", "section": "typography" },
+      { "name": "A Regra do Plano com Borda", "body": "Em repouso, card é superfície mais borda de 1px, sem sombra (exceto o que se arrasta). Sombra média só como resposta a hover; sombra grande só para camadas que flutuam.", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** usar accent-text (#4B4CD8 claro, #A5A8FF escuro) para qualquer texto ou ícone índigo.",
+      "**Do** usar danger-fill (#DC2626) sob texto branco; #EF4444 fica para ícone, bolinha e borda.",
+      "**Do** oferecer só as sete cores de workspace de `WorkspaceColors`, todas com 4,5:1 contra a inicial branca.",
+      "**Do** declarar toda cor nova uma única vez com `light-dark()` em `tokens.css` e conferir AA nos dois temas.",
+      "**Do** manter um botão primário por região e usar secundário ou ghost para o resto.",
+      "**Do** separar superfícies por tom e borda de 1px; reservar sombra para hover, arraste e camadas flutuantes.",
+      "**Do** usar os breakpoints 640px e 1024px e alvos de 44px em ponteiro grosso.",
+      "**Do** desenhar ícones pelo componente Icon: traço 2px, grade 24px, decorativo por padrão e com rótulo quando for o único conteúdo do controle."
+    ],
+    "donts": [
+      "**Don't** usar #5B5CEB como cor de texto sobre fundo tingido ou escuro.",
+      "**Don't** introduzir um segundo acento de marca; cor semântica não vira decoração.",
+      "**Don't** usar `clamp()` ou tamanhos fluidos nas telas do app.",
+      "**Don't** usar pesos fora de 400, 500, 600 e 700 nem outra família além de Inter.",
+      "**Don't** colocar sombra em card em repouso nem aninhar cards dentro de cards.",
+      "**Don't** escrever hex solto em componente quando existe token.",
+      "**Don't** pôr rótulo em caixa alta acima de título; o sistema não usa sobretítulos.",
+      "**Don't** usar emoji ou caracteres como ícone."
+    ]
+  }
+}

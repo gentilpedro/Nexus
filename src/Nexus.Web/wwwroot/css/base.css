@@ -1,0 +1,339 @@
+/* Base: reset, tipografia de documento e as superfícies do navegador (foco, seleção,
+   scrollbar, placeholder) — as partes que ninguém desenha e que por isso entregam o padrão
+   do navegador quando esquecidas. */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    accent-color: var(--color-accent);
+    scrollbar-color: var(--color-border-strong) transparent;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--leading-normal);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01";
+}
+
+::selection {
+    background: color-mix(in srgb, var(--color-accent) 28%, transparent);
+    color: inherit;
+}
+
+/* ---- Títulos ----
+   Escala fixa em rem (interface de produto, não página editorial): o tamanho de um h1 não
+   muda com a largura da janela. */
+h1, h2, h3, h4, h5, h6 {
+    margin: 0 0 var(--space-3);
+    color: var(--color-text);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-tight);
+    letter-spacing: -0.011em;
+    text-wrap: balance;
+}
+
+h1 { font-size: var(--text-h1); letter-spacing: -0.018em; }
+h2 { font-size: var(--text-h2); letter-spacing: -0.014em; }
+h3 { font-size: var(--text-h3); }
+h4 { font-size: var(--text-h4); }
+h5, h6 { font-size: var(--text-body); }
+
+p {
+    margin: 0 0 var(--space-3);
+    text-wrap: pretty;
+}
+
+p:last-child {
+    margin-bottom: 0;
+}
+
+small {
+    font-size: var(--text-small);
+}
+
+strong, b {
+    font-weight: var(--weight-semibold);
+}
+
+code, kbd, samp, pre {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid var(--color-divider);
+    margin: var(--space-6) 0;
+}
+
+img, svg, video, canvas {
+    max-width: 100%;
+}
+
+img {
+    height: auto;
+}
+
+/* ---- Links ---- */
+a {
+    color: var(--color-accent-text);
+    text-decoration: none;
+    text-underline-offset: 0.18em;
+    text-decoration-thickness: 1px;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* ---- Foco ----
+   Um anel só, visível nos dois temas, apenas para teclado. */
+:focus {
+    outline: none;
+}
+
+:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* Blazor foca o h1 após a navegação para o leitor de tela anunciar a página; o anel ali
+   só atrapalharia quem usa mouse. */
+h1:focus,
+h1:focus-visible {
+    outline: none;
+}
+
+/* ---- Campos: base comum a todo input/select/textarea do app ---- */
+input,
+select,
+textarea,
+button {
+    font: inherit;
+    color: inherit;
+    letter-spacing: inherit;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="url"],
+input[type="tel"],
+input:not([type]),
+select,
+textarea {
+    width: 100%;
+    min-height: var(--control-md);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-body);
+    line-height: var(--leading-snug);
+    transition: border-color var(--duration-fast) var(--ease-out),
+                box-shadow var(--duration-fast) var(--ease-out);
+}
+
+textarea {
+    min-height: 5.5rem;
+    padding: var(--space-2) var(--space-3);
+    resize: vertical;
+    line-height: var(--leading-normal);
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+    border-color: var(--color-text-disabled);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    border-color: var(--color-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 24%, transparent);
+    border-radius: var(--radius-md);
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--color-text-disabled);
+    opacity: 1;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+    cursor: not-allowed;
+    color: var(--color-text-disabled);
+    background-color: var(--color-surface-sunken);
+}
+
+input[readonly] {
+    background-color: var(--color-surface-sunken);
+}
+
+select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2rem;
+    background-image: var(--select-chevron);
+    background-repeat: no-repeat;
+    background-position: right 0.65rem center;
+    background-size: 0.85rem;
+    cursor: pointer;
+}
+
+select option {
+    color: var(--color-text);
+    background-color: var(--color-surface);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--color-accent);
+}
+
+input[type="file"] {
+    font-size: var(--text-small);
+    color: var(--color-text-secondary);
+    max-width: 100%;
+}
+
+input[type="file"]::file-selector-button {
+    margin-right: var(--space-3);
+    padding: var(--space-1-5) var(--space-3);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+    font: inherit;
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+input[type="file"]::file-selector-button:hover {
+    background: var(--color-hover);
+}
+
+input[type="color"] {
+    width: var(--control-md);
+    height: var(--control-md);
+    padding: 2px;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    cursor: pointer;
+}
+
+/* Validação do Blazor (EditForm) */
+.valid.modified:not([type="checkbox"]):not([type="radio"]) {
+    border-color: var(--color-success);
+}
+
+.invalid {
+    border-color: var(--color-danger) !important;
+}
+
+.invalid:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 22%, transparent) !important;
+}
+
+.validation-message {
+    color: var(--color-danger-text);
+    font-size: var(--text-small);
+}
+
+/* ---- Tabelas: base neutra; a versão de interface é .data-table ---- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+th, td {
+    text-align: left;
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--color-divider);
+}
+
+/* ---- Utilidades de acessibilidade ---- */
+.sr-only {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.skip-link {
+    position: absolute;
+    left: var(--space-3);
+    top: -3rem;
+    z-index: calc(var(--z-toast) + 1);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
+    color: var(--color-text-on-accent);
+    font-weight: var(--weight-semibold);
+    transition: top var(--duration-fast) var(--ease-out);
+}
+
+.skip-link:focus-visible {
+    top: var(--space-3);
+    text-decoration: none;
+}
+
+.tabular {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Movimento reduzido ----
+   Mantém as mudanças de estado (cor, opacidade), tira deslocamento e escala. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-property: color, background-color, border-color, opacity, box-shadow !important;
+    }
+}
+
+[hidden] {
+    display: none !important;
+}
