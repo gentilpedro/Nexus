@@ -72,6 +72,11 @@ builder.Services.AddScoped<AuditLogService>();
 // Chat ao vivo e rate limiting do circuito. Sem Redis:ConnectionString configurado,
 // registra as implementacoes de instancia unica — o comportamento anterior.
 builder.Services.AddChatBackplane(builder.Configuration);
+builder.Services.AddSingleton<Nexus.Web.Services.Collab.DocCollabService>();
+// Presença nos Docs acompanha a conexão do circuito: sai quando a aba fecha, não minutos depois.
+builder.Services.AddScoped<Nexus.Web.Services.Collab.DocPresenceCircuitHandler>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler>(
+    sp => sp.GetRequiredService<Nexus.Web.Services.Collab.DocPresenceCircuitHandler>());
 builder.Services.AddSingleton<AttachmentStorageService>();
 builder.Services.AddHostedService<SprintSnapshotHostedService>();
 builder.Services.AddHostedService<DueDateNotificationHostedService>();

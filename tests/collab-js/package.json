@@ -1,0 +1,13 @@
+{
+  "name": "nexus-collab-js",
+  "private": true,
+  "description": "Gera os vetores de referência do quill-delta e testa o núcleo do cliente colaborativo.",
+  "type": "module",
+  "scripts": {
+    "vectors": "node gen-vectors.mjs",
+    "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON"
+  },
+  "devDependencies": {
+    "quill-delta": "5.1.0"
+  }
+}
