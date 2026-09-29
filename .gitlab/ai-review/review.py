@@ -81,21 +81,38 @@ SECRET_VALUES = [v for k, v in os.environ.items()
                  if v and len(v) >= 12 and (k.endswith("TOKEN") or k.endswith("KEY") or k.endswith("PASSWORD") or k.endswith("SECRET"))]
 
 
+QUICK_ACTION = re.compile(r"^(\s*)/", re.MULTILINE)
+
+
 def redact(text):
+    """Tudo o que sai do modelo passa por aqui antes de virar comentário."""
     for value in SECRET_VALUES:
         text = text.replace(value, "[removido]")
     for pattern in SECRET_PATTERNS:
         text = pattern.sub("[removido]", text)
-    return text
+    # O marcador de "já revisado" só pode vir deste script, nunca do texto do modelo.
+    text = MARKER.sub("", text)
+    # O GitLab executa quick actions (/approve, /merge, /label…) escritas em notas criadas pela
+    # API, com a permissão de quem posta. Um diff manipulado poderia fazer o modelo escrever
+    # "/approve" e o bot aprovaria o MR. Com a barra escapada, o Markdown mostra "/approve" como
+    # texto e o GitLab não reconhece o comando.
+    return QUICK_ACTION.sub(r"\1\\/", text)
 
 
 # --------------------------------------------------------------------------------------------
 # Revisão
 # --------------------------------------------------------------------------------------------
 
-def previous_review(notes):
-    """SHA da última revisão deste bot neste MR, ou None."""
+def previous_review(notes, bot_id):
+    """SHA da última revisão deste bot neste MR, ou None.
+
+    Só vale o marcador escrito pelo próprio bot: o projeto é público, e qualquer pessoa que
+    comentasse um marcador com o SHA atual suprimiria a revisão — ou, com um SHA antigo,
+    restringiria a revisão incremental e esconderia parte do diff do revisor.
+    """
     for note in sorted(notes, key=lambda n: n["created_at"], reverse=True):
+        if (note.get("author") or {}).get("id") != bot_id:
+            continue
         match = MARKER.search(note.get("body") or "")
         if match:
             return match.group(1)
@@ -172,6 +189,10 @@ SEVERITY_ORDER = {"bloqueante": 0, "importante": 1, "sugestão": 2}
 
 
 def post_inline(finding, diff_refs, old_paths):
+    try:
+        line = int(finding["line"])
+    except (TypeError, ValueError):
+        return False  # "42-45", "n/a"…: o achado vai para o resumo em vez de derrubar o job
     body = redact(f"**[{finding['severity']}] {finding['title']}**\n\n{finding['body']}")
     new_path = finding["file"]
     data = {
@@ -182,19 +203,20 @@ def post_inline(finding, diff_refs, old_paths):
         "position[head_sha]": diff_refs["head_sha"],
         "position[new_path]": new_path,
         "position[old_path]": old_paths.get(new_path, new_path),
-        "position[new_line]": int(finding["line"]),
+        "position[new_line]": line,
     }
     try:
         api("POST", f"/merge_requests/{MR_IID}/discussions", data)
         return True
-    except urllib.error.HTTPError:
-        return False  # linha fora do diff: o achado vai para o resumo
+    except (urllib.error.URLError, TimeoutError):
+        return False  # linha fora do diff (ou falha de rede): o achado vai para o resumo
 
 
 def main():
     os.makedirs(WORKDIR, exist_ok=True)
+    me = json.load(urllib.request.urlopen(urllib.request.Request(f"{API}/user", headers={"PRIVATE-TOKEN": TOKEN}), timeout=30))
     notes = api_all(f"/merge_requests/{MR_IID}/notes?sort=desc")
-    last = previous_review(notes)
+    last = previous_review(notes, me["id"])
     if last == HEAD_SHA:
         print(f"O commit {HEAD_SHA[:7]} já foi revisado. Nada a fazer.")
         return
@@ -228,7 +250,7 @@ def main():
         leftovers.append(finding)
 
     counts = {s: sum(1 for f in findings if f.get("severity") == s) for s in SEVERITY_ORDER}
-    lines = ["### Revisão automática", "", review["summary"], ""]
+    lines = ["### Revisão automática", "", str(review["summary"]), ""]
     if findings:
         lines.append("**Achados:** " + ", ".join(f"{n} {s}" for s, n in counts.items() if n) +
                      (" — comentados nas linhas do diff." if len(leftovers) < len(findings) else "."))
@@ -242,12 +264,13 @@ def main():
     if cost is not None:
         footer += f" · US$ {cost:.2f}"
     footer += " · só aconselha: não aprova nem bloqueia o merge."
-    lines += ["", f"<sub>{footer}</sub>", f"<!-- ai-review sha={HEAD_SHA} -->"]
-    api("POST", f"/merge_requests/{MR_IID}/notes", {"body": redact("\n".join(lines))})
+    lines += ["", f"<sub>{footer}</sub>"]
+    # O marcador entra depois da redação, que apaga qualquer marcador vindo do modelo.
+    body = redact("\n".join(lines)) + f"\n<!-- ai-review sha={HEAD_SHA} -->"
+    api("POST", f"/merge_requests/{MR_IID}/notes", {"body": body})
 
     # O bot aparece como revisor do MR, sem tirar os revisores que já estavam lá.
     try:
-        me = json.load(urllib.request.urlopen(urllib.request.Request(f"{API}/user", headers={"PRIVATE-TOKEN": TOKEN}), timeout=30))
         reviewers = {r["id"] for r in mr.get("reviewers", [])}
         if me["id"] not in reviewers:
             api("PUT", f"/merge_requests/{MR_IID}", {"reviewer_ids[]": sorted(reviewers | {me["id"]})})

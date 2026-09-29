@@ -138,13 +138,6 @@ verify:
       - publish/
     expire_in: 1 week
 
-# Leva para o GitHub o que foi commitado aqui. O deploy sai de lá, então uma mudança que entrasse
-# só no GitLab nunca chegaria em produção — este job existe para que isso não aconteça.
-#
-# Nunca empurra para a main do GitHub: cria/atualiza a branch sync/gitlab lá e abre um Pull
-# Request, que fica esperando aprovação manual como qualquer outra mudança.
-#
-# Depois do verify, de propósito: um PR só é aberto se o código passou no quality gate.
 # Revisor automático de MRs (issue #43): o Claude Code lê o diff e o repositório e comenta no MR
 # como um revisor. Detalhes, segurança e configuração em docs/revisor-ia.md.
 #
@@ -174,6 +167,13 @@ ai-review:
   script:
     - python3 .gitlab/ai-review/review.py
 
+# Leva para o GitHub o que foi commitado aqui. O deploy sai de lá, então uma mudança que entrasse
+# só no GitLab nunca chegaria em produção — este job existe para que isso não aconteça.
+#
+# Nunca empurra para a main do GitHub: cria/atualiza a branch sync/gitlab lá e abre um Pull
+# Request, que fica esperando aprovação manual como qualquer outra mudança.
+#
+# Depois do verify, de propósito: um PR só é aberto se o código passou no quality gate.
 sync-github:
   stage: sync
   image: alpine:3.20
