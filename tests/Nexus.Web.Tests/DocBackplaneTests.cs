@@ -47,7 +47,7 @@ public class DocBackplaneTests
 
         var local = new DocChange(Guid.NewGuid(), 1, Guid.NewGuid(), DocChangeKind.Operation);
         var remote = new DocChange(Guid.NewGuid(), 7, Guid.NewGuid(), DocChangeKind.Operation);
-        await notifier.PublishAsync(local);
+        await notifier.PublishAsync(local, TestContext.Current.CancellationToken);
         notifier.RaiseFromRemote(remote);
 
         Assert.Equal([local, remote], seen);
@@ -64,7 +64,7 @@ public class DocBackplaneTests
         notifier.Changed += _ => throw new InvalidOperationException("circuito com problema");
         notifier.Changed += _ => seen++;
 
-        await notifier.PublishAsync(new DocChange(Guid.NewGuid(), 1, Guid.Empty, DocChangeKind.Operation));
+        await notifier.PublishAsync(new DocChange(Guid.NewGuid(), 1, Guid.Empty, DocChangeKind.Operation), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, seen);
     }
@@ -78,19 +78,19 @@ public class DocBackplaneTests
         var anaTab2 = Guid.NewGuid();
         var bia = Guid.NewGuid();
 
-        await store.JoinAsync(doc, anaTab1, new DocEditor("ana", "Ana"));
-        await store.JoinAsync(doc, anaTab2, new DocEditor("ana", "Ana"));
-        await store.JoinAsync(doc, bia, new DocEditor("bia", "Bia"));
+        await store.JoinAsync(doc, anaTab1, new DocEditor("ana", "Ana"), TestContext.Current.CancellationToken);
+        await store.JoinAsync(doc, anaTab2, new DocEditor("ana", "Ana"), TestContext.Current.CancellationToken);
+        await store.JoinAsync(doc, bia, new DocEditor("bia", "Bia"), TestContext.Current.CancellationToken);
 
-        Assert.Equal(["Ana", "Bia"], (await store.ListAsync(doc)).Select(e => e.Name));
+        Assert.Equal(["Ana", "Bia"], (await store.ListAsync(doc, TestContext.Current.CancellationToken)).Select(e => e.Name));
 
         // Ana fecha uma aba: continua editando pela outra.
-        await store.LeaveAsync(doc, anaTab1);
-        Assert.Equal(["Ana", "Bia"], (await store.ListAsync(doc)).Select(e => e.Name));
+        await store.LeaveAsync(doc, anaTab1, TestContext.Current.CancellationToken);
+        Assert.Equal(["Ana", "Bia"], (await store.ListAsync(doc, TestContext.Current.CancellationToken)).Select(e => e.Name));
 
-        await store.LeaveAsync(doc, anaTab2);
-        Assert.Equal(["Bia"], (await store.ListAsync(doc)).Select(e => e.Name));
-        Assert.Empty(await store.ListAsync(Guid.NewGuid()));
+        await store.LeaveAsync(doc, anaTab2, TestContext.Current.CancellationToken);
+        Assert.Equal(["Bia"], (await store.ListAsync(doc, TestContext.Current.CancellationToken)).Select(e => e.Name));
+        Assert.Empty(await store.ListAsync(Guid.NewGuid(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -104,16 +104,16 @@ public class DocBackplaneTests
         var ana = Guid.NewGuid();
         var bia = Guid.NewGuid();
 
-        await store.JoinAsync(doc, ana, new DocEditor("ana", "Ana"));
-        await store.JoinAsync(doc, bia, new DocEditor("bia", "Bia"));
+        await store.JoinAsync(doc, ana, new DocEditor("ana", "Ana"), TestContext.Current.CancellationToken);
+        await store.JoinAsync(doc, bia, new DocEditor("bia", "Bia"), TestContext.Current.CancellationToken);
 
         for (var i = 0; i < 4; i++)
         {
             clock.Advance(IDocPresenceStore.Heartbeat);
-            await store.JoinAsync(doc, ana, new DocEditor("ana", "Ana")); // só a Ana renova
+            await store.JoinAsync(doc, ana, new DocEditor("ana", "Ana"), TestContext.Current.CancellationToken); // só a Ana renova
         }
 
-        Assert.Equal(["Ana"], (await store.ListAsync(doc)).Select(e => e.Name));
+        Assert.Equal(["Ana"], (await store.ListAsync(doc, TestContext.Current.CancellationToken)).Select(e => e.Name));
     }
 
     [Fact]
@@ -131,23 +131,23 @@ public class DocBackplaneTests
         var ana = new DocEditor("ana", "Ana");
 
         handler.Register(session, doc, ana);
-        await store.JoinAsync(doc, session, ana);
+        await store.JoinAsync(doc, session, ana, TestContext.Current.CancellationToken);
 
         await handler.OnConnectionDownAsync(null!, CancellationToken.None);
         Assert.False(handler.IsConnected);
-        Assert.Empty(await store.ListAsync(doc));
+        Assert.Empty(await store.ListAsync(doc, TestContext.Current.CancellationToken));
 
         await handler.OnConnectionUpAsync(null!, CancellationToken.None);
         Assert.True(handler.IsConnected);
-        Assert.Equal(["Ana"], (await store.ListAsync(doc)).Select(e => e.Name));
+        Assert.Equal(["Ana"], (await store.ListAsync(doc, TestContext.Current.CancellationToken)).Select(e => e.Name));
         Assert.Equal(2, presenceChanges);
 
         // Depois de sair do documento, uma queda não mexe mais nele.
         handler.Unregister(session);
-        await store.LeaveAsync(doc, session);
+        await store.LeaveAsync(doc, session, TestContext.Current.CancellationToken);
         await handler.OnConnectionDownAsync(null!, CancellationToken.None);
         await handler.OnConnectionUpAsync(null!, CancellationToken.None);
-        Assert.Empty(await store.ListAsync(doc));
+        Assert.Empty(await store.ListAsync(doc, TestContext.Current.CancellationToken));
     }
 
     private sealed class RecordingPublisher : IDocChangePublisher
