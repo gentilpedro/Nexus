@@ -37,3 +37,7 @@ Wireframes/
 .impeccable/questions/
 .impeccable/hook.cache.json
 .impeccable/config.local.json
+
+# Revisor de MRs (docs/revisor-ia.md): diffs gerados pelo job e bytecode do script
+ai-review/
+__pycache__/
