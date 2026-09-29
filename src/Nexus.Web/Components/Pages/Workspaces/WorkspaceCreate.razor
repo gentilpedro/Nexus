@@ -4,110 +4,126 @@
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Services
+@using Nexus.Web.Extensions
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkspaceInviteService InviteService
 @inject NavigationManager NavigationManager
 
-<PageTitle>Novo workspace</PageTitle>
+<PageTitle>Novo workspace · Nexus</PageTitle>
 
-<div class="page-container page-container--wide">
-    <div class="breadcrumbs"><a href="/workspaces">Workspaces</a> / Novo workspace</div>
-    <div class="page-header">
-        <h1>Configurar novo workspace</h1>
-    </div>
-    <p style="color:var(--color-text-secondary); margin-top:-0.75rem; margin-bottom:1.5rem;">Crie um ambiente colaborativo para sua equipe e convide quem já vai trabalhar com você.</p>
+<div class="page-container">
+    <PageHeader Title="Novo workspace" Description="Um espaço para o seu time organizar projetos, documentos e conversas. Você pode convidar pessoas agora ou depois.">
+        <Breadcrumbs>
+            <a href="/workspaces">Workspaces</a>
+        </Breadcrumbs>
+    </PageHeader>
 
     @if (!string.IsNullOrEmpty(errorMessage))
     {
-        <div class="alert alert-danger">@errorMessage</div>
+        <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
     }
 
-    <div class="dashboard-layout">
-        <div>
-            <EditForm Model="model" OnValidSubmit="HandleCreate" class="card" style="margin-bottom:1rem;">
-                <DataAnnotationsValidator />
-                <div class="form-field">
-                    <label for="name">Nome do workspace</label>
-                    <InputText id="name" @bind-Value="model.Name" placeholder="Ex: Minha Empresa" />
-                    <ValidationMessage For="() => model.Name" />
-                    <span style="font-size:0.8rem;color:var(--color-text-muted);">Esse nome aparece na barra lateral para todos os membros.</span>
-                </div>
+    <EditForm Model="model" OnSubmit="HandleSubmit" class="card form-card">
+        <DataAnnotationsValidator />
 
-                <div class="form-field">
-                    <label>Cor de identificação</label>
-                    <div class="color-swatch-row">
-                        @foreach (var color in AvailableColors)
-                        {
-                            <button type="button" class="color-swatch @(model.Color == color ? "is-selected" : "")"
-                                    style="background:@color;" @onclick="() => model.Color = color"
-                                    aria-label="Selecionar cor @color"></button>
-                        }
+        <section class="form-section">
+            <h2 class="form-section-title">Identidade</h2>
+            <p class="form-section-description">O nome e a cor aparecem na barra lateral de todos os membros.</p>
+            <div class="identity-row">
+                <Avatar Name="@(string.IsNullOrWhiteSpace(model.Name) ? "?" : model.Name)" Color="@model.Color" Size="xl" Square="true" />
+                <div class="identity-fields">
+                    <div class="form-field">
+                        <label for="name" class="required">Nome do workspace</label>
+                        <InputText id="name" @bind-Value="model.Name" @bind-Value:event="oninput" placeholder="Ex.: Agência Norte, Time de Produto" autofocus />
+                        <ValidationMessage For="() => model.Name" />
                     </div>
+                    <fieldset class="form-fieldset">
+                        <legend class="field-label">Cor</legend>
+                        <div class="color-swatch-row">
+                            @foreach (var (color, colorName) in AvailableColors)
+                            {
+                                <button type="button" class="color-swatch @(model.Color == color ? "is-selected" : "")"
+                                        style="background:@color;" @onclick="() => model.Color = color"
+                                        aria-pressed="@(model.Color == color ? "true" : "false")" aria-label="@colorName"></button>
+                            }
+                        </div>
+                    </fieldset>
                 </div>
+            </div>
+        </section>
 
-                <label style="font-weight:600;display:block;margin:1rem 0 0.5rem;">Convidar membros</label>
-                <p style="font-size:0.85rem;color:var(--color-text-muted);margin:0 0 0.75rem;">A pessoa recebe um convite por e-mail. Se já tiver conta, entra direto; se não tiver, cria uma e já entra no workspace.</p>
-                <div class="form-row">
-                    <input type="email" placeholder="email@exemplo.com" @bind="inviteEmail" @bind:event="oninput" style="flex:1;padding:0.5rem 0.65rem;border:1px solid var(--color-border);border-radius:var(--radius);background:var(--color-surface);color:var(--color-text);" />
-                    <button type="button" class="btn btn-secondary" @onclick="AddInvite">+ Adicionar</button>
+        <section class="form-section">
+            <h2 class="form-section-title">Convidar pessoas <span class="field-hint">(opcional)</span></h2>
+            <p class="form-section-description">Cada pessoa recebe um convite por e-mail. Quem já tem conta entra direto; quem não tem cria uma e já cai no workspace.</p>
+
+            <div class="invite-input-row">
+                <div class="form-field">
+                    <label for="invite-email" class="sr-only">E-mail para convidar</label>
+                    <input id="invite-email" type="email" placeholder="nome@empresa.com.br" autocomplete="off"
+                           @bind="inviteEmail" @bind:event="oninput"
+                           aria-invalid="@(inviteError is null ? null : "true")" aria-describedby="invite-email-error" />
                 </div>
-                @if (pendingInvites.Count > 0)
-                {
-                    <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;">
-                        @foreach (var email in pendingInvites)
-                        {
-                            <span class="label-chip label-chip--sm" style="background:var(--color-hover);color:var(--color-text);">
-                                @email
-                                <button type="button" class="chat-compose-pending-remove" @onclick="() => pendingInvites.Remove(email)">✕</button>
-                            </span>
-                        }
-                    </div>
-                }
-                else
-                {
-                    <div class="empty-state" style="padding:1rem;">Nenhum membro adicionado ainda.</div>
-                }
+                <button type="button" class="btn btn-secondary" @onclick="AddInvite"><Icon Name="plus" /> Adicionar</button>
+            </div>
+            <p id="invite-email-error" class="validation-message" role="alert">@inviteError</p>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn" disabled="@isSaving">Criar workspace agora</button>
-                    <a class="btn btn-secondary" href="/workspaces">Cancelar</a>
-                </div>
-            </EditForm>
-        </div>
+            @if (pendingInvites.Count > 0)
+            {
+                <ul class="invite-chips" aria-label="Pessoas que serão convidadas">
+                    @foreach (var email in pendingInvites)
+                    {
+                        <li class="invite-chip">
+                            <Avatar Name="@email" Size="xs" />
+                            <span>@email</span>
+                            <button type="button" class="icon-btn icon-btn--sm" @onclick="() => pendingInvites.Remove(email)">
+                                <Icon Name="x" Label="@($"Remover {email}")" />
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
 
-        <div>
             @if (suggestions is { Count: > 0 })
             {
-                <div class="side-card">
-                    <h2>Pessoas com quem você já trabalha</h2>
-                    @foreach (var person in suggestions)
-                    {
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.75rem;">
-                            <div style="display:flex;align-items:center;gap:0.5rem;min-width:0;">
-                                <span class="dashboard-workspace-avatar" style="width:1.9rem;height:1.9rem;font-size:0.75rem;">@Initial(person.DisplayName ?? person.Email)</span>
-                                <div style="min-width:0;">
-                                    <div style="font-size:0.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@(person.DisplayName ?? person.Email)</div>
-                                    <div style="font-size:0.75rem;color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">@person.Email</div>
-                                </div>
-                            </div>
-                            <button type="button" class="btn-link" @onclick="() => AddSuggestion(person.Email!)">+</button>
+                var remaining = suggestions.Where(p => p.Email is not null && !pendingInvites.Contains(p.Email, StringComparer.OrdinalIgnoreCase)).ToList();
+                @if (remaining.Count > 0)
+                {
+                    <div class="invite-suggestions">
+                        <p class="field-label">Pessoas com quem você já trabalha</p>
+                        <div class="invite-suggestion-row">
+                            @foreach (var person in remaining)
+                            {
+                                <button type="button" class="invite-suggestion" @onclick="() => AddSuggestion(person.Email!)">
+                                    <Avatar Name="@(person.DisplayName ?? person.Email!)" Size="xs" />
+                                    <span>@(person.DisplayName ?? person.Email)</span>
+                                    <Icon Name="plus" Class="icon--sm" />
+                                </button>
+                            }
                         </div>
-                    }
-                </div>
+                    </div>
+                }
             }
+        </section>
+
+        <div class="form-actions form-actions--end">
+            <a class="btn btn-ghost" href="/workspaces">Cancelar</a>
+            <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving">
+                Criar workspace@(pendingInvites.Count > 0 ? $" e convidar {pendingInvites.Count}" : "")
+            </button>
         </div>
-    </div>
+    </EditForm>
 </div>
 
 @code {
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private static readonly string[] AvailableColors = ["#2563EB", "#16A34A", "#7C3AED", "#DC2626", "#EA580C", "#0D9488"];
+    private static readonly (string Hex, string Name)[] AvailableColors = WorkspaceColors.Options;
 
-    private readonly CreateWorkspaceModel model = new() { Color = AvailableColors[0] };
+    private readonly CreateWorkspaceModel model = new() { Color = AvailableColors[0].Hex };
+    private string? inviteError;
     private bool isSaving;
     private string? errorMessage;
     private string inviteEmail = "";
@@ -138,13 +154,42 @@
     private void AddInvite()
     {
         var email = inviteEmail.Trim();
-        if (string.IsNullOrEmpty(email) || pendingInvites.Contains(email, StringComparer.OrdinalIgnoreCase))
+        inviteError = null;
+        if (string.IsNullOrEmpty(email))
         {
+            return;
+        }
+
+        if (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || !email.Contains('.'))
+        {
+            inviteError = "Esse e-mail não parece válido. Confira e tente de novo.";
+            return;
+        }
+
+        if (pendingInvites.Contains(email, StringComparer.OrdinalIgnoreCase))
+        {
+            inviteError = "Essa pessoa já está na lista.";
             return;
         }
 
         pendingInvites.Add(email);
         inviteEmail = "";
+    }
+
+    // Enter dentro do formulário o envia. Se ainda há um e-mail digitado no campo de convite,
+    // a intenção é adicioná-lo à lista — não criar o workspace sem ele.
+    private async Task HandleSubmit(EditContext context)
+    {
+        if (!string.IsNullOrWhiteSpace(inviteEmail))
+        {
+            AddInvite();
+            return;
+        }
+
+        if (context.Validate())
+        {
+            await HandleCreate();
+        }
     }
 
     private void AddSuggestion(string email)
@@ -259,13 +304,12 @@
         return slug;
     }
 
-    private static string Initial(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
 
     private class CreateWorkspaceModel
     {
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe um nome.")]
         [System.ComponentModel.DataAnnotations.StringLength(200, ErrorMessage = "Nome muito longo.")]
         public string Name { get; set; } = "";
-        public string Color { get; set; } = "#2563EB";
+        public string Color { get; set; } = "#5B5CEB";
     }
 }

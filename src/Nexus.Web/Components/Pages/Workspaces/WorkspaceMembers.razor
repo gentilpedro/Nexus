@@ -18,131 +18,119 @@
 @inject WorkspaceInviteService InviteService
 @inject IJSRuntime JS
 
-<PageTitle>Membros</PageTitle>
+<PageTitle>Membros · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
 
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Workspace não encontrado ou você não tem acesso a ele.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Workspace não encontrado"
+                    Description="Ele pode ter sido excluído, ou você não faz mais parte dele.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (workspace is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando membros…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
-            Membros
-        </div>
+        <PageHeader Title="@workspace.Name">
+            <Breadcrumbs>
+                <a href="/workspaces">Workspaces</a>
+            </Breadcrumbs>
+        </PageHeader>
 
-        <div class="page-header">
-            <div>
-                <h1 style="margin-bottom:0.15rem;">Membros do Workspace</h1>
-                <span class="topnav-user">Gerencie quem tem acesso ao workspace @workspace.Name e defina os níveis de permissão.</span>
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" @onclick="HandleExportCsv">Exportar CSV</button>
+        <WorkspaceTabs WorkspaceId="WorkspaceId" Active="members" CanManage="canManage" />
+
+        <div class="section-header members-header">
+            <p class="list-summary">
+                @if (members is not null)
+                {
+                    <span><strong>@members.Count</strong> membro@(members.Count == 1 ? "" : "s")</span>
+                    <span><strong>@members.Count(m => m.Role is WorkspaceRole.Admin or WorkspaceRole.Owner)</strong> com acesso de administrador</span>
+                    @if (pendingInvites is { Count: > 0 })
+                    {
+                        <span><strong>@pendingInvites.Count</strong> convite@(pendingInvites.Count == 1 ? "" : "s") pendente@(pendingInvites.Count == 1 ? "" : "s")</span>
+                    }
+                }
+            </p>
+            <div class="button-row">
+                <button type="button" class="btn btn-ghost" @onclick="HandleExportCsv"><Icon Name="download" /> <span class="label-collapsible">Exportar CSV</span></button>
                 @if (canManage)
                 {
-                    <button type="button" class="btn" @onclick="() => showAddForm = !showAddForm">+ Convidar Membro</button>
+                    <button type="button" class="btn" @onclick="() => showAddForm = !showAddForm" aria-expanded="@(showAddForm ? "true" : "false")">
+                        <Icon Name="user-plus" /> Convidar pessoa
+                    </button>
                 }
             </div>
         </div>
 
-        @if (members is not null)
-        {
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Total de membros</span>
-                        <span class="stat-card-value">@members.Count</span>
-                    </div>
-                    <span class="stat-card-icon">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Administradores</span>
-                        <span class="stat-card-value">@members.Count(m => m.Role is WorkspaceRole.Admin or WorkspaceRole.Owner)</span>
-                    </div>
-                    <span class="stat-card-icon is-success">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Convites pendentes</span>
-                        <span class="stat-card-value">@(pendingInvites?.Count ?? 0)</span>
-                    </div>
-                    <span class="stat-card-icon">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" /><polyline points="4 6 12 13 20 6" /></svg>
-                    </span>
-                </div>
-            </div>
-        }
-
         @if (!string.IsNullOrEmpty(errorMessage))
         {
-            <div class="alert alert-danger">@errorMessage</div>
+            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
         }
 
         @if (!string.IsNullOrEmpty(statusMessage))
         {
-            <div class="alert alert-success">@statusMessage</div>
+            <div class="alert alert-success" role="status"><Icon Name="check-circle" /> <span>@statusMessage</span></div>
         }
 
         @if (canManage && showAddForm)
         {
-            <EditForm Model="addModel" OnValidSubmit="HandleAddMember" class="card" style="margin-bottom:1.5rem;">
+            <EditForm Model="addModel" OnValidSubmit="HandleAddMember" class="card inline-form">
+                <div class="card-header">
+                    <div>
+                        <h2 class="card-title">Convidar para @workspace.Name</h2>
+                        <p class="card-subtitle">A pessoa recebe um e-mail com o link. Se ainda não tiver conta no Nexus, cria uma e já entra no workspace.</p>
+                    </div>
+                </div>
                 <DataAnnotationsValidator />
-                <div class="form-row">
+                <div class="form-row invite-form-row">
                     <div class="form-field">
-                        <label for="member-email">E-mail</label>
-                        <InputText id="member-email" @bind-Value="addModel.Email" placeholder="pessoa@exemplo.com" />
+                        <label for="member-email" class="required">E-mail</label>
+                        <InputText id="member-email" type="email" @bind-Value="addModel.Email" placeholder="nome@empresa.com.br" autofocus />
                         <ValidationMessage For="() => addModel.Email" />
                     </div>
                     <div class="form-field">
-                        <label for="member-role">Cargo</label>
+                        <label for="member-role">Permissão</label>
                         <InputSelect id="member-role" @bind-Value="addModel.Role">
-                            <option value="@WorkspaceRole.Member">Membro</option>
-                            <option value="@WorkspaceRole.Admin">Admin</option>
+                            <option value="@WorkspaceRole.Member">Membro — trabalha nas tarefas</option>
+                            <option value="@WorkspaceRole.Admin">Admin — também gerencia spaces, listas e pessoas</option>
                         </InputSelect>
                     </div>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn" disabled="@isSaving">Adicionar</button>
-                    <button type="button" class="btn btn-secondary" @onclick="() => showAddForm = false">Cancelar</button>
+                <div class="form-actions form-actions--end">
+                    <button type="button" class="btn btn-ghost" @onclick="() => showAddForm = false">Cancelar</button>
+                    <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving">Enviar convite</button>
                 </div>
             </EditForm>
         }
 
         @if (members is null)
         {
-            <p>Carregando membros...</p>
+            <Skeleton Count="6" />
         }
         else
         {
-            <div class="form-field" style="max-width:280px;">
-                <input type="search" placeholder="Buscar por nome ou e-mail..." @bind="memberFilter" @bind:event="oninput" />
+            <div class="list-toolbar">
+                <div class="input-with-icon list-toolbar-search">
+                    <Icon Name="search" />
+                    <label for="member-filter" class="sr-only">Buscar membros por nome ou e-mail</label>
+                    <input id="member-filter" type="search" placeholder="Buscar por nome ou e-mail" @bind="memberFilter" @bind:event="oninput" />
+                </div>
             </div>
 
             <div class="table-scroll">
-                <table class="data-table">
+                <table class="data-table members-table">
                     <thead>
                         <tr>
-                            <th>Membro</th>
-                            <th>Cargo</th>
-                            <th>Status</th>
+                            <th>Pessoa</th>
+                            <th>Permissão</th>
+                            <th>Situação</th>
                             <th>Desde</th>
                             @if (canManage)
                             {
-                                <th></th>
+                                <th><span class="sr-only">Ações</span></th>
                             }
                         </tr>
                     </thead>
@@ -150,35 +138,35 @@
                         @foreach (var inv in FilteredPendingInvites)
                         {
                             var expired = inv.ExpiresAtUtc <= DateTime.UtcNow;
-                            <tr>
+                            <tr class="is-pending">
                                 <td>
-                                    <div style="display:flex;align-items:center;gap:0.6rem;">
-                                        <span class="chat-message-avatar">@Initial(null, inv.Email)</span>
-                                        <div>
-                                            <div style="font-weight:600;">@inv.Email</div>
-                                            <div class="topnav-user">Aguardando aceite do convite</div>
+                                    <div class="person-cell">
+                                        <span class="avatar avatar--md avatar--empty" aria-hidden="true"><Icon Name="mail" Class="icon--sm" /></span>
+                                        <div class="person-cell-text">
+                                            <span class="person-cell-name">@inv.Email</span>
+                                            <span class="person-cell-sub">Convidado em @inv.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</span>
                                         </div>
                                     </div>
                                 </td>
-                                <td><span class="tab-count">@inv.Role.ToDisplayLabel()</span></td>
+                                <td><span class="badge">@inv.Role.ToDisplayLabel()</span></td>
                                 <td>
-                                    <span style="display:inline-flex;align-items:center;gap:0.4rem;">
-                                        <span style="width:0.5rem;height:0.5rem;border-radius:50%;background:@(expired ? "var(--color-danger)" : "var(--color-warning)");display:inline-block;"></span>
-                                        @(expired ? "Convite expirado" : "Pendente")
-                                    </span>
+                                    <span class="badge @(expired ? "badge--danger" : "badge--warning")">@(expired ? "Convite expirado" : "Aguardando aceite")</span>
                                 </td>
-                                <td>Convidado em @inv.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                <td class="cell-muted">—</td>
                                 @if (canManage)
                                 {
-                                    <td style="position:relative;">
-                                        <div class="board-column-menu">
-                                            <button type="button" class="board-column-menu-btn" @onclick="() => openInviteMenuId = openInviteMenuId == inv.Id ? null : inv.Id" aria-label="Ações do convite">⋯</button>
+                                    <td class="cell-actions">
+                                        <div class="menu-anchor">
+                                            <button type="button" class="icon-btn icon-btn--sm" @onclick="() => openInviteMenuId = openInviteMenuId == inv.Id ? null : inv.Id"
+                                                    aria-haspopup="menu" aria-expanded="@(openInviteMenuId == inv.Id ? "true" : "false")">
+                                                <Icon Name="more" Label="@($"Ações do convite para {inv.Email}")" />
+                                            </button>
                                             @if (openInviteMenuId == inv.Id)
                                             {
-                                                <div class="board-column-menu-backdrop" @onclick="() => openInviteMenuId = null"></div>
-                                                <div class="board-column-menu-dropdown">
-                                                    <button type="button" @onclick="() => HandleResendInvite(inv)">Reenviar convite</button>
-                                                    <button type="button" @onclick="() => HandleCancelInvite(inv.Id)">Cancelar convite</button>
+                                                <div class="menu-backdrop" @onclick="() => openInviteMenuId = null"></div>
+                                                <div class="menu" role="menu">
+                                                    <button type="button" role="menuitem" @onclick="() => HandleResendInvite(inv)"><Icon Name="send" /> Reenviar convite</button>
+                                                    <button type="button" role="menuitem" class="is-danger" @onclick="() => HandleCancelInvite(inv.Id)"><Icon Name="x" /> Cancelar convite</button>
                                                 </div>
                                             }
                                         </div>
@@ -188,48 +176,54 @@
                         }
                         @foreach (var member in PagedMembers)
                         {
+                            var name = string.IsNullOrEmpty(member.User.DisplayName) ? (member.User.Email ?? "—") : member.User.DisplayName;
                             <tr>
                                 <td>
-                                    <div style="display:flex;align-items:center;gap:0.6rem;">
-                                        <span class="chat-message-avatar">@Initial(member.User.DisplayName, member.User.Email)</span>
-                                        <div>
-                                            <div style="font-weight:600;">@(string.IsNullOrEmpty(member.User.DisplayName) ? "—" : member.User.DisplayName)</div>
-                                            <div class="topnav-user">@(member.User.Email ?? "—")</div>
+                                    <div class="person-cell">
+                                        <Avatar Name="@name" Size="md" />
+                                        <div class="person-cell-text">
+                                            <span class="person-cell-name">
+                                                @name
+                                                @if (member.UserId == currentUserId)
+                                                {
+                                                    <span class="badge badge--outline">você</span>
+                                                }
+                                            </span>
+                                            <span class="person-cell-sub">@(member.User.Email ?? "—")</span>
                                         </div>
                                     </div>
                                 </td>
                                 <td>
                                     @if (canManage && member.Role != WorkspaceRole.Owner)
                                     {
-                                        <select @onchange="@(e => HandleRoleChange(member.Id, e.Value))">
+                                        <label class="sr-only" for="@($"role-{member.Id}")">Permissão de @name</label>
+                                        <select id="@($"role-{member.Id}")" class="select-inline" @onchange="@(e => HandleRoleChange(member.Id, e.Value))">
                                             <option value="@WorkspaceRole.Member" selected="@(member.Role == WorkspaceRole.Member)">Membro</option>
                                             <option value="@WorkspaceRole.Admin" selected="@(member.Role == WorkspaceRole.Admin)">Admin</option>
                                         </select>
                                     }
                                     else
                                     {
-                                        <span class="tab-count">@member.Role.ToDisplayLabel()</span>
+                                        <span class="badge @(member.Role == WorkspaceRole.Owner ? "badge--accent" : "")">@member.Role.ToDisplayLabel()</span>
                                     }
                                 </td>
-                                <td>
-                                    <span style="display:inline-flex;align-items:center;gap:0.4rem;">
-                                        <span style="width:0.5rem;height:0.5rem;border-radius:50%;background:var(--color-success);display:inline-block;"></span>
-                                        Ativo
-                                    </span>
-                                </td>
-                                <td>@member.JoinedAtUtc.ToString("dd/MM/yyyy")</td>
+                                <td><span class="badge badge--success">Ativo</span></td>
+                                <td class="cell-muted tabular">@member.JoinedAtUtc.ToString("dd/MM/yyyy")</td>
                                 @if (canManage)
                                 {
-                                    <td style="position:relative;">
+                                    <td class="cell-actions">
                                         @if (member.Role != WorkspaceRole.Owner || OwnerCount > 1)
                                         {
-                                            <div class="board-column-menu">
-                                                <button type="button" class="board-column-menu-btn" @onclick="() => openMenuId = openMenuId == member.Id ? null : member.Id" aria-label="Ações">⋯</button>
+                                            <div class="menu-anchor">
+                                                <button type="button" class="icon-btn icon-btn--sm" @onclick="() => openMenuId = openMenuId == member.Id ? null : member.Id"
+                                                        aria-haspopup="menu" aria-expanded="@(openMenuId == member.Id ? "true" : "false")">
+                                                    <Icon Name="more" Label="@($"Ações para {name}")" />
+                                                </button>
                                                 @if (openMenuId == member.Id)
                                                 {
-                                                    <div class="board-column-menu-backdrop" @onclick="() => openMenuId = null"></div>
-                                                    <div class="board-column-menu-dropdown">
-                                                        <button type="button" @onclick="() => HandleRemove(member.Id)">Remover</button>
+                                                    <div class="menu-backdrop" @onclick="() => openMenuId = null"></div>
+                                                    <div class="menu" role="menu">
+                                                        <button type="button" role="menuitem" class="is-danger" @onclick="() => HandleRemove(member.Id)"><Icon Name="trash" /> Remover do workspace</button>
                                                     </div>
                                                 }
                                             </div>
@@ -238,24 +232,33 @@
                                 }
                             </tr>
                         }
+                        @if (!FilteredPendingInvites.Any() && PagedMembers.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5">
+                                    <EmptyState Compact="true" Title="@($"Ninguém encontrado para \"{memberFilter}\"")" />
+                                </td>
+                            </tr>
+                        }
                     </tbody>
                 </table>
             </div>
 
             @if (totalPages > 1)
             {
-                <div class="pagination">
-                    <button type="button" disabled="@(currentPage == 1)" @onclick="() => currentPage = 1">«</button>
-                    <button type="button" disabled="@(currentPage == 1)" @onclick="() => currentPage--">Anterior</button>
+                <nav class="pagination" aria-label="Páginas de membros">
+                    <button type="button" disabled="@(currentPage == 1)" @onclick="() => currentPage--"><Icon Name="chevron-left" Label="Página anterior" /></button>
                     @for (var p = 1; p <= totalPages; p++)
                     {
                         var page = p;
-                        <button type="button" class="@(currentPage == page ? "active" : "")" @onclick="() => currentPage = page">@(page)</button>
+                        <button type="button" class="@(currentPage == page ? "active" : "")" aria-current="@(currentPage == page ? "page" : null)" @onclick="() => currentPage = page">@(page)</button>
                     }
-                    <button type="button" disabled="@(currentPage == totalPages)" @onclick="() => currentPage++">Próxima</button>
-                </div>
+                    <button type="button" disabled="@(currentPage == totalPages)" @onclick="() => currentPage++"><Icon Name="chevron-right" Label="Próxima página" /></button>
+                </nav>
             }
         }
+
+        <ConfirmDialog @ref="confirm" />
     }
 </div>
 
@@ -284,6 +287,7 @@
     private Guid? openInviteMenuId;
     private string? currentUserId;
     private List<WorkspaceInvite>? pendingInvites;
+    private ConfirmDialog? confirm;
 
     private int OwnerCount => members?.Count(m => m.Role == WorkspaceRole.Owner) ?? 0;
 
@@ -462,6 +466,17 @@
     private async Task HandleCancelInvite(Guid inviteId)
     {
         openInviteMenuId = null;
+        var email = pendingInvites?.FirstOrDefault(i => i.Id == inviteId)?.Email;
+        if (confirm is null || !await confirm.AskAsync(new ConfirmRequest(
+                Title: $"Cancelar o convite para {email}?",
+                Message: "O link enviado deixa de funcionar. Você pode convidar a pessoa de novo depois.",
+                ConfirmLabel: "Cancelar convite",
+                CancelLabel: "Manter convite")))
+        {
+            return;
+        }
+
+        openInviteMenuId = null;
         errorMessage = null;
         statusMessage = null;
 
@@ -518,6 +533,17 @@
 
     private async Task HandleRemove(Guid memberId)
     {
+        openMenuId = null;
+        var target = members?.FirstOrDefault(m => m.Id == memberId);
+        var targetName = target is null ? "esta pessoa" : (string.IsNullOrEmpty(target.User.DisplayName) ? target.User.Email : target.User.DisplayName);
+        if (confirm is null || !await confirm.AskAsync(new ConfirmRequest(
+                Title: $"Remover {targetName} do workspace?",
+                Message: "A pessoa perde o acesso a todos os spaces, listas, documentos e ao chat deste workspace. As tarefas atribuídas a ela continuam existindo.",
+                ConfirmLabel: "Remover do workspace")))
+        {
+            return;
+        }
+
         errorMessage = null;
         openMenuId = null;
 

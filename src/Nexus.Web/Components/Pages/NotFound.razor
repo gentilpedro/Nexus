@@ -1,6 +1,13 @@
-﻿@page "/not-found"
+@page "/not-found"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @layout MainLayout
 
-<h3>Not Found</h3>
-<p>Sorry, the content you are looking for does not exist.</p>
+<PageTitle>Página não encontrada · Nexus</PageTitle>
+
+<div class="page-container centered-page">
+    <EmptyState Icon="search" Title="Não encontramos esta página"
+                Description="O endereço pode estar errado, ou o conteúdo foi movido ou excluído.">
+        <a class="btn" href="/"><Icon Name="home" /> Ir para o início</a>
+        <a class="btn btn-secondary" href="/search"><Icon Name="search" /> Buscar</a>
+    </EmptyState>
+</div>

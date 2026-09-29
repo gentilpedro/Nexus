@@ -1,18 +1,20 @@
 @using Nexus.Domain.Entities
 @using Nexus.Web.Extensions
 
-<span class="type-icon type-icon-@Type.ToString().ToLowerInvariant()" title="@Type.ToDisplayLabel()">@Symbol</span>
+<span class="type-icon type-icon-@Type.ToString().ToLowerInvariant()" title="@Type.ToDisplayLabel()">
+    <Icon Name="@IconName" />
+    <span class="sr-only">@Type.ToDisplayLabel()</span>
+</span>
 
 @code {
     [Parameter, EditorRequired]
     public WorkItemType Type { get; set; }
 
-    private string Symbol => Type switch
+    private string IconName => Type switch
     {
-        WorkItemType.Task => "✓",
-        WorkItemType.Bug => "🐞",
-        WorkItemType.Story => "★",
-        WorkItemType.Epic => "⚡",
-        _ => "•"
+        WorkItemType.Bug => "type-bug",
+        WorkItemType.Story => "type-story",
+        WorkItemType.Epic => "type-epic",
+        _ => "type-task"
     };
 }

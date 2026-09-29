@@ -12,38 +12,47 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Gerenciar email</PageTitle>
+<PageTitle>E-mail · Nexus</PageTitle>
 
-<h2>Gerenciar email</h2>
-<StatusMessage Message="@message" />
+<AccountSection Title="E-mail" Description="O endereço que você usa para entrar e onde recebe convites e avisos de tarefas.">
+    <StatusMessage Message="@message" />
 
-<form @onsubmit="OnSendEmailVerificationAsync" @formname="send-verification" id="send-verification-form" method="post">
-    <AntiforgeryToken />
-</form>
+    <form @onsubmit="OnSendEmailVerificationAsync" @formname="send-verification" id="send-verification-form" method="post">
+        <AntiforgeryToken />
+    </form>
 
-<EditForm Model="Input" FormName="change-email" OnValidSubmit="OnValidSubmitAsync" method="post" class="card">
-    <DataAnnotationsValidator />
-    <ValidationSummary class="validation-errors" role="alert" />
-
-    <div class="form-field">
-        <label for="email">Email atual</label>
-        <input type="text" value="@email" id="email" disabled />
-        @if (isEmailConfirmed)
-        {
-            <span class="badge badge-status-done" style="align-self:flex-start;">✓ confirmado</span>
-        }
-        else
-        {
-            <button type="submit" class="btn-link field-hint-action" form="send-verification-form">Reenviar email de verificação</button>
-        }
-    </div>
-    <div class="form-field">
-        <label for="Input.NewEmail">Novo email</label>
-        <InputText @bind-Value="Input.NewEmail" id="Input.NewEmail" autocomplete="email" aria-required="true" placeholder="Digite um novo email" />
-        <ValidationMessage For="() => Input.NewEmail" />
-    </div>
-    <button type="submit" class="btn">Alterar email</button>
-</EditForm>
+    <EditForm Model="Input" FormName="change-email" OnValidSubmit="OnValidSubmitAsync" method="post" class="card form-card">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="validation-errors" role="alert" />
+        <div class="form-field">
+            <label for="email">E-mail atual</label>
+            <div class="input-with-status">
+                <input type="text" value="@email" id="email" disabled />
+                @if (isEmailConfirmed)
+                {
+                    <span class="badge badge--success"><Icon Name="check" Class="icon--sm" /> Confirmado</span>
+                }
+                else
+                {
+                    <span class="badge badge--warning">Não confirmado</span>
+                }
+            </div>
+            @if (!isEmailConfirmed)
+            {
+                <button type="submit" class="btn-link field-hint-action" form="send-verification-form">Reenviar e-mail de confirmação</button>
+            }
+        </div>
+        <div class="form-field">
+            <label for="Input.NewEmail">Novo e-mail</label>
+            <InputText @bind-Value="Input.NewEmail" id="Input.NewEmail" type="email" autocomplete="email" aria-required="true" placeholder="nome@empresa.com.br" aria-describedby="new-email-hint" />
+            <span id="new-email-hint" class="field-hint">Enviamos um link de confirmação para o novo endereço. A troca só vale depois que você clicar nele.</span>
+            <ValidationMessage For="() => Input.NewEmail" />
+        </div>
+        <div class="form-actions form-actions--end">
+            <button type="submit" class="btn">Alterar e-mail</button>
+        </div>
+    </EditForm>
+</AccountSection>
 
 @code {
     private string? message;
@@ -78,7 +87,7 @@
     {
         if (Input.NewEmail is null || Input.NewEmail == email)
         {
-            message = "Your email is unchanged.";
+            message = "O e-mail continua o mesmo.";
             return;
         }
 
@@ -122,7 +131,7 @@
 
         await EmailSender.SendConfirmationLinkAsync(user, email, HtmlEncoder.Default.Encode(callbackUrl));
 
-        message = "Verification email sent. Please check your email.";
+        message = "Enviamos um e-mail de confirmação. Confira sua caixa de entrada.";
     }
 
     private sealed class InputModel

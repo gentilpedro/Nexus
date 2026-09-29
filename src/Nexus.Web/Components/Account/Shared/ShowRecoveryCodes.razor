@@ -1,4 +1,4 @@
-﻿<StatusMessage Message="@StatusMessage" />
+<StatusMessage Message="@StatusMessage" />
 <h3>Códigos de recuperação</h3>
 <div class="alert alert-warning" role="alert">
     <p>
@@ -8,7 +8,7 @@
         Se você perder o dispositivo e não tiver os códigos de recuperação, vai perder o acesso à sua conta.
     </p>
 </div>
-<div class="card" style="max-width:320px;">
+<div class="card narrow-form">
     @foreach (var recoveryCode in RecoveryCodes)
     {
         <div><code>@recoveryCode</code></div>

@@ -4,6 +4,7 @@
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
 @using Nexus.Web.Services
+@using Nexus.Web.Extensions
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
@@ -11,131 +12,143 @@
 @inject IAuthorizationService AuthorizationService
 @inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
+@inject ToastService Toasts
 
-<PageTitle>Configurações — @(workspace?.Name ?? "Workspace")</PageTitle>
+<PageTitle>Configurações · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
 
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Workspace não encontrado ou você não tem acesso a ele.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Sem acesso às configurações"
+                    Description="Só administradores do workspace podem alterar as configurações dele.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (workspace is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Variant="text" Count="6" Label="Carregando configurações…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
-            Configurações
-        </div>
-        <div class="page-header">
-            <h1>Configurações</h1>
-        </div>
+        <PageHeader Title="@workspace.Name">
+            <Breadcrumbs>
+                <a href="/workspaces">Workspaces</a>
+            </Breadcrumbs>
+        </PageHeader>
+
+        <WorkspaceTabs WorkspaceId="WorkspaceId" Active="settings" CanManage="true" />
 
         <div class="settings-layout">
-            <nav class="settings-nav">
-                <button type="button" class="settings-nav-link @(tab == "geral" ? "active" : "")" @onclick='() => tab = "geral"'>Geral</button>
-                <button type="button" class="settings-nav-link @(tab == "workflow" ? "active" : "")" @onclick='() => tab = "workflow"'>Fluxo de Trabalho</button>
+            <nav class="settings-nav" aria-label="Seções das configurações">
+                <button type="button" class="settings-nav-link @(tab == "geral" ? "active" : "")" aria-current="@(tab == "geral" ? "true" : null)" @onclick='() => tab = "geral"'><Icon Name="settings" /> Geral</button>
+                <button type="button" class="settings-nav-link @(tab == "workflow" ? "active" : "")" aria-current="@(tab == "workflow" ? "true" : null)" @onclick='() => tab = "workflow"'><Icon Name="refresh" /> Fluxo de trabalho</button>
             </nav>
 
-            <div class="settings-content" style="max-width:640px;">
+            <div class="settings-content">
                 @if (tab == "geral")
                 {
                     @if (!string.IsNullOrEmpty(errorMessage))
                     {
-                        <div class="alert alert-danger">@errorMessage</div>
-                    }
-                    @if (!string.IsNullOrEmpty(statusMessage))
-                    {
-                        <div class="alert alert-success">@statusMessage</div>
+                        <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
                     }
 
-                    <EditForm Model="generalModel" OnValidSubmit="HandleSaveGeneral" class="card" style="margin-bottom:1.5rem;">
+                    <EditForm Model="generalModel" OnValidSubmit="HandleSaveGeneral" class="card form-card">
                         <DataAnnotationsValidator />
-                        <div class="form-field">
-                            <label for="ws-name">Nome do workspace</label>
-                            <InputText id="ws-name" @bind-Value="generalModel.Name" />
-                            <ValidationMessage For="() => generalModel.Name" />
-                        </div>
-                        <div class="form-field">
-                            <label>Cor de identificação</label>
-                            <div class="color-swatch-row">
-                                @foreach (var color in AvailableColors)
-                                {
-                                    <button type="button" class="color-swatch @(generalModel.Color == color ? "is-selected" : "")"
-                                            style="background:@color;" @onclick="() => generalModel.Color = color"
-                                            aria-label="Selecionar cor @color"></button>
-                                }
+                        <h2 class="form-section-title">Identidade</h2>
+                        <p class="form-section-description">Nome e cor aparecem para todos os membros, na barra lateral e nos convites.</p>
+                        <div class="identity-row">
+                            <Avatar Name="@(string.IsNullOrWhiteSpace(generalModel.Name) ? "?" : generalModel.Name)" Color="@generalModel.Color" Size="xl" Square="true" />
+                            <div class="identity-fields">
+                                <div class="form-field">
+                                    <label for="ws-name" class="required">Nome do workspace</label>
+                                    <InputText id="ws-name" @bind-Value="generalModel.Name" @bind-Value:event="oninput" />
+                                    <ValidationMessage For="() => generalModel.Name" />
+                                </div>
+                                <fieldset class="form-fieldset">
+                                    <legend class="field-label">Cor</legend>
+                                    <div class="color-swatch-row">
+                                        @foreach (var (color, colorName) in AvailableColors)
+                                        {
+                                            <button type="button" class="color-swatch @(generalModel.Color == color ? "is-selected" : "")"
+                                                    style="background:@color;" @onclick="() => generalModel.Color = color"
+                                                    aria-pressed="@(generalModel.Color == color ? "true" : "false")" aria-label="@colorName"></button>
+                                        }
+                                    </div>
+                                </fieldset>
                             </div>
                         </div>
-                        <div class="form-actions">
-                            <button type="submit" class="btn" disabled="@isSaving">Salvar alterações</button>
+                        <div class="form-actions form-actions--end">
+                            <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving">Salvar alterações</button>
                         </div>
                     </EditForm>
 
-                    <div class="card">
-                        <h3 style="margin-top:0;">Zona de risco</h3>
-                        @if (workspace.IsArchived)
-                        {
-                            <p style="color:var(--color-text-muted);">Este workspace está arquivado — ele fica oculto da lista principal, mas nada foi apagado.</p>
-                            <button type="button" class="btn btn-secondary" @onclick="HandleToggleArchive">Desarquivar workspace</button>
-                        }
-                        else
-                        {
-                            <p style="color:var(--color-text-muted);">Arquivar oculta este workspace da lista principal sem apagar nada. Você pode desarquivar quando quiser.</p>
-                            <button type="button" class="btn btn-danger" @onclick="HandleToggleArchive">Arquivar workspace</button>
-                        }
-                    </div>
+                    <section class="card danger-zone" aria-labelledby="danger-zone-title">
+                        <h2 id="danger-zone-title" class="form-section-title">@(workspace.IsArchived ? "Workspace arquivado" : "Arquivar workspace")</h2>
+                        <div class="danger-zone-row">
+                            <p class="form-section-description">
+                                @if (workspace.IsArchived)
+                                {
+                                    @("Ele está fora da lista principal, mas nada foi apagado. Desarquive para voltar a usá-lo normalmente.")
+                                }
+                                else
+                                {
+                                    @("Arquivar tira o workspace da lista principal de todos os membros. Nada é apagado e dá para desarquivar a qualquer momento.")
+                                }
+                            </p>
+                            <button type="button" class="btn @(workspace.IsArchived ? "btn-secondary" : "btn-danger-ghost btn-bordered-danger")" @onclick="HandleToggleArchive">
+                                <Icon Name="@(workspace.IsArchived ? "refresh" : "inbox")" />
+                                @(workspace.IsArchived ? "Desarquivar" : "Arquivar workspace")
+                            </button>
+                        </div>
+                    </section>
                 }
                 else
                 {
-                    <p style="color:var(--color-text-muted); margin-top:-0.5rem;">Cada lista tem seu próprio fluxo de colunas. Escolha uma lista abaixo pra configurar o workflow dela.</p>
+                    <p class="form-section-description">Cada lista tem suas próprias colunas de status e regras de transição. Escolha uma lista para configurar o fluxo dela.</p>
 
                     @if (spaces is null)
                     {
-                        <p>Carregando...</p>
+                        <Skeleton Count="4" />
                     }
                     else if (spaces.Count == 0)
                     {
-                        <div class="empty-state"><p>Nenhum space criado ainda.</p></div>
+                        <div class="card">
+                            <EmptyState Compact="true" Title="Nenhum space criado ainda" Description="Crie um space e uma lista na visão geral do workspace." />
+                        </div>
                     }
                     else
                     {
                         @foreach (var space in spaces)
                         {
-                            <h4 style="margin-bottom:0.5rem;">@space.Name</h4>
-                            @if (space.Lists.Count == 0)
-                            {
-                                <p class="topnav-user" style="margin-bottom:1rem;">Nenhuma lista neste space.</p>
-                            }
-                            else
-                            {
-                                <div class="table-scroll" style="margin-bottom:1.5rem;">
-                                    <table class="data-table">
-                                        <tbody>
-                                            @foreach (var list in space.Lists)
-                                            {
-                                                <tr>
-                                                    <td>@list.Name</td>
-                                                    <td style="text-align:right;">
-                                                        <a class="btn-link" href="@($"/lists/{list.Id}/workflow")">Configurar workflow →</a>
-                                                    </td>
-                                                </tr>
-                                            }
-                                        </tbody>
-                                    </table>
-                                </div>
-                            }
+                            <section class="section" aria-label="@space.Name">
+                                <h3 class="section-title settings-space-title"><Icon Name="space" Class="icon--sm" /> @space.Name</h3>
+                                @if (space.Lists.Count == 0)
+                                {
+                                    <p class="cell-muted">Nenhuma lista neste space.</p>
+                                }
+                                else
+                                {
+                                    <ul class="space-list">
+                                        @foreach (var list in space.Lists.OrderBy(l => l.SortOrder))
+                                        {
+                                            <li>
+                                                <a class="space-item space-item--compact" href="@($"/lists/{list.Id}/workflow")">
+                                                    <span class="space-item-body"><span class="space-item-name">@list.Name</span></span>
+                                                    <span class="space-item-meta">Configurar fluxo</span>
+                                                    <Icon Name="chevron-right" Class="space-item-chevron" />
+                                                </a>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </section>
                         }
                     }
                 }
             </div>
         </div>
+
+        <ConfirmDialog @ref="confirm" />
     }
 </div>
 
@@ -146,14 +159,14 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private static readonly string[] AvailableColors = ["#2563EB", "#16A34A", "#7C3AED", "#DC2626", "#EA580C", "#0D9488"];
+    private static readonly (string Hex, string Name)[] AvailableColors = WorkspaceColors.Options;
+    private ConfirmDialog? confirm;
 
     private Workspace? workspace;
     private List<Space>? spaces;
     private bool notFound;
     private bool isSaving;
     private string? errorMessage;
-    private string? statusMessage;
     private string tab = "geral";
     private readonly GeneralModel generalModel = new();
     private Guid? loadedWorkspaceId;
@@ -188,7 +201,7 @@
         }
 
         generalModel.Name = workspace.Name;
-        generalModel.Color = workspace.Color ?? AvailableColors[0];
+        generalModel.Color = workspace.Color ?? WorkspaceColors.Default;
 
         NavContext.SetWorkspace(WorkspaceId, workspace.Name);
 
@@ -227,7 +240,6 @@
 
         isSaving = true;
         errorMessage = null;
-        statusMessage = null;
 
         var newName = generalModel.Name.Trim();
 
@@ -245,17 +257,25 @@
         NavContext.Refresh();
 
         isSaving = false;
-        statusMessage = "Alterações salvas.";
+        Toasts.Show("Alterações salvas");
     }
 
     private async Task HandleToggleArchive()
     {
+        var newValue = !workspace!.IsArchived;
+        if (newValue && (confirm is null || !await confirm.AskAsync(new ConfirmRequest(
+                Title: $"Arquivar \"{workspace.Name}\"?",
+                Message: "Ele sai da lista principal de todos os membros. Nada é apagado, e você pode desarquivar quando quiser.",
+                ConfirmLabel: "Arquivar workspace"))))
+        {
+            return;
+        }
+
         if (!await StillAdminAsync())
         {
             return;
         }
 
-        var newValue = !workspace!.IsArchived;
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
@@ -264,7 +284,7 @@
         }
 
         workspace.IsArchived = newValue;
-        statusMessage = newValue ? "Workspace arquivado." : "Workspace desarquivado.";
+        Toasts.Show(newValue ? "Workspace arquivado" : "Workspace desarquivado");
     }
 
     private class GeneralModel
@@ -272,6 +292,6 @@
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe um nome.")]
         [System.ComponentModel.DataAnnotations.StringLength(200, ErrorMessage = "Nome muito longo.")]
         public string Name { get; set; } = "";
-        public string Color { get; set; } = "#2563EB";
+        public string Color { get; set; } = WorkspaceColors.Default;
     }
 }

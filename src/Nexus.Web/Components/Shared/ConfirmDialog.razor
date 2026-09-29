@@ -1,0 +1,89 @@
+@* Confirmação antes de ações destrutivas ou irreversíveis. Um por página:
+
+       <ConfirmDialog @ref="confirm" />
+       ...
+       if (!await confirm.AskAsync(ConfirmRequest.Delete("space", space.Name, "Todas as listas e tarefas dele também serão excluídas.")))
+       {
+           return;
+       }
+
+   Usa o <dialog> nativo com showModal(): foco preso, Esc cancela, fundo inerte. O foco inicial
+   vai para "Cancelar" — numa confirmação de exclusão, Enter por reflexo não deve apagar nada. *@
+@inject IJSRuntime JS
+@implements IDisposable
+
+<dialog @ref="dialog" class="dialog dialog--confirm" role="alertdialog"
+        aria-labelledby="@titleId" aria-describedby="@messageId"
+        @oncancel="Cancel" @onclose="HandleNativeClose">
+    @if (request is not null)
+    {
+        <div class="dialog-body">
+            <span class="dialog-icon @(request.Destructive ? "is-danger" : "")" aria-hidden="true">
+                <Icon Name="@(request.Destructive ? "trash" : "alert-circle")" />
+            </span>
+            <div class="dialog-text">
+                <h2 id="@titleId" class="dialog-title">@request.Title</h2>
+                <p id="@messageId" class="dialog-message">@request.Message</p>
+            </div>
+        </div>
+        <div class="dialog-actions">
+            <button type="button" class="btn btn-secondary" autofocus @onclick="Cancel">@request.CancelLabel</button>
+            <button type="button" class="btn @(request.Destructive ? "btn-danger" : "")" @onclick="Confirm">@request.ConfirmLabel</button>
+        </div>
+    }
+</dialog>
+
+@code {
+    private ElementReference dialog;
+    private ConfirmRequest? request;
+    private TaskCompletionSource<bool>? pending;
+    private bool openRequested;
+
+    private readonly string titleId = $"confirm-title-{Guid.NewGuid():N}";
+    private readonly string messageId = $"confirm-message-{Guid.NewGuid():N}";
+
+    /// <summary>Abre a confirmação e devolve true só se a pessoa confirmar.</summary>
+    public Task<bool> AskAsync(ConfirmRequest confirmRequest)
+    {
+        // Um pedido novo enquanto outro está aberto encerra o anterior como "cancelado".
+        pending?.TrySetResult(false);
+
+        request = confirmRequest;
+        pending = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        openRequested = true;
+        StateHasChanged();
+        return pending.Task;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (openRequested)
+        {
+            openRequested = false;
+            await JS.InvokeVoidAsync("nexusUi.showModal", dialog);
+        }
+    }
+
+    private Task Confirm() => Finish(true);
+
+    private Task Cancel() => Finish(false);
+
+    // Fechamento que não passou pelos botões (ex.: navegador fechou o diálogo).
+    private void HandleNativeClose() => pending?.TrySetResult(false);
+
+    private async Task Finish(bool result)
+    {
+        pending?.TrySetResult(result);
+        pending = null;
+        try
+        {
+            await JS.InvokeVoidAsync("nexusUi.close", dialog);
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuito encerrado: não há diálogo para fechar.
+        }
+    }
+
+    public void Dispose() => pending?.TrySetResult(false);
+}

@@ -17,145 +17,154 @@
 
 @if (!Embedded)
 {
-    <PageTitle>Chat</PageTitle>
+    <PageTitle>Chat · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
 }
 
-<div class="@(Embedded ? "chat-embedded" : "page-container")">
+<div class="@(Embedded ? "chat-embedded" : "page-container page-container--wide chat-page")">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Workspace não encontrado ou você não tem acesso a ele.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Workspace não encontrado"
+                    Description="Ele pode ter sido excluído, ou você não faz mais parte dele.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (workspace is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando conversa…" />
     }
     else
     {
         @if (!Embedded)
         {
-            <div class="breadcrumbs">
-                <a href="/workspaces">Workspaces</a> /
-                <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
-                Chat
-            </div>
-
-            <div class="page-header">
-                <div>
-                    <h1 style="margin-bottom:0.15rem;">#@workspace.Name</h1>
-                    <span class="topnav-user">@memberCount membro@(memberCount == 1 ? "" : "s")</span>
-                </div>
-            </div>
-        }
-        else
-        {
-            <div class="chat-embedded-header">
-                <a href="/chats" class="chat-embedded-back topnav-icon-btn" title="Voltar para conversas">←</a>
-                <div>
-                    <strong>#@workspace.Name</strong>
-                    <span class="topnav-user">@memberCount membro@(memberCount == 1 ? "" : "s")</span>
-                </div>
-            </div>
+            <PageHeader Title="@workspace.Name">
+                <Breadcrumbs>
+                    <a href="/workspaces">Workspaces</a>
+                </Breadcrumbs>
+            </PageHeader>
+            <WorkspaceTabs WorkspaceId="WorkspaceId" Active="chat" CanManage="isAdmin" />
         }
 
-        <div class="chat-messages @(Embedded ? "chat-messages--embedded" : "")" @ref="messagesEl">
-            @if (messages is null)
-            {
-                <p>Carregando mensagens...</p>
-            }
-            else if (messages.Count == 0)
-            {
-                <div class="empty-state">
-                    <p>Nenhuma mensagem ainda. Comece a conversa!</p>
-                </div>
-            }
-            else
-            {
-                @if (hasMoreOlderMessages)
+        <section class="chat-panel" aria-label="@($"Chat de {workspace.Name}")">
+            <header class="chat-panel-header">
+                @if (Embedded)
                 {
-                    <div class="chat-load-older-row">
-                        <button type="button" class="btn-link" @onclick="LoadOlderMessagesAsync" disabled="@isLoadingOlder">
-                            @(isLoadingOlder ? "Carregando..." : "Carregar mensagens anteriores")
-                        </button>
-                    </div>
+                    <a href="/chats" class="icon-btn icon-btn--sm chat-embedded-back">
+                        <Icon Name="arrow-left" Label="Voltar para as conversas" />
+                    </a>
                 }
-                @for (var i = 0; i < messages.Count; i++)
-                {
-                    var message = messages[i];
-                    var previous = i > 0 ? messages[i - 1] : null;
-                    var isGrouped = previous is not null
-                        && previous.UserId == message.UserId
-                        && (message.CreatedAtUtc - previous.CreatedAtUtc) < TimeSpan.FromMinutes(5);
+                <Avatar Name="@workspace.Name" Color="@workspace.Color" Size="md" Square="true" />
+                <div class="chat-panel-title">
+                    <strong>@workspace.Name</strong>
+                    <span>@memberCount membro@(memberCount == 1 ? "" : "s") · todos veem esta conversa</span>
+                </div>
+            </header>
 
-                    <div class="chat-message @(isGrouped ? "chat-message-grouped" : "")">
-                        @if (isGrouped)
-                        {
-                            <span class="chat-message-avatar-spacer"></span>
-                        }
-                        else
-                        {
-                            <span class="chat-message-avatar">@Initial(message)</span>
-                        }
-                        <div class="chat-message-body">
-                            @if (!isGrouped)
-                            {
-                                <div class="chat-message-meta">
-                                    <span class="chat-message-author">@AuthorLabel(message)</span>
-                                    <span class="chat-message-time">@message.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</span>
-                                </div>
-                            }
-                            @if (!string.IsNullOrEmpty(message.Content))
-                            {
-                                <div class="chat-message-content">
-                                    @foreach (var (text, isMention) in SplitContentForMentions(message))
-                                    {
-                                        @if (isMention)
-                                        {
-                                            <span class="chat-mention">@text</span>
-                                        }
-                                        else
-                                        {
-                                            @text
-                                        }
-                                    }
-                                </div>
-                            }
-                            @if (message.ReferencedDocPage is not null)
-                            {
-                                <a class="chat-docref-card" href="@($"/workspaces/{WorkspaceId}/docs/{message.ReferencedDocPage.Id}")">
-                                    <span class="chat-docref-icon">📄</span>
-                                    <span class="chat-docref-title">@message.ReferencedDocPage.Title</span>
-                                </a>
-                            }
-                            @if (message.Attachments.Count > 0)
-                            {
-                                <div class="chat-attachment-list">
-                                    @foreach (var attachment in message.Attachments)
-                                    {
-                                        <a class="chat-attachment-item" href="@($"/chat-attachments/{attachment.Id}/download")" target="_blank">
-                                            <span class="chat-attachment-icon">📎</span>
-                                            <span class="chat-attachment-info">
-                                                <span class="chat-attachment-name">@attachment.FileName</span>
-                                                <span class="chat-attachment-size">@FormatSize(attachment.SizeBytes)</span>
-                                            </span>
-                                        </a>
-                                    }
-                                </div>
-                            }
+            <div class="chat-messages" @ref="messagesEl" role="log" aria-live="polite" aria-relevant="additions" aria-label="Mensagens">
+                @if (messages is null)
+                {
+                    <Skeleton Count="5" Label="Carregando mensagens…" />
+                }
+                else if (messages.Count == 0)
+                {
+                    <EmptyState Icon="chat" Title="Nenhuma mensagem ainda"
+                                Description="@EmptyChatHint" />
+                }
+                else
+                {
+                    @if (hasMoreOlderMessages)
+                    {
+                        <div class="chat-load-older-row">
+                            <button type="button" class="btn btn-ghost btn-sm @(isLoadingOlder ? "is-loading" : "")" @onclick="LoadOlderMessagesAsync" disabled="@isLoadingOlder">
+                                Carregar mensagens anteriores
+                            </button>
                         </div>
-                    </div>
-                }
-            }
-        </div>
+                    }
+                    @for (var i = 0; i < messages.Count; i++)
+                    {
+                        var message = messages[i];
+                        var previous = i > 0 ? messages[i - 1] : null;
+                        var local = message.CreatedAtUtc.ToLocalTime();
+                        var newDay = previous is null || previous.CreatedAtUtc.ToLocalTime().Date != local.Date;
+                        var isGrouped = !newDay && previous is not null
+                            && previous.UserId == message.UserId
+                            && (message.CreatedAtUtc - previous.CreatedAtUtc) < TimeSpan.FromMinutes(5);
+                        var mine = message.UserId == currentUserId;
 
-        <ChatComposeBox WorkspaceId="WorkspaceId"
-                        Workspace="workspace"
-                        DocPages="docPages"
-                        WorkspaceMembers="workspaceMembers"
-                        CurrentUserId="@currentUserId"
-                        OnAccessRevoked="HandleComposeAccessRevoked" />
+                        @if (newDay)
+                        {
+                            <div class="chat-day-separator" role="separator"><span>@DayLabel(local)</span></div>
+                        }
+
+                        <article class="chat-message @(isGrouped ? "chat-message-grouped" : "") @(mine ? "is-mine" : "")" @key="message.Id">
+                            @if (isGrouped)
+                            {
+                                <span class="chat-message-avatar-spacer" aria-hidden="true">
+                                    <time class="chat-message-hover-time" datetime="@message.CreatedAtUtc.ToString("o")">@local.ToString("HH:mm")</time>
+                                </span>
+                            }
+                            else
+                            {
+                                <Avatar Name="@AuthorLabel(message)" Size="md" />
+                            }
+                            <div class="chat-message-body">
+                                @if (!isGrouped)
+                                {
+                                    <div class="chat-message-meta">
+                                        <span class="chat-message-author">@AuthorLabel(message)</span>
+                                        <time class="chat-message-time" datetime="@message.CreatedAtUtc.ToString("o")" title="@local.ToString("dd/MM/yyyy HH:mm")">@local.ToString("HH:mm")</time>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrEmpty(message.Content))
+                                {
+                                    <div class="chat-message-content">
+                                        @foreach (var (text, isMention) in SplitContentForMentions(message))
+                                        {
+                                            @if (isMention)
+                                            {
+                                                <span class="chat-mention">@text</span>
+                                            }
+                                            else
+                                            {
+                                                @text
+                                            }
+                                        }
+                                    </div>
+                                }
+                                @if (message.ReferencedDocPage is not null)
+                                {
+                                    <a class="chat-docref-card" href="@($"/workspaces/{WorkspaceId}/docs/{message.ReferencedDocPage.Id}")">
+                                        <span class="doc-type-icon" aria-hidden="true"><Icon Name="doc" /></span>
+                                        <span class="chat-docref-title">@message.ReferencedDocPage.Title</span>
+                                    </a>
+                                }
+                                @if (message.Attachments.Count > 0)
+                                {
+                                    <div class="chat-attachment-list">
+                                        @foreach (var attachment in message.Attachments)
+                                        {
+                                            <a class="chat-attachment-item" href="@($"/chat-attachments/{attachment.Id}/download")" target="_blank" rel="noopener">
+                                                <span class="doc-type-icon doc-type-icon--file" aria-hidden="true"><Icon Name="paperclip" /></span>
+                                                <span class="chat-attachment-info">
+                                                    <span class="chat-attachment-name">@attachment.FileName</span>
+                                                    <span class="chat-attachment-size">@FormatSize(attachment.SizeBytes)</span>
+                                                </span>
+                                            </a>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </article>
+                    }
+                }
+            </div>
+
+            <ChatComposeBox WorkspaceId="WorkspaceId"
+                            Workspace="workspace"
+                            DocPages="docPages"
+                            WorkspaceMembers="workspaceMembers"
+                            CurrentUserId="@currentUserId"
+                            OnAccessRevoked="HandleComposeAccessRevoked" />
+        </section>
     }
 </div>
 
@@ -183,6 +192,20 @@
     private ElementReference messagesEl;
     private IJSObjectReference? module;
     private List<(string UserId, string DisplayName, string? AvatarPath)> workspaceMembers = [];
+    private bool isAdmin;
+
+    private const string EmptyChatHint = "Comece a conversa. Digite @ para mencionar alguém — a pessoa recebe uma notificação.";
+
+    private static readonly System.Globalization.CultureInfo PtBr = new("pt-BR");
+
+    private static string DayLabel(DateTime local)
+    {
+        var today = DateTime.Now.Date;
+        if (local.Date == today) return "Hoje";
+        if (local.Date == today.AddDays(-1)) return "Ontem";
+        var label = local.ToString(local.Year == today.Year ? "dddd, d 'de' MMMM" : "d 'de' MMMM 'de' yyyy", PtBr);
+        return char.ToUpper(label[0], PtBr) + label[1..];
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -207,6 +230,9 @@
             notFound = true;
             return;
         }
+
+        isAdmin = (await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin))).Succeeded;
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {

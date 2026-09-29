@@ -19,81 +19,124 @@
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Lista não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Lista não encontrada"
+                    Description="Ela pode ter sido excluída, ou você não tem mais acesso ao workspace dela.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (taskList is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando a lista…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
-            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
-            @taskList.Name
-        </div>
-
-        <div class="page-header">
-            <h1>@taskList.Name</h1>
-            <div class="form-actions">
-                @if (canManageFields)
-                {
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/labels")">Labels</a>
-                }
-                <button class="btn" @onclick="OpenCreate">+ Nova task</button>
-            </div>
-        </div>
-
-        <ViewSwitcher ListId="ListId" ActiveView="calendar" />
+        <ListPageHeader ListId="ListId" ListName="@taskList.Name"
+                        WorkspaceId="workspaceId" WorkspaceName="@workspaceName"
+                        SpaceId="taskList.SpaceId" SpaceName="@spaceName"
+                        ActiveView="calendar" CanManage="canManageFields"
+                        OnCreate="OpenCreate" />
 
         @if (workItems is null)
         {
-            <p>Carregando...</p>
+            <Skeleton Variant="card" Count="3" Label="Carregando o calendário…" />
         }
         else
         {
             @if (itemsTruncated)
             {
-                <div class="empty-state">
-                    <p>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tasks. O calendário mostra as @WorkItemQueryService.MaxItemsPerView primeiras.</p>
+                <div class="alert alert-warning" role="status">
+                    <Icon Name="alert" />
+                    <span>Esta lista tem mais de @WorkItemQueryService.MaxItemsPerView tarefas. O calendário mostra as @WorkItemQueryService.MaxItemsPerView primeiras.</span>
                 </div>
             }
 
-            <div class="calendar-header">
-                <button type="button" class="btn btn-secondary" @onclick="PrevMonth">‹</button>
-                <h2>@Culture.TextInfo.ToTitleCase(currentMonth.ToString("MMMM yyyy", Culture))</h2>
-                <button type="button" class="btn btn-secondary" @onclick="NextMonth">›</button>
+            <div class="calendar-toolbar">
+                <div class="button-row">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="GoToToday" disabled="@IsCurrentMonth">Hoje</button>
+                    <button type="button" class="icon-btn icon-btn--sm icon-btn--bordered" @onclick="PrevMonth"><Icon Name="chevron-left" Label="Mês anterior" /></button>
+                    <button type="button" class="icon-btn icon-btn--sm icon-btn--bordered" @onclick="NextMonth"><Icon Name="chevron-right" Label="Próximo mês" /></button>
+                </div>
+                <h2 class="calendar-title" aria-live="polite">@MonthTitle</h2>
+                @if (UndatedCount > 0)
+                {
+                    <p class="calendar-undated">@UndatedCount tarefa@(UndatedCount == 1 ? "" : "s") sem prazo não aparece@(UndatedCount == 1 ? "" : "m") aqui</p>
+                }
             </div>
 
-            <div class="calendar-grid">
-                @foreach (var dayName in DayNames)
+            <div class="calendar-grid" role="grid" aria-label="@MonthTitle">
+                <div class="calendar-week calendar-week--head" role="row">
+                    @foreach (var dayName in DayNames)
+                    {
+                        <div class="calendar-day-name" role="columnheader">@dayName</div>
+                    }
+                </div>
+                @foreach (var week in CalendarDays.Chunk(7))
                 {
-                    <div class="calendar-day-name">@dayName</div>
-                }
-                @foreach (var day in CalendarDays)
-                {
-                    <div class="calendar-day @(day.Month == currentMonth.Month ? "" : "is-outside")">
-                        <div class="calendar-day-number">@day.Day</div>
-                        @foreach (var item in ItemsForDay(day))
+                    <div class="calendar-week" role="row">
+                        @foreach (var day in week)
                         {
-                            <div class="calendar-task-pill badge-priority-@item.Priority.ToString().ToLowerInvariant()" @onclick="() => OpenEdit(item)">@item.Title</div>
+                            var items = ItemsForDay(day);
+                            var isToday = day.Date == DateTime.UtcNow.Date;
+                            var expanded = expandedDays.Contains(day.Date);
+                            var visible = expanded ? items : items.Take(MaxPillsPerDay).ToList();
+                            <div class="calendar-day @(day.Month == currentMonth.Month ? "" : "is-outside") @(isToday ? "is-today" : "")" role="gridcell"
+                                 aria-label="@DayLabel(day, items.Count)">
+                                <span class="calendar-day-number" aria-hidden="true">@day.Day</span>
+                                @foreach (var item in visible)
+                                {
+                                    <button type="button" class="calendar-task-pill @(item.Status.Category == StatusCategory.Done ? "is-done" : "")"
+                                            style="--pill-color: var(--priority-@PriorityToken(item.Priority))"
+                                            title="@item.Title" @onclick="() => OpenEdit(item)">
+                                        @item.Title
+                                    </button>
+                                }
+                                @if (items.Count > MaxPillsPerDay)
+                                {
+                                    <button type="button" class="calendar-more" @onclick="() => ToggleDay(day.Date)">
+                                        @(expanded ? "Mostrar menos" : $"+{items.Count - MaxPillsPerDay} mais")
+                                    </button>
+                                }
+                            </div>
                         }
                     </div>
                 }
             </div>
 
-            <div class="priority-legend">
-                <span style="font-weight:600;color:var(--color-text);">Prioridade:</span>
-                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--badge-priority-highest-fg);"></span>@WorkItemPriority.Highest.ToDisplayLabel()</span>
-                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--badge-priority-high-fg);"></span>@WorkItemPriority.High.ToDisplayLabel()</span>
-                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--badge-priority-medium-fg);"></span>@WorkItemPriority.Medium.ToDisplayLabel()</span>
-                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--badge-priority-low-fg);"></span>@WorkItemPriority.Low.ToDisplayLabel()</span>
+            @* Celular: 7 colunas de 50px não comportam títulos — vira uma agenda do mês. *@
+            <div class="calendar-agenda">
+                @{
+                    var daysWithItems = CalendarDays.Where(d => d.Month == currentMonth.Month && ItemsForDay(d).Count > 0).ToList();
+                }
+                @if (daysWithItems.Count == 0)
+                {
+                    <div class="card">
+                        <EmptyState Compact="true" Title="@($"Nenhuma tarefa com prazo em {Culture.DateTimeFormat.GetMonthName(currentMonth.Month)}")" />
+                    </div>
+                }
+                else
+                {
+                    @foreach (var day in daysWithItems)
+                    {
+                        <section class="calendar-agenda-day @(day.Date == DateTime.UtcNow.Date ? "is-today" : "")">
+                            <h3 class="calendar-agenda-date">@Culture.TextInfo.ToTitleCase(day.ToString("dddd, d 'de' MMMM", Culture))</h3>
+                            @foreach (var item in ItemsForDay(day))
+                            {
+                                <button type="button" class="calendar-task-pill @(item.Status.Category == StatusCategory.Done ? "is-done" : "")"
+                                        style="--pill-color: var(--priority-@PriorityToken(item.Priority))" @onclick="() => OpenEdit(item)">
+                                    @item.Title
+                                </button>
+                            }
+                        </section>
+                    }
+                }
+            </div>
+
+            <div class="priority-legend" aria-label="Legenda de prioridade">
+                <span class="priority-legend-title">Prioridade</span>
+                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--priority-highest);"></span>@WorkItemPriority.Highest.ToDisplayLabel()</span>
+                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--priority-high);"></span>@WorkItemPriority.High.ToDisplayLabel()</span>
+                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--priority-medium);"></span>@WorkItemPriority.Medium.ToDisplayLabel()</span>
+                <span class="priority-legend-item"><span class="priority-legend-dot" style="background:var(--priority-low);"></span>@WorkItemPriority.Low.ToDisplayLabel() e @WorkItemPriority.Lowest.ToDisplayLabel().ToLowerInvariant()</span>
             </div>
         }
 
@@ -155,6 +198,42 @@
 
     private void PrevMonth() => currentMonth = currentMonth.AddMonths(-1);
     private void NextMonth() => currentMonth = currentMonth.AddMonths(1);
+    private void GoToToday() => currentMonth = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+
+    private const int MaxPillsPerDay = 3;
+
+    private static string DayLabel(DateTime day, int count) =>
+        day.ToString("d 'de' MMMM", Culture) + (count == 0 ? "" : $", {count} {(count == 1 ? "tarefa" : "tarefas")}");
+    private readonly HashSet<DateTime> expandedDays = new();
+
+    private bool IsCurrentMonth => currentMonth.Year == DateTime.UtcNow.Year && currentMonth.Month == DateTime.UtcNow.Month;
+
+    private string MonthTitle
+    {
+        get
+        {
+            var text = currentMonth.ToString("MMMM 'de' yyyy", Culture);
+            return char.ToUpper(text[0], Culture) + text[1..];
+        }
+    }
+
+    private int UndatedCount => workItems?.Count(w => w.DueDateUtc is null) ?? 0;
+
+    private void ToggleDay(DateTime day)
+    {
+        if (!expandedDays.Remove(day))
+        {
+            expandedDays.Add(day);
+        }
+    }
+
+    private static string PriorityToken(WorkItemPriority priority) => priority switch
+    {
+        WorkItemPriority.Highest => "highest",
+        WorkItemPriority.High => "high",
+        WorkItemPriority.Medium => "medium",
+        _ => "low"
+    };
 
     protected override async Task OnParametersSetAsync()
     {

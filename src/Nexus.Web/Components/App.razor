@@ -1,9 +1,11 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="pt-BR">
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#F7F8FC" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)" />
     <link rel="shortcut icon" href="@Assets["IconNexus.png"]" type="image/x-icon">
     <base href="/" />
     <ResourcePreloader />
@@ -12,7 +14,16 @@
          first paint. -->
     <script src="@Assets["js/theme-interop.js"]"></script>
     <link rel="stylesheet" href="@Assets["lib/quill/quill.snow.css"]" />
-    <link rel="stylesheet" href="@Assets["app.css"]" />
+    @* Ordem importa: tokens → base → componentes → shell → telas (por área) → landing. *@
+    <link rel="stylesheet" href="@Assets["css/tokens.css"]" />
+    <link rel="stylesheet" href="@Assets["css/base.css"]" />
+    <link rel="stylesheet" href="@Assets["css/components.css"]" />
+    <link rel="stylesheet" href="@Assets["css/shell.css"]" />
+    <link rel="stylesheet" href="@Assets["css/views-home.css"]" />
+    <link rel="stylesheet" href="@Assets["css/views-tasks.css"]" />
+    <link rel="stylesheet" href="@Assets["css/views-workspace.css"]" />
+    <link rel="stylesheet" href="@Assets["css/views-account.css"]" />
+    <link rel="stylesheet" href="@Assets["css/landing.css"]" />
     <link rel="stylesheet" href="@Assets["Nexus.Web.styles.css"]" />
     <ImportMap />
     <HeadOutlet @rendermode="PageRenderMode" />
@@ -24,6 +35,7 @@
     <script src="@Assets["lib/sortablejs/Sortable.min.js"]"></script>
     <script src="@Assets["lib/quill/quill.js"]"></script>
     <script src="@Assets["lib/chartjs/chart.umd.min.js"]"></script>
+    <script src="@Assets["js/ui-interop.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
 </body>

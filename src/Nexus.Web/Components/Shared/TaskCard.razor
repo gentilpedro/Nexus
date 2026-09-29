@@ -1,7 +1,10 @@
 @using Nexus.Domain.Entities
 @using Nexus.Web.Extensions
 
-<div class="task-card" data-workitem-id="@WorkItem.Id" @onclick="() => OnClick.InvokeAsync(WorkItem)">
+@* Card do quadro. O título é um <button> que estica sobre o card inteiro (teclado: Tab chega em
+   cada card, Enter abre). O elemento raiz continua sendo o que o SortableJS arrasta
+   (data-workitem-id), então arrastar e soltar segue funcionando. *@
+<article class="task-card @(IsDone ? "is-done" : "")" data-workitem-id="@WorkItem.Id">
     @if (WorkItem.WorkItemLabels.Count > 0)
     {
         <div class="task-card-labels">
@@ -11,19 +14,32 @@
             }
         </div>
     }
-    <div class="task-card-header">
-        <WorkItemTypeIcon Type="WorkItem.Type" />
-        <PriorityBadge Priority="WorkItem.Priority" />
-    </div>
-    <div class="task-card-title">@WorkItem.Title</div>
+    <h3 class="task-card-title">
+        <button type="button" class="task-card-open" @onclick="() => OnClick.InvokeAsync(WorkItem)">@WorkItem.Title</button>
+    </h3>
     <div class="task-card-footer">
-        <span>@AssigneeLabel</span>
-        @if (WorkItem.DueDateUtc is not null)
+        <WorkItemTypeIcon Type="WorkItem.Type" />
+        <PriorityBadge Priority="WorkItem.Priority" IconOnly="true" />
+        @if (WorkItem.DueDateUtc is DateTime due)
         {
-            <span>@WorkItem.DueDateUtc.Value.ToString("dd/MM")</span>
+            <span class="task-card-due @(IsOverdue ? "is-overdue" : !IsDone && DueDateLabel.IsDueSoon(due) ? "is-soon" : "")" title="@DueDateLabel.Describe(due, IsDone)">
+                <Icon Name="calendar" Class="icon--sm" />
+                <span aria-hidden="true">@DueDateLabel.Format(due)</span>
+                <span class="sr-only">@DueDateLabel.Describe(due, IsDone)</span>
+            </span>
         }
+        <span class="task-card-assignee" title="@AssigneeLabel">
+            @if (WorkItem.Assignee is null)
+            {
+                <span class="avatar avatar--xs avatar--empty" role="img" aria-label="Sem responsável"></span>
+            }
+            else
+            {
+                <Avatar Name="@AssigneeLabel" Size="xs" Decorative="false" />
+            }
+        </span>
     </div>
-</div>
+</article>
 
 @code {
     [Parameter, EditorRequired]
@@ -31,6 +47,10 @@
 
     [Parameter]
     public EventCallback<WorkItem> OnClick { get; set; }
+
+    private bool IsDone => WorkItem.Status?.Category == StatusCategory.Done;
+
+    private bool IsOverdue => !IsDone && WorkItem.DueDateUtc is DateTime due && DueDateLabel.IsOverdue(due);
 
     private string AssigneeLabel =>
         WorkItem.Assignee is null

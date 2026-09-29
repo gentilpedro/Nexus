@@ -1,12 +1,15 @@
 @using Nexus.Domain.Entities
 
+@* Fundo neutro + bolinha na cor do status. A cor customizada de um status (escolhida pelo
+   usuário) vai só na bolinha — como texto sobre fundo tingido dela, uma cor clara como amarelo
+   ficaria ilegível. *@
 @if (!string.IsNullOrEmpty(Color))
 {
-    <span class="badge" style="background-color: @(Color)26; color: @Color;">@Name</span>
+    <span class="badge badge-status" style="--status-dot: @Color">@Name</span>
 }
 else
 {
-    <span class="badge badge-status-@Category.ToString().ToLowerInvariant()">@Name</span>
+    <span class="badge badge-status badge-status-@Category.ToString().ToLowerInvariant()">@Name</span>
 }
 
 @code {

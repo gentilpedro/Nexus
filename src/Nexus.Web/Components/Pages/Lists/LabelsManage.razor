@@ -14,136 +14,116 @@
 @inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 
-<PageTitle>Labels</PageTitle>
+<PageTitle>Labels · Nexus</PageTitle>
 
 <div class="page-container">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Lista não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Configurações indisponíveis"
+                    Description="A lista não existe mais, ou você não é administrador do workspace dela.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (taskList is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando configurações…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
-            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
-            <a href="@($"/lists/{ListId}/list")">@taskList.Name</a> /
-            Labels
-        </div>
+        <ListSettingsHeader ListId="ListId" ListName="@taskList.Name"
+                            WorkspaceId="workspaceId" WorkspaceName="@workspaceName"
+                            SpaceId="taskList.SpaceId" SpaceName="@spaceName" Active="labels" />
 
-        <div class="page-header">
-            <h1>Labels</h1>
-        </div>
-
-        @if (labels is not null)
-        {
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Total de labels</span>
-                        <span class="stat-card-value">@labels.Count</span>
-                    </div>
-                    <span class="stat-card-icon">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L3 3v6.59a2 2 0 0 0 .59 1.41l9.58 9.58a2 2 0 0 0 2.82 0l4.6-4.6a2 2 0 0 0 0-2.82Z" /><circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none" /></svg>
-                    </span>
+        <div class="settings-split">
+            <EditForm Model="createModel" OnValidSubmit="HandleCreate" class="card settings-split-form">
+                <h2 class="form-section-title">Nova label</h2>
+                <p class="form-section-description">Labels marcam tarefas por tema, cliente ou tipo de trabalho, e aparecem nos cards.</p>
+                <DataAnnotationsValidator />
+                <div class="form-field">
+                    <label for="label-name" class="required">Nome</label>
+                    <InputText id="label-name" @bind-Value="createModel.Name" @bind-Value:event="oninput" placeholder="Ex.: Cliente VIP, Retrabalho" />
+                    <ValidationMessage For="() => createModel.Name" />
                 </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Cores usadas</span>
-                        <span class="stat-card-value">@labels.Select(l => l.Color).Distinct().Count()</span>
-                    </div>
-                    <span class="stat-card-icon is-success">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor" /><circle cx="17.5" cy="10.5" r=".5" fill="currentColor" /><circle cx="8.5" cy="7.5" r=".5" fill="currentColor" /><circle cx="6.5" cy="12.5" r=".5" fill="currentColor" /><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2Z" /></svg>
-                    </span>
+                <div class="form-field">
+                    <label for="label-description">Descrição <span class="field-hint">(opcional)</span></label>
+                    <InputText id="label-description" @bind-Value="createModel.Description" placeholder="Quando usar esta label?" />
                 </div>
-            </div>
-        }
+                <fieldset class="form-fieldset">
+                    <legend class="field-label">Cor</legend>
+                    <div class="label-swatch-row">
+                        @foreach (var (color, colorName) in Palette)
+                        {
+                            <button type="button"
+                                    class="label-swatch @(createModel.Color == color ? "is-selected" : "")"
+                                    style="background-color: @color;"
+                                    aria-pressed="@(createModel.Color == color ? "true" : "false")"
+                                    aria-label="@colorName"
+                                    @onclick="() => createModel.Color = color">
+                            </button>
+                        }
+                    </div>
+                </fieldset>
+                <div class="label-preview">
+                    <span class="field-label">Prévia</span>
+                    <span class="label-chip" style="@ChipStyle(createModel.Color)">@(string.IsNullOrWhiteSpace(createModel.Name) ? "Nome da label" : createModel.Name)</span>
+                </div>
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
+                }
+                <div class="form-actions form-actions--end">
+                    <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving"><Icon Name="plus" /> Adicionar label</button>
+                </div>
+            </EditForm>
 
-        <EditForm Model="createModel" OnValidSubmit="HandleCreate" class="card" style="margin-bottom:1.5rem;">
-            <DataAnnotationsValidator />
-            <div class="form-field">
-                <label for="label-name">Nome</label>
-                <InputText id="label-name" @bind-Value="createModel.Name" placeholder="Ex: Alta prioridade" />
-                <ValidationMessage For="() => createModel.Name" />
-            </div>
-            <div class="form-field">
-                <label for="label-description">Descrição (opcional)</label>
-                <InputText id="label-description" @bind-Value="createModel.Description" placeholder="Pra que serve essa label?" />
-            </div>
-            <div class="form-field">
-                <label>Cor</label>
-                <div class="label-swatch-row">
-                    @foreach (var color in Palette)
+            <section class="settings-split-list" aria-labelledby="labels-title">
+                <div class="section-header">
+                    <h2 id="labels-title" class="section-title">Labels desta lista @if (labels is not null) { <span class="tab-count">@labels.Count</span> }</h2>
+                </div>
+                @if (labels is null)
+                {
+                    <Skeleton Count="4" />
+                }
+                else if (labels.Count == 0)
+                {
+                    <div class="card">
+                        <EmptyState Compact="true" Title="Nenhuma label ainda" Description="Crie a primeira no formulário ao lado." />
+                    </div>
+                }
+                else
+                {
+                    @if (labels.Count > 6)
                     {
-                        <button type="button"
-                                class="label-swatch @(createModel.Color == color ? "is-selected" : "")"
-                                style="background-color: @color;"
-                                title="@color"
-                                @onclick="() => createModel.Color = color">
-                        </button>
+                        <div class="input-with-icon list-toolbar-search settings-filter">
+                            <Icon Name="search" />
+                            <label for="label-filter" class="sr-only">Buscar labels</label>
+                            <input id="label-filter" type="search" placeholder="Buscar labels" @bind="labelFilter" @bind:event="oninput" />
+                        </div>
                     }
-                </div>
-            </div>
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger">@errorMessage</div>
-            }
-            <div class="form-actions">
-                <button type="submit" class="btn" disabled="@isSaving">Adicionar label</button>
-            </div>
-        </EditForm>
-
-        @if (labels is null)
-        {
-            <p>Carregando labels...</p>
-        }
-        else if (labels.Count == 0)
-        {
-            <div class="empty-state">
-                <p>Nenhuma label criada ainda.</p>
-            </div>
-        }
-        else
-        {
-            <div class="form-field" style="max-width:280px;">
-                <input type="search" placeholder="Buscar labels..." @bind="labelFilter" @bind:event="oninput" />
-            </div>
-
-            <div class="table-scroll">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Label</th>
-                            <th>Uso</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                    <ul class="card card--flush row-list settings-rows">
                         @foreach (var label in FilteredLabels)
                         {
-                            <tr>
-                                <td>
+                            var uses = usageCounts.TryGetValue(label.Id, out var c) ? c : 0;
+                            <li class="settings-row">
+                                <div class="settings-row-main">
                                     <span class="label-chip" style="@ChipStyle(label.Color)">@label.Name</span>
                                     @if (!string.IsNullOrWhiteSpace(label.Description))
                                     {
-                                        <div class="topnav-user" style="margin-top:0.25rem;">@label.Description</div>
+                                        <span class="settings-row-sub">@label.Description</span>
                                     }
-                                </td>
-                                <td class="topnav-user">@(usageCounts.TryGetValue(label.Id, out var c) ? c : 0) tarefa@((usageCounts.TryGetValue(label.Id, out var c2) ? c2 : 0) == 1 ? "" : "s")</td>
-                                <td><button type="button" class="btn-link" @onclick="() => HandleDelete(label.Id)">Excluir</button></td>
-                            </tr>
+                                </div>
+                                <span class="settings-row-meta">@uses tarefa@(uses == 1 ? "" : "s")</span>
+                                <button type="button" class="icon-btn icon-btn--sm is-danger" @onclick="() => HandleDelete(label.Id)">
+                                    <Icon Name="trash" Label="@($"Excluir label {label.Name}")" />
+                                </button>
+                            </li>
                         }
-                    </tbody>
-                </table>
-            </div>
-        }
+                    </ul>
+                }
+            </section>
+        </div>
+
+        <ConfirmDialog @ref="confirm" />
     }
 </div>
 
@@ -154,10 +134,12 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private static readonly string[] Palette =
+    private ConfirmDialog? confirm;
+
+    private static readonly (string Hex, string Name)[] Palette =
     [
-        "#61BD4F", "#F2D600", "#FFAB4A", "#EB5A46", "#C377E0",
-        "#0079BF", "#00C2E0", "#FF78CB", "#4D4D4D"
+        ("#61BD4F", "Verde"), ("#F2D600", "Amarelo"), ("#FFAB4A", "Laranja"), ("#EB5A46", "Vermelho"), ("#C377E0", "Lilás"),
+        ("#0079BF", "Azul"), ("#00C2E0", "Ciano"), ("#FF78CB", "Rosa"), ("#4D4D4D", "Grafite")
     ];
 
     private TaskList? taskList;
@@ -286,13 +268,21 @@
 
         createModel.Name = "";
         createModel.Description = "";
-        createModel.Color = Palette[0];
+        createModel.Color = Palette[0].Hex;
         isSaving = false;
         await LoadLabelsAsync();
     }
 
     private async Task HandleDelete(Guid labelId)
     {
+        var label = labels?.FirstOrDefault(l => l.Id == labelId);
+        var uses = usageCounts.TryGetValue(labelId, out var count) ? count : 0;
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("label", label?.Name,
+                uses == 0 ? "Nenhuma tarefa usa esta label." : $"Ela sai de {uses} {(uses == 1 ? "tarefa" : "tarefas")}.")))
+        {
+            return;
+        }
+
         if (!await StillAdminAsync())
         {
             return;
@@ -314,6 +304,6 @@
         public string Name { get; set; } = "";
         [StringLength(200, ErrorMessage = "Descrição muito longa.")]
         public string Description { get; set; } = "";
-        public string Color { get; set; } = Palette[0];
+        public string Color { get; set; } = Palette[0].Hex;
     }
 }

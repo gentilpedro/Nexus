@@ -12,40 +12,37 @@
 @inject WorkItemQueryService QueryService
 @inject NavigationManager NavigationManager
 
-<PageTitle>Busca Global</PageTitle>
+<PageTitle>Busca · Nexus</PageTitle>
 
 <div class="page-container page-container--wide">
-    <div class="page-header">
-        <div>
-            <h1 style="margin-bottom:0.15rem;">Busca Global</h1>
-            @if (!string.IsNullOrWhiteSpace(textFilter))
-            {
-                <span class="topnav-user">Exibindo @TotalCount resultado@(TotalCount == 1 ? "" : "s") para "@textFilter"</span>
-            }
-            else
-            {
-                <span class="topnav-user">Busque em tarefas, documentos, planilhas e pessoas dos seus workspaces</span>
-            }
-        </div>
-        <button type="button" class="btn btn-secondary" @onclick="() => showAdvancedFilters = !showAdvancedFilters">
-            @(showAdvancedFilters ? "Ocultar filtros" : "Filtros avançados")
-        </button>
-    </div>
+    <PageHeader Title="Busca" Description="Encontre tarefas, documentos, planilhas e pessoas de todos os seus workspaces." />
 
-    <form class="topnav-search-form" style="max-width:none;margin-bottom:1.25rem;padding:0.6rem 1rem;" @onsubmit="HandleSearch" @onsubmit:preventDefault="true">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-        <input type="search" placeholder="Buscar tarefas, documentos, planilhas ou pessoas..." @bind="textFilter" @bind:event="oninput" />
-        <button type="submit" class="btn" style="flex-shrink:0;">Buscar</button>
+    <form class="search-bar" role="search" @onsubmit="HandleSearch" @onsubmit:preventDefault="true">
+        <div class="input-with-icon search-bar-input">
+            <Icon Name="search" />
+            <label for="search-q" class="sr-only">O que você procura?</label>
+            <input id="search-q" type="search" placeholder="Buscar tarefas, documentos, planilhas ou pessoas" @bind="textFilter" @bind:event="oninput" autofocus />
+        </div>
+        <button type="button" class="btn btn-secondary" @onclick="() => showAdvancedFilters = !showAdvancedFilters"
+                aria-expanded="@(showAdvancedFilters ? "true" : "false")" aria-controls="search-filters">
+            <Icon Name="filter" /> <span class="label-collapsible">Filtros</span>
+            @if (ActiveFilterCount > 0)
+            {
+                <span class="tab-count">@ActiveFilterCount</span>
+            }
+        </button>
+        <button type="submit" class="btn">Buscar</button>
     </form>
 
     @if (showAdvancedFilters)
     {
-        <form @onsubmit="HandleSearch" @onsubmit:preventDefault="true" class="card search-filters">
-            <div class="form-row">
+        <form id="search-filters" @onsubmit="HandleSearch" @onsubmit:preventDefault="true" class="card search-filters">
+            <p class="form-section-description">Os filtros valem para a aba Tarefas.</p>
+            <div class="form-row form-row--3">
                 <div class="form-field">
                     <label for="search-workspace">Workspace</label>
                     <select id="search-workspace" @bind="workspaceIdText" @bind:after="HandleSearch">
-                        <option value="">Qualquer um dos meus</option>
+                        <option value="">Todos os meus</option>
                         @foreach (var ws in workspaces ?? [])
                         {
                             <option value="@ws.Id">@ws.Name</option>
@@ -56,13 +53,11 @@
                     <label for="search-status">Status</label>
                     <select id="search-status" @bind="statusCategoryText" @bind:after="HandleSearch">
                         <option value="">Qualquer</option>
-                        <option value="ToDo">A Fazer</option>
-                        <option value="InProgress">Em Andamento</option>
+                        <option value="ToDo">A fazer</option>
+                        <option value="InProgress">Em andamento</option>
                         <option value="Done">Concluído</option>
                     </select>
                 </div>
-            </div>
-            <div class="form-row">
                 <div class="form-field">
                     <label for="search-priority">Prioridade</label>
                     <select id="search-priority" @bind="priorityText" @bind:after="HandleSearch">
@@ -83,13 +78,11 @@
                         }
                     </select>
                 </div>
-            </div>
-            <div class="form-row">
                 <div class="form-field">
                     <label for="search-assignee">Responsável</label>
                     <select id="search-assignee" @bind="assigneeModeText" @bind:after="HandleSearch">
                         <option value="Any">Qualquer</option>
-                        <option value="Me">Atribuído a mim</option>
+                        <option value="Me">Atribuídas a mim</option>
                         <option value="Unassigned">Sem responsável</option>
                     </select>
                 </div>
@@ -97,173 +90,128 @@
                     <label for="search-due">Prazo</label>
                     <select id="search-due" @bind="dueModeText" @bind:after="HandleSearch">
                         <option value="Any">Qualquer</option>
-                        <option value="Overdue">Atrasado</option>
+                        <option value="Overdue">Atrasadas</option>
                         <option value="ThisWeek">Esta semana</option>
                         <option value="NoDueDate">Sem prazo</option>
                     </select>
                 </div>
             </div>
-            <p class="topnav-user">Esses filtros se aplicam à aba Tarefas.</p>
         </form>
     }
 
-    <div class="view-tabs">
-        <button type="button" class="@(tab == "all" ? "active" : "")" @onclick='() => tab = "all"'>Tudo <span class="tab-count">@TotalCount</span></button>
-        <button type="button" class="@(tab == "tasks" ? "active" : "")" @onclick='() => tab = "tasks"'>Tarefas <span class="tab-count">@(results?.Count ?? 0)</span></button>
-        <button type="button" class="@(tab == "docs" ? "active" : "")" @onclick='() => tab = "docs"'>Documentos <span class="tab-count">@(docResults?.Count ?? 0)</span></button>
-        <button type="button" class="@(tab == "sheets" ? "active" : "")" @onclick='() => tab = "sheets"'>Planilhas <span class="tab-count">@(sheetResults?.Count ?? 0)</span></button>
-        <button type="button" class="@(tab == "people" ? "active" : "")" @onclick='() => tab = "people"'>Pessoas <span class="tab-count">@(peopleResults?.Count ?? 0)</span></button>
+    <div class="view-tabs" role="tablist" aria-label="Tipo de resultado">
+        <button type="button" role="tab" aria-selected="@(tab == "all" ? "true" : "false")" class="@(tab == "all" ? "active" : "")" @onclick='() => tab = "all"'>Tudo <span class="tab-count">@TotalCount</span></button>
+        <button type="button" role="tab" aria-selected="@(tab == "tasks" ? "true" : "false")" class="@(tab == "tasks" ? "active" : "")" @onclick='() => tab = "tasks"'>Tarefas <span class="tab-count">@(results?.Count ?? 0)</span></button>
+        <button type="button" role="tab" aria-selected="@(tab == "docs" ? "true" : "false")" class="@(tab == "docs" ? "active" : "")" @onclick='() => tab = "docs"'>Documentos <span class="tab-count">@(docResults?.Count ?? 0)</span></button>
+        <button type="button" role="tab" aria-selected="@(tab == "sheets" ? "true" : "false")" class="@(tab == "sheets" ? "active" : "")" @onclick='() => tab = "sheets"'>Planilhas <span class="tab-count">@(sheetResults?.Count ?? 0)</span></button>
+        <button type="button" role="tab" aria-selected="@(tab == "people" ? "true" : "false")" class="@(tab == "people" ? "active" : "")" @onclick='() => tab = "people"'>Pessoas <span class="tab-count">@(peopleResults?.Count ?? 0)</span></button>
     </div>
 
+    <div role="tabpanel" aria-live="polite" aria-busy="@(!HasLoaded ? "true" : "false")">
     @if (!HasLoaded)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Buscando…" />
     }
     else if (!string.IsNullOrWhiteSpace(textFilter) && TotalCount == 0)
     {
-        <div class="search-empty-state">
-            <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-                <circle cx="60" cy="60" r="56" fill="var(--color-primary-soft)" />
-                <circle cx="52" cy="52" r="22" fill="none" stroke="var(--color-primary)" stroke-width="6" />
-                <line x1="69" y1="69" x2="88" y2="88" stroke="var(--color-primary)" stroke-width="6" stroke-linecap="round" />
-            </svg>
-            <h2>Ops! Nenhum resultado para "@textFilter"</h2>
-            <p>Tente usar palavras-chave mais genéricas, verifique a digitação ou limpe os filtros pra ver mais resultados.</p>
+        <EmptyState Icon="search" Title="@($"Nada encontrado para \"{textFilter}\"")"
+                    Description="Tente palavras mais gerais, confira a digitação ou limpe os filtros.">
             <button type="button" class="btn btn-secondary" @onclick="ClearSearch">Limpar busca</button>
-        </div>
+        </EmptyState>
     }
     else if (tab == "all")
     {
+        @if (TotalCount == 0)
+        {
+            <EmptyState Icon="search" Title="O que você procura?"
+                        Description="Digite um termo acima. A busca olha títulos de tarefas, documentos e planilhas, e nomes e e-mails de pessoas." />
+        }
         @if (results is { Count: > 0 })
         {
-            <h2 style="font-size:0.95rem;">Tarefas <button type="button" class="btn-link" style="margin-left:0.5rem;" @onclick='() => tab = "tasks"'>ver todas →</button></h2>
-            <div class="dashboard-task-list" style="margin-bottom:1.5rem;">
-                @foreach (var item in results.Take(3))
-                {
-                    <TaskRow Item="item" OnClick="OpenTask" />
-                }
-            </div>
+            <section class="section search-section" aria-labelledby="sr-tasks">
+                <div class="section-header">
+                    <h2 id="sr-tasks" class="section-title">Tarefas <span class="tab-count">@results.Count</span></h2>
+                    @if (results.Count > 3)
+                    {
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick='() => tab = "tasks"'>Ver todas <Icon Name="arrow-right" /></button>
+                    }
+                </div>
+                <ul class="task-list card card--flush">
+                    @foreach (var item in results.Take(3))
+                    {
+                        <TaskRow Item="item" OnClick="OpenTask" @key="item.Id" />
+                    }
+                </ul>
+            </section>
         }
         @if (docResults is { Count: > 0 } || sheetResults is { Count: > 0 })
         {
-            <h2 style="font-size:0.95rem;">Documentos e planilhas <button type="button" class="btn-link" style="margin-left:0.5rem;" @onclick='() => tab = "docs"'>ver todos →</button></h2>
-            <div class="table-scroll" style="margin-bottom:1.5rem;">
-                <table class="data-table">
-                    <tbody>
-                        @foreach (var doc in (docResults ?? []).Concat(sheetResults ?? []).Take(3))
-                        {
-                            <tr class="data-table-row" @onclick="() => OpenDoc(doc)">
-                                <td>@(doc.Type == DocPageType.Spreadsheet ? "📊" : "📄") @doc.Title</td>
-                                <td>@doc.Workspace.Name</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+            var docsAndSheets = (docResults ?? []).Concat(sheetResults ?? []).ToList();
+            <section class="section search-section" aria-labelledby="sr-docs">
+                <div class="section-header">
+                    <h2 id="sr-docs" class="section-title">Documentos e planilhas <span class="tab-count">@docsAndSheets.Count</span></h2>
+                    @if (docsAndSheets.Count > 3)
+                    {
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick='() => tab = "docs"'>Ver todos <Icon Name="arrow-right" /></button>
+                    }
+                </div>
+                @DocTable(docsAndSheets.Take(3))
+            </section>
         }
         @if (peopleResults is { Count: > 0 })
         {
-            <h2 style="font-size:0.95rem;">Pessoas <button type="button" class="btn-link" style="margin-left:0.5rem;" @onclick='() => tab = "people"'>ver todas →</button></h2>
-            <div class="card-list">
-                @foreach (var person in peopleResults.Take(3))
-                {
-                    <div class="card" style="display:flex;align-items:center;gap:0.6rem;">
-                        <span class="dashboard-workspace-avatar" style="width:2.1rem;height:2.1rem;font-size:0.8rem;">@Initial(person.DisplayName ?? person.Email)</span>
-                        <div>
-                            <div style="font-weight:600;">@(person.DisplayName is { Length: > 0 } dn ? dn : person.Email)</div>
-                            <div style="font-size:0.8rem;color:var(--color-text-muted);">@person.Email</div>
-                        </div>
-                    </div>
-                }
-            </div>
-        }
-        @if (TotalCount == 0)
-        {
-            <div class="empty-state">
-                <p>Digite algo na busca acima pra encontrar tarefas, documentos, planilhas ou pessoas.</p>
-            </div>
+            <section class="section search-section" aria-labelledby="sr-people">
+                <div class="section-header">
+                    <h2 id="sr-people" class="section-title">Pessoas <span class="tab-count">@peopleResults.Count</span></h2>
+                    @if (peopleResults.Count > 3)
+                    {
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick='() => tab = "people"'>Ver todas <Icon Name="arrow-right" /></button>
+                    }
+                </div>
+                @PeopleGrid(peopleResults.Take(3))
+            </section>
         }
     }
     else if (tab == "tasks")
     {
-        @if (results is null)
+        @if (results is null || results.Count == 0)
         {
-            <p>Carregando...</p>
-        }
-        else if (results.Count == 0)
-        {
-            <div class="empty-state">
-                <p>Nenhuma task encontrada com esses filtros.</p>
-            </div>
+            <EmptyState Icon="tasks" Title="Nenhuma tarefa encontrada" Description="Ajuste o termo ou os filtros para ver mais resultados." />
         }
         else
         {
-            <div class="dashboard-task-list">
+            <ul class="task-list card card--flush">
                 @foreach (var item in results)
                 {
-                    <TaskRow Item="item" OnClick="OpenTask" />
+                    <TaskRow Item="item" OnClick="OpenTask" @key="item.Id" />
                 }
-            </div>
+            </ul>
         }
     }
     else if (tab is "docs" or "sheets")
     {
         var list = tab == "docs" ? docResults : sheetResults;
-        @if (list is null)
+        @if (list is null || list.Count == 0)
         {
-            <p>Carregando...</p>
-        }
-        else if (list.Count == 0)
-        {
-            <div class="empty-state"><p>Nenhum resultado encontrado.</p></div>
+            <EmptyState Icon="@(tab == "docs" ? "doc" : "sheet")" Title="@(tab == "docs" ? "Nenhum documento encontrado" : "Nenhuma planilha encontrada")" />
         }
         else
         {
-            <div class="table-scroll">
-                <table class="data-table">
-                    <thead>
-                        <tr><th>Título</th><th>Workspace</th><th>Atualizado</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var doc in list)
-                        {
-                            <tr class="data-table-row" @onclick="() => OpenDoc(doc)">
-                                <td>@doc.Title</td>
-                                <td>@doc.Workspace.Name</td>
-                                <td>@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToLocalTime().ToString("dd/MM/yyyy"))</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+            @DocTable(list)
         }
     }
     else
     {
-        @if (peopleResults is null)
+        @if (peopleResults is null || peopleResults.Count == 0)
         {
-            <p>Carregando...</p>
-        }
-        else if (peopleResults.Count == 0)
-        {
-            <div class="empty-state"><p>Nenhuma pessoa encontrada.</p></div>
+            <EmptyState Icon="team" Title="Ninguém encontrado" Description="A busca olha nome e e-mail de quem participa dos seus workspaces." />
         }
         else
         {
-            <div class="card-list">
-                @foreach (var person in peopleResults)
-                {
-                    <div class="card" style="display:flex;align-items:center;gap:0.6rem;">
-                        <span class="dashboard-workspace-avatar" style="width:2.1rem;height:2.1rem;font-size:0.8rem;">@Initial(person.DisplayName ?? person.Email)</span>
-                        <div>
-                            <div style="font-weight:600;">@(person.DisplayName is { Length: > 0 } dn ? dn : person.Email)</div>
-                            <div style="font-size:0.8rem;color:var(--color-text-muted);">@person.Email</div>
-                        </div>
-                    </div>
-                }
-            </div>
+            @PeopleGrid(peopleResults)
         }
     }
+    </div>
 </div>
 
 @code {
@@ -405,9 +353,64 @@
         peopleResults = await query.OrderBy(u => u.DisplayName).Take(50).ToListAsync();
     }
 
-    private void OpenTask(WorkItem item) => NavigationManager.NavigateTo($"/lists/{item.TaskListId}/list");
+    // Abre a lista já com o painel da tarefa (ListView lê ?tarefa=).
+    private void OpenTask(WorkItem item) => NavigationManager.NavigateTo($"/lists/{item.TaskListId}/list?tarefa={item.Id}");
 
-    private void OpenDoc(DocPage doc) => NavigationManager.NavigateTo(doc.Type == DocPageType.Spreadsheet ? $"/spreadsheets/{doc.Id}" : $"/docs/{doc.Id}");
+    // Antes navegava para /docs/{id} e /spreadsheets/{id}, rotas que não existem (404): as
+    // páginas de documento vivem sob o workspace. Mesma regra de DocsList.OpenDoc.
+    private void OpenDoc(DocPage doc)
+    {
+        if (doc.Type == DocPageType.File)
+        {
+            NavigationManager.NavigateTo($"/doc-files/{doc.Id}/download", forceLoad: true);
+            return;
+        }
 
-    private static string Initial(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[0].ToString().ToUpperInvariant();
+        var segment = doc.Type == DocPageType.Spreadsheet ? "spreadsheets" : "docs";
+        NavigationManager.NavigateTo($"/workspaces/{doc.WorkspaceId}/{segment}/{doc.Id}");
+    }
+
+    private int ActiveFilterCount =>
+        new[] { workspaceIdText, statusCategoryText, priorityText, typeText }.Count(v => !string.IsNullOrEmpty(v))
+        + (assigneeModeText != "Any" ? 1 : 0)
+        + (dueModeText != "Any" ? 1 : 0);
+
+    private RenderFragment DocTable(IEnumerable<DocPage> docs) => @<div class="table-scroll">
+        <table class="data-table docs-table">
+            <thead>
+                <tr><th>Nome</th><th>Workspace</th><th>Atualizado</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var doc in docs)
+                {
+                    <tr class="data-table-row" @onclick="() => OpenDoc(doc)">
+                        <td class="cell-title">
+                            <span class="doc-cell">
+                                <span class="doc-type-icon doc-type-icon--@doc.Type.ToString().ToLowerInvariant()" aria-hidden="true">
+                                    <Icon Name="@(doc.Type == DocPageType.Spreadsheet ? "sheet" : doc.Type == DocPageType.File ? "paperclip" : "doc")" />
+                                </span>
+                                <button type="button" class="row-link" @onclick="() => OpenDoc(doc)" @onclick:stopPropagation="true">@doc.Title</button>
+                            </span>
+                        </td>
+                        <td class="cell-muted">@doc.Workspace.Name</td>
+                        <td class="cell-muted tabular">@((doc.UpdatedAtUtc ?? doc.CreatedAtUtc).ToLocalTime().ToString("dd/MM/yyyy"))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>;
+
+    private RenderFragment PeopleGrid(IEnumerable<ApplicationUser> people) => @<ul class="people-grid">
+        @foreach (var person in people)
+        {
+            var name = person.DisplayName is { Length: > 0 } dn ? dn : (person.Email ?? "");
+            <li class="person-card">
+                <Avatar Name="@name" Size="lg" />
+                <div class="person-cell-text">
+                    <span class="person-cell-name">@name</span>
+                    <span class="person-cell-sub">@person.Email</span>
+                </div>
+            </li>
+        }
+    </ul>;
 }

@@ -6,22 +6,30 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Dados pessoais</PageTitle>
+<PageTitle>Dados pessoais · Nexus</PageTitle>
 
-<h2>Dados pessoais</h2>
-<StatusMessage />
+<AccountSection Title="Dados pessoais" Description="Seus direitos pela LGPD: baixar uma cópia dos dados da sua conta ou excluí-la.">
+    <StatusMessage />
 
-<div class="card">
-    <p>Sua conta contém dados pessoais que você nos forneceu. Esta página permite baixar ou excluir esses dados.</p>
-    <p><strong>Excluir apaga permanentemente seus dados de identificação (nome, e-mail, foto) e bloqueia sua conta. Conteúdo que você criou em workspaces compartilhados (tarefas, comentários, documentos) permanece, mas sem seu nome associado.</strong></p>
-    <div class="form-actions">
+    <div class="card settings-card">
+        <div class="settings-card-text">
+            <h3 class="form-section-title">Baixar seus dados</h3>
+            <p class="form-section-description">Um arquivo JSON com os dados de cadastro da sua conta.</p>
+        </div>
         <form action="Account/Manage/DownloadPersonalData" method="post">
             <AntiforgeryToken />
-            <button class="btn" type="submit">Baixar</button>
+            <button class="btn btn-secondary" type="submit"><Icon Name="download" /> Baixar</button>
         </form>
-        <a href="Account/Manage/DeletePersonalData" class="btn btn-danger">Excluir</a>
     </div>
-</div>
+
+    <div class="card settings-card danger-zone">
+        <div class="settings-card-text">
+            <h3 class="form-section-title">Excluir conta</h3>
+            <p class="form-section-description">Apaga seus dados de identificação (nome, e-mail e foto) e bloqueia a conta. O que você criou em workspaces compartilhados — tarefas, comentários, documentos — continua lá, sem o seu nome.</p>
+        </div>
+        <a href="Account/Manage/DeletePersonalData" class="btn btn-danger-ghost btn-bordered-danger"><Icon Name="trash" /> Excluir conta</a>
+    </div>
+</AccountSection>
 
 @code {
     [CascadingParameter]

@@ -13,151 +13,130 @@
 @inject WorkItemQueryService QueryService
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
+@inject ToastService Toasts
 
 <PageTitle>@(taskList?.Name ?? "Backlog")</PageTitle>
 
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Lista não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Lista não encontrada"
+                    Description="Ela pode ter sido excluída, ou você não tem mais acesso ao workspace dela.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (taskList is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando a lista…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{workspaceId}")">@workspaceName</a> /
-            <a href="@($"/workspaces/{workspaceId}/spaces/{taskList.SpaceId}")">@spaceName</a> /
-            @taskList.Name
-        </div>
-
-        <div class="page-header">
-            <h1>@taskList.Name</h1>
-            <div class="form-actions">
-                @if (canManageFields)
-                {
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/fields")">Campos customizados</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/workflow")">Workflow</a>
-                    <a class="btn btn-secondary" href="@($"/lists/{ListId}/labels")">Labels</a>
-                }
+        <ListPageHeader ListId="ListId" ListName="@taskList.Name"
+                        WorkspaceId="workspaceId" WorkspaceName="@workspaceName"
+                        SpaceId="taskList.SpaceId" SpaceName="@spaceName"
+                        ActiveView="backlog" CanManage="canManageFields"
+                        OnCreate="OpenCreate" ShowCreate="canManage">
+            <ExtraActions>
                 @if (completedSprints is { Count: > 0 })
                 {
-                    <button type="button" class="btn btn-secondary" @onclick="() => showHistory = !showHistory">Histórico</button>
+                    <button type="button" class="btn btn-ghost" aria-pressed="@(showHistory ? "true" : "false")" @onclick="() => showHistory = !showHistory">
+                        <Icon Name="clock" /> <span class="label-collapsible">Histórico</span>
+                    </button>
                 }
                 @if (canManage)
                 {
-                    <button class="btn btn-secondary" @onclick="ToggleCreateSprintForm">+ Criar sprint</button>
-                    <button class="btn" @onclick="OpenCreate">+ Nova tarefa</button>
+                    <button type="button" class="btn btn-secondary" @onclick="ToggleCreateSprintForm">
+                        <Icon Name="zap" /> Criar sprint
+                    </button>
                 }
-            </div>
-        </div>
-
-        <ViewSwitcher ListId="ListId" ActiveView="backlog" />
+            </ExtraActions>
+        </ListPageHeader>
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
-            <div class="alert alert-danger">@errorMessage</div>
+            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
         }
 
         @if (showCreateSprintForm)
         {
-            <EditForm Model="createSprintModel" OnValidSubmit="HandleCreateSprint" class="card" style="margin-bottom:1rem;">
+            <EditForm Model="createSprintModel" OnValidSubmit="HandleCreateSprint" class="card inline-form">
+                <div class="card-header">
+                    <h2 class="card-title">Nova sprint</h2>
+                </div>
                 <DataAnnotationsValidator />
-                <div class="form-field">
-                    <label for="sprint-name">Nome</label>
-                    <InputText id="sprint-name" @bind-Value="createSprintModel.Name" placeholder="Ex: Sprint 1" />
-                    <ValidationMessage For="() => createSprintModel.Name" />
-                </div>
-                <div class="form-field">
-                    <label for="sprint-goal">Meta (opcional)</label>
-                    <InputTextArea id="sprint-goal" @bind-Value="createSprintModel.Goal" rows="2" />
-                </div>
                 <div class="form-row">
                     <div class="form-field">
-                        <label for="sprint-start">Início</label>
-                        <InputDate id="sprint-start" @bind-Value="createSprintModel.StartDate" />
+                        <label for="sprint-name" class="required">Nome</label>
+                        <InputText id="sprint-name" @bind-Value="createSprintModel.Name" placeholder="Ex.: Sprint 12" autofocus />
+                        <ValidationMessage For="() => createSprintModel.Name" />
                     </div>
-                    <div class="form-field">
-                        <label for="sprint-end">Término</label>
-                        <InputDate id="sprint-end" @bind-Value="createSprintModel.EndDate" />
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="sprint-start">Início</label>
+                            <InputDate id="sprint-start" @bind-Value="createSprintModel.StartDate" />
+                        </div>
+                        <div class="form-field">
+                            <label for="sprint-end">Término</label>
+                            <InputDate id="sprint-end" @bind-Value="createSprintModel.EndDate" />
+                        </div>
                     </div>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn" disabled="@isSavingSprint">Criar</button>
-                    <button type="button" class="btn btn-secondary" @onclick="ToggleCreateSprintForm">Cancelar</button>
+                <div class="form-field">
+                    <label for="sprint-goal">Meta <span class="field-hint">(opcional)</span></label>
+                    <InputTextArea id="sprint-goal" @bind-Value="createSprintModel.Goal" rows="2" placeholder="O que o time quer entregar até o fim desta sprint?" />
+                </div>
+                <div class="form-actions form-actions--end">
+                    <button type="button" class="btn btn-ghost" @onclick="ToggleCreateSprintForm">Cancelar</button>
+                    <button type="submit" class="btn @(isSavingSprint ? "is-loading" : "")" disabled="@isSavingSprint">Criar sprint</button>
                 </div>
             </EditForm>
         }
 
         @if (sprints is null)
         {
-            <p>Carregando...</p>
+            <Skeleton Count="6" Label="Carregando o backlog…" />
         }
         else
         {
             @if (itemsTruncated)
             {
-                <div class="empty-state">
-                    <p>O backlog tem mais de @WorkItemQueryService.MaxItemsPerView tarefas. Mostrando as @WorkItemQueryService.MaxItemsPerView primeiras.</p>
+                <div class="alert alert-warning" role="status">
+                    <Icon Name="alert" />
+                    <span>O backlog tem mais de @WorkItemQueryService.MaxItemsPerView tarefas. Mostrando as @WorkItemQueryService.MaxItemsPerView primeiras.</span>
                 </div>
             }
 
-            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
-                <div class="form-field" style="flex:1;min-width:200px;margin-bottom:0;">
-                    <input type="search" placeholder="Filtrar tarefas..." @bind="filterText" @bind:event="oninput" />
+            <div class="list-toolbar">
+                <div class="input-with-icon list-toolbar-search">
+                    <Icon Name="search" />
+                    <label for="backlog-filter" class="sr-only">Filtrar tarefas do backlog</label>
+                    <input id="backlog-filter" type="search" placeholder="Filtrar tarefas" @bind="filterText" @bind:event="oninput" />
                 </div>
-                <div class="pill-tabs">
-                    <button type="button" class="@(rowFilter == "all" ? "active" : "")" @onclick='() => rowFilter = "all"'>Todas <span class="tab-count">@AllItems.Count</span></button>
-                    <button type="button" class="@(rowFilter == "mine" ? "active" : "")" @onclick='() => rowFilter = "mine"'>Minhas <span class="tab-count">@AllItems.Count(w => w.AssigneeId == currentUserId)</span></button>
-                    <button type="button" class="@(rowFilter == "urgent" ? "active" : "")" @onclick='() => rowFilter = "urgent"'>Urgentes <span class="tab-count">@AllItems.Count(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest)</span></button>
+                <div class="pill-tabs" role="group" aria-label="Filtrar tarefas">
+                    <button type="button" aria-pressed="@(rowFilter == "all" ? "true" : "false")" class="@(rowFilter == "all" ? "active" : "")" @onclick='() => rowFilter = "all"'>Todas <span class="tab-count">@AllItems.Count</span></button>
+                    <button type="button" aria-pressed="@(rowFilter == "mine" ? "true" : "false")" class="@(rowFilter == "mine" ? "active" : "")" @onclick='() => rowFilter = "mine"'>Minhas <span class="tab-count">@AllItems.Count(w => w.AssigneeId == currentUserId)</span></button>
+                    <button type="button" aria-pressed="@(rowFilter == "urgent" ? "true" : "false")" class="@(rowFilter == "urgent" ? "active" : "")" @onclick='() => rowFilter = "urgent"'>Urgentes <span class="tab-count">@AllItems.Count(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest)</span></button>
                 </div>
             </div>
 
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Total de tarefas</span>
-                        <span class="stat-card-value">@AllItems.Count</span>
+            <p class="list-summary">
+                <span><strong>@AllItems.Count</strong> tarefa@(AllItems.Count == 1 ? "" : "s")</span>
+                <span class="@(BacklogOverdueCount > 0 ? "text-danger" : "")"><strong>@BacklogOverdueCount</strong> atrasada@(BacklogOverdueCount == 1 ? "" : "s")</span>
+                <span title="Média de tarefas concluídas por sprint finalizada"><strong>@SprintVelocity</strong> de velocidade (tarefas/sprint)</span>
+                <span class="list-summary-hint">Arraste tarefas entre o backlog e as sprints para planejar.</span>
+            </p>
+
+            @if (sprints.Count == 0 && canManage && !showCreateSprintForm)
+            {
+                <div class="callout">
+                    <Icon Name="zap" />
+                    <div>
+                        <strong>Organize o trabalho em sprints</strong>
+                        <p>Crie uma sprint, arraste para ela as tarefas das próximas semanas e acompanhe o progresso pelo burndown.</p>
                     </div>
-                    <span class="stat-card-icon">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-                    </span>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ToggleCreateSprintForm">Criar sprint</button>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Prioridade alta</span>
-                        <span class="stat-card-value">@AllItems.Count(w => w.Priority is WorkItemPriority.High or WorkItemPriority.Highest)</span>
-                    </div>
-                    <span class="stat-card-icon is-danger">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Sprint velocity</span>
-                        <span class="stat-card-value">@SprintVelocity</span>
-                        <span style="font-size:0.75rem;color:var(--color-text-muted);">tarefas concluídas / sprint</span>
-                    </div>
-                    <span class="stat-card-icon">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
-                    </span>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-card-body">
-                        <span class="stat-card-label">Atrasadas</span>
-                        <span class="stat-card-value">@AllItems.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is not null && w.DueDateUtc.Value.Date < DateTime.UtcNow.Date)</span>
-                    </div>
-                    <span class="stat-card-icon is-warning">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
-                    </span>
-                </div>
-            </div>
+            }
 
             @foreach (var sprint in sprints)
             {
@@ -179,16 +158,25 @@
 
             @if (showHistory && completedSprints is { Count: > 0 })
             {
-                <h2 style="margin-top:2rem;">Sprints concluídas</h2>
-                @foreach (var cs in completedSprints)
-                {
-                    <div class="sprint-history-item">
-                        <span>@cs.Name — @cs.StartDateUtc.ToString("dd/MM/yyyy") a @cs.EndDateUtc.ToString("dd/MM/yyyy") · @cs.WorkItems.Count(w => w.Status.Category == StatusCategory.Done) concluídas</span>
-                        <a class="btn-link" href="@($"/sprints/{cs.Id}/burndown")">Ver burndown</a>
-                    </div>
-                }
+                <section class="section sprint-history" aria-labelledby="sprint-history-title">
+                    <h2 id="sprint-history-title" class="section-title">Sprints concluídas</h2>
+                    <ul class="card card--flush row-list">
+                        @foreach (var cs in completedSprints)
+                        {
+                            <li class="sprint-history-item">
+                                <div>
+                                    <strong>@cs.Name</strong>
+                                    <span class="cell-muted">@cs.StartDateUtc.ToString("dd/MM/yyyy") a @cs.EndDateUtc.ToString("dd/MM/yyyy") · @cs.WorkItems.Count(w => w.Status.Category == StatusCategory.Done) concluídas</span>
+                                </div>
+                                <a class="btn btn-ghost btn-sm" href="@($"/sprints/{cs.Id}/burndown")"><Icon Name="trending-down" /> Burndown</a>
+                            </li>
+                        }
+                    </ul>
+                </section>
             }
         }
+
+        <ConfirmDialog @ref="confirm" />
 
         <TaskDetailPanel @ref="panel"
                           TaskListId="ListId"
@@ -227,6 +215,9 @@
     private bool notFound;
     private bool canManage;
     private bool canManageFields;
+    private ConfirmDialog? confirm;
+
+    private int BacklogOverdueCount => AllItems.Count(w => w.Status.Category != StatusCategory.Done && w.DueDateUtc is DateTime d && d.Date < DateTime.UtcNow.Date);
     private bool showCreateSprintForm;
     private bool isSavingSprint;
     private bool showHistory;
@@ -390,7 +381,23 @@
 
     private async Task HandleComplete(Guid sprintId)
     {
+        var sprint = sprints?.FirstOrDefault(sp => sp.Id == sprintId);
+        var unfinished = sprint?.WorkItems.Count(w => w.Status.Category != StatusCategory.Done) ?? 0;
+        var consequence = unfinished == 0
+            ? "Todas as tarefas desta sprint estão concluídas."
+            : $"{unfinished} {(unfinished == 1 ? "tarefa não concluída volta" : "tarefas não concluídas voltam")} para o backlog geral.";
+
+        if (confirm is null || !await confirm.AskAsync(new ConfirmRequest(
+                Title: $"Finalizar \"{sprint?.Name}\"?",
+                Message: $"{consequence} Uma sprint finalizada não pode ser reaberta.",
+                ConfirmLabel: "Finalizar sprint",
+                Destructive: false)))
+        {
+            return;
+        }
+
         await QueryService.CompleteSprintAsync(ListId, sprintId);
+        Toasts.Show("Sprint finalizada");
         await ReloadAsync();
     }
 

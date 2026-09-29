@@ -9,57 +9,53 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Biometria & chaves de acesso</PageTitle>
+<PageTitle>Chaves de acesso · Nexus</PageTitle>
 
-<h3>Biometria & chaves de acesso</h3>
+<AccountSection Title="Chaves de acesso" Description="Entre com a digital, o rosto ou o PIN do seu dispositivo, sem digitar a senha.">
+    <StatusMessage />
 
-<StatusMessage />
-
-@if (currentPasskeys is { Count: > 0 })
-{
-    <div class="table-scroll">
-        <table class="data-table">
-            <tbody>
+    <div class="card card--flush">
+        @if (currentPasskeys is { Count: > 0 })
+        {
+            <ul class="row-list settings-rows">
                 @foreach (var passkey in currentPasskeys)
                 {
-                    <tr>
-                        <td>@(passkey.Name ?? "Chave sem nome")</td>
-                        <td>
-                            @{
-                                var credentialId = Base64Url.EncodeToString(passkey.CredentialId);
-                            }
-                            <form @formname="@($"update-passkey-{credentialId}")" @onsubmit="UpdatePasskey" method="post">
-                                <AntiforgeryToken />
-                                <div class="form-actions" style="margin-top:0;">
-                                    <input type="hidden" name="CredentialId" value="@credentialId" />
-                                    <button type="submit" name="Action" value="rename" class="btn btn-secondary" title="Renomear esta chave">Renomear</button>
-                                    <button type="submit" name="Action" value="delete" class="btn btn-danger" title="Remover esta chave da sua conta">Excluir</button>
-                                </div>
-                            </form>
-                        </td>
-                    </tr>
+                    var credentialId = Base64Url.EncodeToString(passkey.CredentialId);
+                    <li class="settings-row">
+                        <span class="doc-type-icon" aria-hidden="true"><Icon Name="key" /></span>
+                        <div class="settings-row-main">
+                            <span class="settings-row-title">@(passkey.Name ?? "Chave sem nome")</span>
+                        </div>
+                        <form @formname="@($"update-passkey-{credentialId}")" @onsubmit="UpdatePasskey" method="post">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="CredentialId" value="@credentialId" />
+                            <div class="button-row">
+                                <button type="submit" name="Action" value="rename" class="btn btn-ghost btn-sm">Renomear</button>
+                                <button type="submit" name="Action" value="delete" class="btn btn-danger-ghost btn-sm">Excluir</button>
+                            </div>
+                        </form>
+                    </li>
                 }
-            </tbody>
-        </table>
+            </ul>
+        }
+        else
+        {
+            <EmptyState Compact="true" Title="Nenhuma chave de acesso cadastrada"
+                        Description="Adicione uma chave neste dispositivo para entrar mais rápido da próxima vez." />
+        }
+        <form @formname="add-passkey" @onsubmit="AddPasskey" method="post" class="settings-card-footer">
+            <AntiforgeryToken />
+            @if (currentPasskeys is { Count: >= MaxPasskeyCount })
+            {
+                <p class="field-hint">Você atingiu o limite de chaves. Exclua uma antes de adicionar outra.</p>
+            }
+            else
+            {
+                <PasskeySubmit Operation="PasskeyOperation.Create" Name="Input" class="btn">Adicionar chave neste dispositivo</PasskeySubmit>
+            }
+        </form>
     </div>
-}
-else
-{
-    <p style="color:var(--color-text-muted);">Nenhuma chave de acesso cadastrada.</p>
-}
-
-<form @formname="add-passkey" @onsubmit="AddPasskey" method="post" style="margin-top:1rem;">
-    <AntiforgeryToken />
-    @if (currentPasskeys is { Count: >= MaxPasskeyCount })
-    {
-        <p style="color:var(--color-danger);">Você atingiu o número máximo de chaves permitidas. Exclua uma antes de adicionar outra.</p>
-    }
-    else
-    {
-        <PasskeySubmit Operation="PasskeyOperation.Create" Name="Input" class="btn">Adicionar nova chave</PasskeySubmit>
-    }
-
-</form>
+</AccountSection>
 
 @code {
     private const int MaxPasskeyCount = 100;

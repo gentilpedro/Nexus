@@ -16,107 +16,110 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @inject AttachmentStorageService Storage
+@inject ToastService Toasts
 
-<PageTitle>@(doc?.Title ?? "Nova página")</PageTitle>
+<PageTitle>@(doc?.Title ?? "Novo documento") · Nexus</PageTitle>
 
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Página não encontrada ou você não tem acesso a ela.</p>
-            <a class="btn" href="@($"/workspaces/{WorkspaceId}/docs")">Voltar</a>
-        </div>
+        <EmptyState Icon="doc" Title="Documento não encontrado"
+                    Description="Ele pode ter sido excluído, ou você não tem mais acesso ao workspace dele.">
+            <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/docs")">Ver documentos</a>
+        </EmptyState>
     }
     else if (workspace is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Variant="text" Count="8" Label="Carregando documento…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a> /
-            <a href="@($"/workspaces/{WorkspaceId}/docs")">Docs</a> /
-            @(isCreating ? "Nova página" : doc?.Title)
-        </div>
+        <nav class="breadcrumbs" aria-label="Você está em">
+            <a href="/workspaces">Workspaces</a>
+            <span class="breadcrumb-sep" aria-hidden="true">/</span>
+            <a href="@($"/workspaces/{WorkspaceId}")">@workspace.Name</a>
+            <span class="breadcrumb-sep" aria-hidden="true">/</span>
+            <a href="@($"/workspaces/{WorkspaceId}/docs")">Documentos</a>
+        </nav>
 
         @if (isEditing)
         {
-            <div class="form-field">
-                <label for="doc-title">Título</label>
-                <input id="doc-title" type="text" @bind="titleInput" placeholder="Título da página" />
-            </div>
-            <div id="@editorElementId" class="doc-editor"></div>
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-danger">@errorMessage</div>
-            }
-            <div class="form-actions">
-                <button type="button" class="btn" disabled="@isSaving" @onclick="HandleSave">Salvar</button>
-                <button type="button" class="btn btn-secondary" @onclick="HandleCancel">Cancelar</button>
+            <div class="doc-edit">
+                <label for="doc-title" class="sr-only">Título do documento</label>
+                <input id="doc-title" class="doc-title-input" type="text" @bind="titleInput" placeholder="Sem título" autofocus />
+                <div id="@editorElementId" class="doc-editor"></div>
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
+                }
+                <div class="doc-edit-bar">
+                    <p class="field-hint"><Icon Name="info" Class="icon--sm" /> Se outra pessoa salvar este documento enquanto você edita, a versão salva por último é a que fica.</p>
+                    <div class="button-row">
+                        <button type="button" class="btn btn-ghost" @onclick="HandleCancel">Cancelar</button>
+                        <button type="button" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving" @onclick="HandleSave">@(isCreating ? "Criar documento" : "Salvar")</button>
+                    </div>
+                </div>
             </div>
         }
         else if (doc is not null)
         {
-            <div class="page-header">
-                <div class="doc-title-block">
-                    <span class="doc-title-icon">📄</span>
-                    <div>
-                        <h1 style="margin-bottom:0.15rem;">@doc.Title</h1>
-                        <span class="topnav-user">@workspace.Name · @LastEditedLabel() · Visível para todo o workspace</span>
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" @onclick="EnterEditMode">Editar</button>
-                    @if (canDelete)
-                    {
-                        <button type="button" class="btn-link" @onclick="HandleDelete">Excluir</button>
-                    }
-                </div>
-            </div>
-            <div class="dashboard-layout">
-                <div>
-                    <div class="doc-content">
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
+            }
+            <div class="doc-layout">
+                <article class="doc-article">
+                    <header class="doc-header">
+                        <h1 class="doc-title" tabindex="-1">@doc.Title</h1>
+                        <div class="doc-header-row">
+                            <p class="page-meta">
+                                <span><Avatar Name="@AuthorLabel(doc.UpdatedByUser ?? doc.CreatedByUser)" Size="xs" /> @LastEditedLabel()</span>
+                                <span>@WordCount() palavras</span>
+                            </p>
+                            <div class="button-row">
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="EnterEditMode"><Icon Name="edit" /> Editar</button>
+                                @if (canDelete)
+                                {
+                                    <button type="button" class="icon-btn icon-btn--sm is-danger" @onclick="HandleDelete">
+                                        <Icon Name="trash" Label="Excluir documento" />
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </header>
+                    <div class="doc-content prose" id="doc-content">
                         @((MarkupString)(doc.ContentHtml ?? ""))
                     </div>
-                    <div class="doc-footer-bar">
-                        <span>@WordCount() palavras</span>
-                        <span>Salvo na nuvem</span>
-                    </div>
-                </div>
-                <div>
+                </article>
+
+                <aside class="doc-aside" aria-label="Sobre o documento">
                     @{ var outline = GetOutline(); }
-                    @if (outline.Count > 0)
+                    @if (outline.Count > 1)
                     {
-                        <div class="side-card">
-                            <h2>Sumário</h2>
-                            @foreach (var (level, text) in outline)
+                        <nav class="doc-outline" aria-label="Sumário">
+                            <h2 class="doc-aside-title">Nesta página</h2>
+                            @for (var i = 0; i < outline.Count; i++)
                             {
-                                <a href="#" class="doc-outline-item doc-outline-item--@level" @onclick:preventDefault="true">@text</a>
+                                var index = i;
+                                var (level, text) = outline[i];
+                                <button type="button" class="doc-outline-item doc-outline-item--@level" @onclick="() => ScrollToHeading(index)">@text</button>
                             }
-                        </div>
+                        </nav>
                     }
-                    <div class="side-card">
-                        <h2>Sobre este documento</h2>
-                        <div class="progress-row">
-                            <div class="progress-row-top"><span class="name">Criado por</span></div>
-                            <span>@AuthorLabel(doc.CreatedByUser)</span>
-                        </div>
-                        <div class="progress-row">
-                            <div class="progress-row-top"><span class="name">Criado em</span></div>
-                            <span>@doc.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</span>
-                        </div>
+                    <dl class="doc-facts">
+                        <div><dt>Criado por</dt><dd>@AuthorLabel(doc.CreatedByUser)</dd></div>
+                        <div><dt>Criado em</dt><dd>@doc.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</dd></div>
                         @if (doc.UpdatedAtUtc is not null)
                         {
-                            <div class="progress-row">
-                                <div class="progress-row-top"><span class="name">Última edição</span></div>
-                                <span>@AuthorLabel(doc.UpdatedByUser) · @doc.UpdatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
-                            </div>
+                            <div><dt>Última edição</dt><dd>@AuthorLabel(doc.UpdatedByUser), @doc.UpdatedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy 'às' HH:mm")</dd></div>
                         }
-                    </div>
-                </div>
+                        <div><dt>Quem vê</dt><dd>Todos do workspace</dd></div>
+                    </dl>
+                </aside>
             </div>
         }
+
+        <ConfirmDialog @ref="confirm" />
     }
 </div>
 
@@ -138,6 +141,12 @@
     private bool editorMounted;
     private bool canDelete;
     private string? errorMessage;
+    private ConfirmDialog? confirm;
+
+    // O HTML do documento é sanitizado e não traz ids nos títulos; o sumário rola até o
+    // N-ésimo h1–h3 do conteúdo.
+    private async Task ScrollToHeading(int index) =>
+        await JS.InvokeVoidAsync("nexusUi.scrollToHeading", "doc-content", index);
     private string titleInput = "";
     private string? userId;
     private (Guid WorkspaceId, Guid? DocId)? loaded;
@@ -432,6 +441,24 @@
             return;
         }
 
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("documento", doc.Title,
+                "O conteúdo é apagado para todo o workspace, e mensagens do chat que citam o documento perdem o link.")))
+        {
+            return;
+        }
+
+        // Autor pode excluir o próprio documento; os demais precisam ser admin AGORA, não só
+        // quando a página abriu (ver WorkspaceAccessGuard).
+        var authState = await AuthStateTask!;
+        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var required = doc.CreatedByUserId == userId ? WorkspaceRole.Member : WorkspaceRole.Admin;
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, required))
+        {
+            errorMessage = "Você não tem mais permissão para excluir este documento.";
+            canDelete = false;
+            return;
+        }
+
         await using var db = await DbFactory.CreateDbContextAsync();
 
         // ReferencedDocPageId is Restrict (not SetNull, to avoid a second cascade path from
@@ -447,6 +474,7 @@
             Storage.Delete(doc.FileStoragePath);
         }
 
+        Toasts.Show("Documento excluído");
         NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
     }
 }

@@ -1,4 +1,4 @@
-﻿@page "/Account/Manage/ExternalLogins"
+@page "/Account/Manage/ExternalLogins"
 
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
@@ -9,58 +9,46 @@
 @inject IUserStore<ApplicationUser> UserStore
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Manage your external logins</PageTitle>
+<PageTitle>Logins externos · Nexus</PageTitle>
 
-<StatusMessage />
-@if (currentLogins?.Count > 0)
-{
-    <h3>Registered Logins</h3>
-    <table class="table">
-        <tbody>
+<AccountSection Title="Logins externos" Description="Contas de outros serviços que você pode usar para entrar no Nexus.">
+    <StatusMessage />
+    @if (currentLogins?.Count > 0)
+    {
+        <ul class="card card--flush row-list settings-rows">
             @foreach (var login in currentLogins)
             {
-                <tr>
-                    <td>@login.ProviderDisplayName</td>
-                    <td>
-                        @if (showRemoveButton)
-                        {
-                            <form @formname="@($"remove-login-{login.LoginProvider}")" @onsubmit="OnSubmitAsync" method="post">
-                                <AntiforgeryToken />
-                                <div>
-                                    <input type="hidden" name="@nameof(LoginProvider)" value="@login.LoginProvider" />
-                                    <input type="hidden" name="@nameof(ProviderKey)" value="@login.ProviderKey" />
-                                    <button type="submit" class="btn btn-primary" title="Remove this @login.ProviderDisplayName login from your account">Remove</button>
-                                </div>
-                            </form>
-                        }
-                        else
-                        {
-                            @: &nbsp;
-                        }
-                    </td>
-                </tr>
+                <li class="settings-row">
+                    <div class="settings-row-main"><span class="settings-row-title">@login.ProviderDisplayName</span></div>
+                    @if (showRemoveButton)
+                    {
+                        <form @formname="@($"remove-login-{login.LoginProvider}")" @onsubmit="OnSubmitAsync" method="post">
+                            <AntiforgeryToken />
+                            <input type="hidden" name="@nameof(LoginProvider)" value="@login.LoginProvider" />
+                            <input type="hidden" name="@nameof(ProviderKey)" value="@login.ProviderKey" />
+                            <button type="submit" class="btn btn-danger-ghost btn-sm">Remover</button>
+                        </form>
+                    }
+                </li>
             }
-        </tbody>
-    </table>
-}
-@if (otherLogins?.Count > 0)
-{
-    <h4>Add another service to log in.</h4>
-    <hr />
-    <form class="form-horizontal" action="Account/Manage/LinkExternalLogin" method="post">
-        <AntiforgeryToken />
-        <div>
-            <p>
+        </ul>
+    }
+    @if (otherLogins?.Count > 0)
+    {
+        <div class="card settings-card">
+            <div class="settings-card-text">
+                <h3 class="form-section-title">Adicionar outro serviço</h3>
+            </div>
+            <form action="Account/Manage/LinkExternalLogin" method="post" class="button-row">
+                <AntiforgeryToken />
                 @foreach (var provider in otherLogins)
                 {
-                    <button type="submit" class="btn btn-primary" name="Provider" value="@provider.Name" title="Log in using your @provider.DisplayName account">
-                        @provider.DisplayName
-                    </button>
+                    <button type="submit" class="btn btn-secondary" name="Provider" value="@provider.Name">Entrar com @provider.DisplayName</button>
                 }
-            </p>
+            </form>
         </div>
-    </form>
-}
+    }
+</AccountSection>
 
 @code {
     public const string LinkLoginCallbackAction = "LinkLoginCallback";
@@ -121,12 +109,12 @@
         var result = await UserManager.RemoveLoginAsync(user, LoginProvider!, ProviderKey!);
         if (!result.Succeeded)
         {
-            RedirectManager.RedirectToCurrentPageWithStatus("Error: The external login was not removed.", HttpContext);
+            RedirectManager.RedirectToCurrentPageWithStatus("Erro: não foi possível remover o login externo.", HttpContext);
         }
         else
         {
             await SignInManager.RefreshSignInAsync(user);
-            RedirectManager.RedirectToCurrentPageWithStatus("The external login was removed.", HttpContext);
+            RedirectManager.RedirectToCurrentPageWithStatus("Login externo removido.", HttpContext);
         }
     }
 
@@ -142,7 +130,7 @@
         var info = await SignInManager.GetExternalLoginInfoAsync(userId);
         if (info is null)
         {
-            RedirectManager.RedirectToCurrentPageWithStatus("Error: Could not load external login info.", HttpContext);
+            RedirectManager.RedirectToCurrentPageWithStatus("Erro: não foi possível carregar os dados do login externo.", HttpContext);
             return;
         }
 
@@ -152,11 +140,11 @@
             // Clear the existing external cookie to ensure a clean login process
             await HttpContext.SignOutAsync(IdentityConstants.ExternalScheme);
 
-            RedirectManager.RedirectToCurrentPageWithStatus("The external login was added.", HttpContext);
+            RedirectManager.RedirectToCurrentPageWithStatus("Login externo adicionado.", HttpContext);
         }
         else
         {
-            RedirectManager.RedirectToCurrentPageWithStatus("Error: The external login was not added. External logins can only be associated with one account.", HttpContext);
+            RedirectManager.RedirectToCurrentPageWithStatus("Erro: essa conta externa já está vinculada a outro usuário.", HttpContext);
         }
     }
 }

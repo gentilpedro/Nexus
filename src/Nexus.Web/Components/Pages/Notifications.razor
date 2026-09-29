@@ -10,62 +10,71 @@
 @inject NavigationManager NavigationManager
 @inject NotificationBadgeService Badge
 
-<PageTitle>Notificações</PageTitle>
+<PageTitle>Notificações · Nexus</PageTitle>
 
-<div class="page-container page-container--wide">
-    <div class="page-header">
-        <h1>Central de notificações</h1>
-        @if (notifications is { Count: > 0 } && notifications.Any(n => !n.IsRead))
-        {
-            <button type="button" class="btn btn-secondary" @onclick="MarkAllRead">Marcar tudo como lido</button>
-        }
-    </div>
+<div class="page-container">
+    <PageHeader Title="Notificações" Description="Tarefas atribuídas a você, prazos chegando, menções e convites.">
+        <Actions>
+            @if (notifications is not null && notifications.Any(n => !n.IsRead))
+            {
+                <button type="button" class="btn btn-secondary" @onclick="MarkAllRead"><Icon Name="check" /> Marcar todas como lidas</button>
+            }
+        </Actions>
+    </PageHeader>
 
     @if (notifications is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Count="6" Label="Carregando notificações…" />
     }
     else
     {
-        <div class="dashboard-layout">
-            <div>
-                <div class="pill-tabs">
-                    <button type="button" class="@(filter == "all" ? "active" : "")" @onclick='() => filter = "all"'>Todas <span class="tab-count">@notifications.Count</span></button>
-                    <button type="button" class="@(filter == "unread" ? "active" : "")" @onclick='() => filter = "unread"'>Não lidas <span class="tab-count">@notifications.Count(n => !n.IsRead)</span></button>
-                </div>
-
-                @if (VisibleNotifications.Count == 0)
-                {
-                    <div class="empty-state">
-                        <p>Nenhuma notificação por aqui.</p>
-                    </div>
-                }
-                else
-                {
-                    <div class="notification-list">
-                        @foreach (var n in VisibleNotifications)
-                        {
-                            <div class="notification-item @(n.IsRead ? "" : "is-unread")" @onclick="() => OpenAsync(n)">
-                                <div class="notification-message">@n.Message</div>
-                                <div class="notification-time">@n.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
-                            </div>
-                        }
-                    </div>
-                }
-            </div>
-
-            <div>
-                <div class="side-card">
-                    <h2>Resumo de hoje</h2>
-                    <div class="progress-row">
-                        <div class="progress-row-top"><span class="name">Não lidas</span><span class="pct">@notifications.Count(n => !n.IsRead)</span></div>
-                    </div>
-                    <div class="progress-row">
-                        <div class="progress-row-top"><span class="name">Recebidas hoje</span><span class="pct">@notifications.Count(n => n.CreatedAtUtc.ToLocalTime().Date == DateTime.Now.Date)</span></div>
-                    </div>
-                </div>
-            </div>
+        <div class="pill-tabs" role="group" aria-label="Filtrar notificações">
+            <button type="button" aria-pressed="@(filter == "all" ? "true" : "false")" class="@(filter == "all" ? "active" : "")" @onclick='() => filter = "all"'>Todas <span class="tab-count">@notifications.Count</span></button>
+            <button type="button" aria-pressed="@(filter == "unread" ? "true" : "false")" class="@(filter == "unread" ? "active" : "")" @onclick='() => filter = "unread"'>Não lidas <span class="tab-count">@notifications.Count(n => !n.IsRead)</span></button>
         </div>
+
+        @if (VisibleNotifications.Count == 0)
+        {
+            <EmptyState Icon="inbox"
+                        Title="@(filter == "unread" ? "Tudo lido por aqui" : "Nenhuma notificação ainda")"
+                        Description="@(filter == "unread" ? "Você está em dia. Novas notificações aparecem aqui assim que chegarem." : "Quando alguém te atribuir uma tarefa, te mencionar no chat ou um prazo se aproximar, você fica sabendo aqui.")" />
+        }
+        else
+        {
+            @foreach (var group in VisibleNotifications.GroupBy(n => GroupLabel(n.CreatedAtUtc)))
+            {
+                <section class="notification-group" aria-label="@group.Key">
+                    <h2 class="task-group-title">@group.Key</h2>
+                    <ul class="card card--flush notification-list">
+                        @foreach (var n in group)
+                        {
+                            <li>
+                                <button type="button" class="notification-item @(n.IsRead ? "" : "is-unread")" @onclick="() => OpenAsync(n)">
+                                    <span class="notification-icon notification-icon--@n.Type.ToString().ToLowerInvariant()" aria-hidden="true">
+                                        <Icon Name="@IconFor(n.Type)" />
+                                    </span>
+                                    <span class="notification-body">
+                                        <span class="notification-message">@n.Message</span>
+                                        <span class="notification-meta">
+                                            @if (n.Workspace is not null)
+                                            {
+                                                <span>@n.Workspace.Name</span>
+                                                <span aria-hidden="true">·</span>
+                                            }
+                                            <time datetime="@n.CreatedAtUtc.ToString("o")" title="@n.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")">@TimeLabel(n.CreatedAtUtc)</time>
+                                        </span>
+                                    </span>
+                                    @if (!n.IsRead)
+                                    {
+                                        <span class="notification-unread-dot"><span class="sr-only">Não lida</span></span>
+                                    }
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                </section>
+            }
+        }
     }
 </div>
 
@@ -76,6 +85,35 @@
     private List<Notification>? notifications;
     private string? userId;
     private string filter = "all";
+
+    private static string IconFor(NotificationType type) => type switch
+    {
+        NotificationType.TaskAssigned => "user-plus",
+        NotificationType.DueDateApproaching => "clock",
+        NotificationType.ChatMention => "message-circle",
+        NotificationType.ChatMessage => "chat",
+        NotificationType.WorkspaceInvite => "mail",
+        _ => "bell"
+    };
+
+    private static string GroupLabel(DateTime utc)
+    {
+        var day = utc.ToLocalTime().Date;
+        var today = DateTime.Now.Date;
+        if (day == today) return "Hoje";
+        if (day == today.AddDays(-1)) return "Ontem";
+        if (day > today.AddDays(-7)) return "Nesta semana";
+        return "Anteriores";
+    }
+
+    private static string TimeLabel(DateTime utc)
+    {
+        var delta = DateTime.UtcNow - utc;
+        if (delta.TotalMinutes < 1) return "agora";
+        if (delta.TotalMinutes < 60) return $"há {(int)delta.TotalMinutes} min";
+        if (delta.TotalHours < 24) return $"há {(int)delta.TotalHours} h";
+        return utc.ToLocalTime().ToString("dd/MM 'às' HH:mm");
+    }
 
     private List<Notification> VisibleNotifications =>
         (filter == "unread" ? notifications!.Where(n => !n.IsRead) : notifications!).ToList();
@@ -129,7 +167,8 @@
         }
         else if (notification.WorkItem is not null)
         {
-            NavigationManager.NavigateTo($"/lists/{notification.WorkItem.TaskListId}/list");
+            // Abre a lista já com o painel da tarefa (ListView lê ?tarefa=).
+            NavigationManager.NavigateTo($"/lists/{notification.WorkItem.TaskListId}/list?tarefa={notification.WorkItem.Id}");
         }
         else if (notification.WorkspaceId is not null)
         {

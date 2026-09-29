@@ -11,141 +11,163 @@
 @inject NavigationManager NavigationManager
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
+@inject WorkspaceAccessGuard AccessGuard
+@inject ToastService Toasts
 
-<PageTitle>@(space?.Name ?? "Space")</PageTitle>
+<PageTitle>@(space?.Name ?? "Space") · Nexus</PageTitle>
 
 <div class="page-container page-container--wide">
     @if (notFound)
     {
-        <div class="empty-state">
-            <p>Space não encontrado ou você não tem acesso a ele.</p>
-            <a class="btn" href="/workspaces">Voltar</a>
-        </div>
+        <EmptyState Icon="lock" Title="Space não encontrado"
+                    Description="Ele pode ter sido excluído, ou você não tem mais acesso ao workspace dele.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
     }
     else if (space is null)
     {
-        <p>Carregando...</p>
+        <Skeleton Variant="card" Count="3" Label="Carregando space…" />
     }
     else
     {
-        <div class="breadcrumbs">
-            <a href="/workspaces">Workspaces</a> /
-            <a href="@($"/workspaces/{WorkspaceId}")">@workspace!.Name</a> /
-            @space.Name
-        </div>
-
         @if (isRenaming)
         {
-            <EditForm Model="renameModel" OnValidSubmit="HandleRename" class="card" style="margin-bottom:1rem;">
+            <nav class="breadcrumbs" aria-label="Você está em">
+                <a href="/workspaces">Workspaces</a>
+                <span class="breadcrumb-sep" aria-hidden="true">/</span>
+                <a href="@($"/workspaces/{WorkspaceId}")">@workspace!.Name</a>
+            </nav>
+            <EditForm Model="renameModel" OnValidSubmit="HandleRename" class="card inline-form rename-form">
                 <DataAnnotationsValidator />
                 <div class="form-field">
-                    <label for="space-name">Nome do space</label>
-                    <InputText id="space-name" @bind-Value="renameModel.Name" />
+                    <label for="space-name" class="required">Nome do space</label>
+                    <InputText id="space-name" @bind-Value="renameModel.Name" autofocus />
                     <ValidationMessage For="() => renameModel.Name" />
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn">Salvar</button>
-                    <button type="button" class="btn btn-secondary" @onclick="() => isRenaming = false">Cancelar</button>
+                <div class="form-actions form-actions--end">
+                    <button type="button" class="btn btn-ghost" @onclick="() => isRenaming = false">Cancelar</button>
+                    <button type="submit" class="btn">Salvar nome</button>
                 </div>
             </EditForm>
         }
         else
         {
-            <div class="page-header">
-                <h1>@space.Name</h1>
-                @if (canManageSpace)
-                {
-                    <div class="form-actions">
-                        <button class="btn btn-secondary" @onclick="StartRename">Renomear</button>
-                        <button class="btn btn-danger" @onclick="HandleDelete">Excluir space</button>
-                    </div>
-                }
-            </div>
+            <PageHeader Title="@space.Name">
+                <Breadcrumbs>
+                    <a href="/workspaces">Workspaces</a>
+                    <span class="breadcrumb-sep" aria-hidden="true">/</span>
+                    <a href="@($"/workspaces/{WorkspaceId}")">@workspace!.Name</a>
+                </Breadcrumbs>
+                <Details>
+                    <span>@(taskLists?.Count ?? 0) lista@(taskLists?.Count == 1 ? "" : "s")</span>
+                    <span>@taskTotal tarefa@(taskTotal == 1 ? "" : "s")</span>
+                    @if (taskTotal > 0)
+                    {
+                        <span>@taskDonePercent% concluído</span>
+                    }
+                </Details>
+                <Actions>
+                    @if (canManageSpace)
+                    {
+                        <div class="menu-anchor" @onkeydown="HandleMenuKey">
+                            <button type="button" class="icon-btn icon-btn--bordered" @onclick="() => menuOpen = !menuOpen"
+                                    aria-haspopup="menu" aria-expanded="@(menuOpen ? "true" : "false")">
+                                <Icon Name="more" Label="Mais opções do space" />
+                            </button>
+                            @if (menuOpen)
+                            {
+                                <div class="menu-backdrop" @onclick="() => menuOpen = false"></div>
+                                <div class="menu" role="menu">
+                                    <button type="button" role="menuitem" @onclick="StartRename"><Icon Name="edit" /> Renomear</button>
+                                    <div class="menu-separator" role="separator"></div>
+                                    <button type="button" role="menuitem" class="is-danger" @onclick="HandleDelete"><Icon Name="trash" /> Excluir space</button>
+                                </div>
+                            }
+                        </div>
+                        <button type="button" class="btn" @onclick="ToggleCreateListForm"><Icon Name="plus" /> Nova lista</button>
+                    }
+                </Actions>
+            </PageHeader>
         }
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
-            <div class="alert alert-danger">@errorMessage</div>
+            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
         }
-
-        <div class="stat-grid">
-            <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Tarefas</span>
-                    <span class="stat-card-value">@taskTotal</span>
-                </div>
-                <span class="stat-card-icon">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>
-                </span>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-body">
-                    <span class="stat-card-label">Concluídas</span>
-                    <span class="stat-card-value">@taskDonePercent%</span>
-                </div>
-                <span class="stat-card-icon is-success">
-                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
-                </span>
-            </div>
-        </div>
-
-        <div class="page-header">
-            <h2>Listas</h2>
-            @if (canManageSpace)
-            {
-                <button class="btn" @onclick="ToggleCreateListForm">+ Nova lista</button>
-            }
-        </div>
 
         @if (showCreateListForm)
         {
-            <EditForm Model="createListModel" OnValidSubmit="HandleCreateList" class="card" style="margin-bottom:1rem;">
+            <EditForm Model="createListModel" OnValidSubmit="HandleCreateList" class="card inline-form">
                 <DataAnnotationsValidator />
                 <div class="form-field">
-                    <label for="list-name">Nome da lista</label>
-                    <InputText id="list-name" @bind-Value="createListModel.Name" placeholder="Ex: Sprint atual" />
+                    <label for="list-name" class="required">Nome da lista</label>
+                    <InputText id="list-name" @bind-Value="createListModel.Name" placeholder="Ex.: Lançamento do site, Suporte, Sprint atual" autofocus />
                     <ValidationMessage For="() => createListModel.Name" />
+                    <span class="field-hint">A lista já vem com três status: A Fazer, Em Andamento e Concluído. Dá para mudar depois.</span>
                 </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn" disabled="@isSavingList">Criar</button>
-                    <button type="button" class="btn btn-secondary" @onclick="ToggleCreateListForm">Cancelar</button>
+                <div class="form-actions form-actions--end">
+                    <button type="button" class="btn btn-ghost" @onclick="ToggleCreateListForm">Cancelar</button>
+                    <button type="submit" class="btn @(isSavingList ? "is-loading" : "")" disabled="@isSavingList">Criar lista</button>
                 </div>
             </EditForm>
         }
 
         @if (taskLists is null)
         {
-            <p>Carregando listas...</p>
+            <Skeleton Variant="card" Count="4" />
         }
         else if (taskLists.Count == 0)
         {
-            <div class="empty-state">
-                <p>Nenhuma lista criada ainda.</p>
+            <div class="card">
+                <EmptyState Icon="list" Title="Nenhuma lista neste space"
+                            Description="@(canManageSpace ? "Listas guardam as tarefas. Crie uma por projeto, fluxo ou entrega." : "Quando um administrador criar uma lista, ela aparece aqui.")">
+                    @if (canManageSpace && !showCreateListForm)
+                    {
+                        <button type="button" class="btn" @onclick="ToggleCreateListForm"><Icon Name="plus" /> Criar a primeira lista</button>
+                    }
+                </EmptyState>
             </div>
         }
         else
         {
-            <div class="card-list">
+            <ul class="space-list">
                 @foreach (var list in taskLists)
                 {
                     var progress = listProgress.TryGetValue(list.Id, out var p) ? p : (Done: 0, Total: 0);
-                    <a class="card card-link" href="@($"/lists/{list.Id}/list")">
-                        <strong>@list.Name</strong>
-                        @if (progress.Total > 0)
-                        {
-                            <div class="topnav-user" style="margin-top:0.35rem;">@progress.Done de @progress.Total tarefas concluídas</div>
-                            <div class="progress-track" style="margin-top:0.4rem;">
-                                <div class="progress-fill" style="width:@(progress.Done * 100 / progress.Total)%"></div>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="topnav-user" style="margin-top:0.35rem;">Nenhuma tarefa ainda</div>
-                        }
-                    </a>
+                    var pct = progress.Total == 0 ? 0 : progress.Done * 100 / progress.Total;
+                    <li>
+                        <a class="space-item" href="@($"/lists/{list.Id}/list")">
+                            <span class="space-item-icon" aria-hidden="true"><Icon Name="list" /></span>
+                            <span class="space-item-body">
+                                <span class="space-item-name">@list.Name</span>
+                                <span class="space-item-meta">
+                                    @if (progress.Total > 0)
+                                    {
+                                        @($"{progress.Done} de {progress.Total} tarefas concluídas")
+                                    }
+                                    else
+                                    {
+                                        @("Nenhuma tarefa ainda")
+                                    }
+                                </span>
+                            </span>
+                            @if (progress.Total > 0)
+                            {
+                                <span class="space-item-progress">
+                                    <span class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@pct" aria-label="@($"{pct}% concluído")">
+                                        <span class="progress-fill" style="width:@(pct)%"></span>
+                                    </span>
+                                    <span class="space-item-pct">@pct%</span>
+                                </span>
+                            }
+                            <Icon Name="chevron-right" Class="space-item-chevron" />
+                        </a>
+                    </li>
                 }
-            </div>
+            </ul>
         }
+
+        <ConfirmDialog @ref="confirm" />
     }
 </div>
 
@@ -174,6 +196,30 @@
     private int taskTotal;
     private int taskDonePercent;
     private Dictionary<Guid, (int Done, int Total)> listProgress = new();
+    private ConfirmDialog? confirm;
+    private bool menuOpen;
+
+    private void HandleMenuKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            menuOpen = false;
+        }
+    }
+
+    // As ações abaixo só aparecem para admins, mas a interface não é a barreira: cada escrita
+    // confere de novo o papel atual no servidor (ver WorkspaceAccessGuard).
+    private async Task<bool> EnsureAdminAsync()
+    {
+        if (await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin))
+        {
+            return true;
+        }
+
+        errorMessage = "Você não tem mais permissão para alterar este space.";
+        canManageSpace = false;
+        return false;
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -250,6 +296,12 @@
 
     private async Task HandleCreateList()
     {
+        if (!await EnsureAdminAsync())
+        {
+            showCreateListForm = false;
+            return;
+        }
+
         isSavingList = true;
 
         var maxSortOrder = taskLists!.Count == 0 ? -1 : taskLists.Max(l => l.SortOrder);
@@ -274,28 +326,53 @@
 
         showCreateListForm = false;
         isSavingList = false;
+        Toasts.Show($"Lista \"{taskList.Name}\" criada");
         await LoadTaskListsAsync();
         NavContext.Refresh();
     }
 
     private void StartRename()
     {
+        menuOpen = false;
         renameModel.Name = space!.Name;
         isRenaming = true;
     }
 
     private async Task HandleRename()
     {
+        if (!await EnsureAdminAsync())
+        {
+            isRenaming = false;
+            return;
+        }
+
         var newName = renameModel.Name.Trim();
         await using var db = await DbFactory.CreateDbContextAsync();
         await db.Spaces.Where(s => s.Id == SpaceId).ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, newName));
         space!.Name = newName;
         isRenaming = false;
+        Toasts.Show("Nome do space atualizado");
         NavContext.Refresh();
     }
 
     private async Task HandleDelete()
     {
+        menuOpen = false;
+        var listCount = taskLists?.Count ?? 0;
+        var consequence = listCount == 0 && taskTotal == 0
+            ? "O space está vazio."
+            : $"{listCount} {(listCount == 1 ? "lista" : "listas")} e {taskTotal} {(taskTotal == 1 ? "tarefa" : "tarefas")} — com comentários, anexos e sprints — serão excluídas junto.";
+
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("space", space?.Name, consequence)))
+        {
+            return;
+        }
+
+        if (!await EnsureAdminAsync())
+        {
+            return;
+        }
+
         try
         {
             // ExecuteDeleteAsync issues a direct SQL DELETE and lets the database resolve the
@@ -313,6 +390,8 @@
                 .Where(t => t.FromStatus.TaskList.SpaceId == SpaceId)
                 .ExecuteDeleteAsync();
             await db.Spaces.Where(s => s.Id == SpaceId).ExecuteDeleteAsync();
+            Toasts.Show($"Space \"{space?.Name}\" excluído");
+            NavContext.Refresh();
             NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}");
         }
         catch (DbException)

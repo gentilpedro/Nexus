@@ -1,0 +1,42 @@
+@* Placeholder de carregamento com a forma do conteúdo que vem (linhas, cards, tabela), no lugar
+   do "Carregando..." em texto. O rótulo acessível fica em aria-busy/sr-only; as barras em si são
+   decorativas. *@
+
+<div class="skeleton skeleton--@Variant" aria-busy="true">
+    <span class="sr-only">@Label</span>
+    @for (var i = 0; i < Count; i++)
+    {
+        @switch (Variant)
+        {
+            case "card":
+                <div class="skeleton-card" aria-hidden="true">
+                    <span class="skeleton-bar skeleton-bar--short"></span>
+                    <span class="skeleton-bar"></span>
+                    <span class="skeleton-bar skeleton-bar--mid"></span>
+                </div>
+                break;
+            case "text":
+                <span class="skeleton-bar @(i == Count - 1 ? "skeleton-bar--mid" : "")" aria-hidden="true"></span>
+                break;
+            default:
+                <div class="skeleton-row" aria-hidden="true">
+                    <span class="skeleton-dot"></span>
+                    <span class="skeleton-bar"></span>
+                    <span class="skeleton-bar skeleton-bar--tiny"></span>
+                </div>
+                break;
+        }
+    }
+</div>
+
+@code {
+    /// <summary>"rows" (listas e tabelas), "card" (grades de card) ou "text" (parágrafos).</summary>
+    [Parameter]
+    public string Variant { get; set; } = "rows";
+
+    [Parameter]
+    public int Count { get; set; } = 4;
+
+    [Parameter]
+    public string Label { get; set; } = "Carregando…";
+}

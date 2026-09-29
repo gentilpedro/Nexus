@@ -1,8 +1,11 @@
-﻿@if (!string.IsNullOrEmpty(DisplayMessage))
+@* Mensagem de status das páginas de conta. Por convenção do scaffold do Identity, uma mensagem
+   que começa com "Erro"/"Error" é de erro; o prefixo serve só para escolher o estilo e não é
+   mostrado — "Erro: senha incorreta." aparece como "Senha incorreta." num alerta vermelho. *@
+@if (!string.IsNullOrEmpty(DisplayMessage))
 {
-    var statusMessageClass = DisplayMessage.StartsWith("Error") ? "danger" : "success";
-    <div class="alert alert-@statusMessageClass" role="alert">
-        @DisplayMessage
+    <div class="alert @(IsError ? "alert-danger" : "alert-success")" role="@(IsError ? "alert" : "status")">
+        <Icon Name="@(IsError ? "alert-circle" : "check-circle")" />
+        <span>@CleanMessage</span>
     </div>
 }
 
@@ -16,6 +19,29 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     private string? DisplayMessage => Message ?? messageFromCookie;
+
+    private bool IsError =>
+        DisplayMessage is not null
+        && (DisplayMessage.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
+            || DisplayMessage.StartsWith("Erro", StringComparison.OrdinalIgnoreCase));
+
+    private string CleanMessage
+    {
+        get
+        {
+            var text = DisplayMessage ?? "";
+            foreach (var prefix in new[] { "Error:", "Erro:" })
+            {
+                if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    text = text[prefix.Length..].TrimStart();
+                    break;
+                }
+            }
+
+            return text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+        }
+    }
 
     protected override void OnInitialized()
     {
