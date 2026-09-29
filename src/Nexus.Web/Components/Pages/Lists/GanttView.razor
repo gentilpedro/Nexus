@@ -7,9 +7,8 @@
 @using Nexus.Web.Services
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
-@inject IAuthorizationService AuthorizationService
+@inject ListViewLoader ListLoader
 @inject NavigationContextService NavContext
 
 <PageTitle>@(taskList?.Name ?? "Gantt")</PageTitle>
@@ -327,62 +326,36 @@
         customFieldDefinitions = null;
         statusTransitions = null;
 
-        var resolvedWorkspaceId = await QueryService.GetWorkspaceIdForListAsync(ListId);
-        if (resolvedWorkspaceId is null)
-        {
-            notFound = true;
-            return;
-        }
-        workspaceId = resolvedWorkspaceId.Value;
-
         var authState = await AuthStateTask!;
-        var authResult = await AuthorizationService.AuthorizeAsync(
-            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
-
-        if (!authResult.Succeeded)
+        var shell = await ListLoader.LoadAsync(ListId, authState.User, ReloadWorkItemsAsync);
+        if (shell is null)
         {
             notFound = true;
             return;
         }
 
-        var adminResult = await AuthorizationService.AuthorizeAsync(
-            authState.User, workspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
-        canManageFields = adminResult.Succeeded;
-
-        await using (var db = await DbFactory.CreateDbContextAsync())
-        {
-            taskList = await db.TaskLists
-                .Include(l => l.Space)
-                .ThenInclude(s => s.Workspace)
-                .FirstOrDefaultAsync(l => l.Id == ListId);
-        }
-
-        if (taskList is null)
-        {
-            notFound = true;
-            return;
-        }
-
+        taskList = shell.TaskList;
+        workspaceId = shell.WorkspaceId;
         workspaceName = taskList.Space.Workspace.Name;
         spaceName = taskList.Space.Name;
+        canManageFields = shell.CanManage;
+        statuses = shell.Statuses;
+        assigneeOptions = shell.AssigneeOptions;
+        customFieldDefinitions = shell.CustomFieldDefinitions;
+        statusTransitions = shell.StatusTransitions;
+        labels = shell.Labels;
 
         NavContext.SetList(workspaceId, workspaceName, taskList.SpaceId, ListId);
-
-        statuses = await QueryService.GetStatusesForListAsync(ListId);
-        assigneeOptions = await QueryService.GetWorkspaceMemberOptionsAsync(workspaceId);
-        epics = await QueryService.GetEpicsForListAsync(ListId);
-        customFieldDefinitions = await QueryService.GetCustomFieldDefinitionsForListAsync(ListId);
-        statusTransitions = await QueryService.GetStatusTransitionsForListAsync(ListId);
-        labels = await QueryService.GetLabelsForListAsync(ListId);
-        await ReloadWorkItemsAsync();
     }
 
     private async Task ReloadWorkItemsAsync()
     {
-        var itemsPage = await QueryService.GetWorkItemsForListAsync(ListId);
-        workItems = itemsPage.Items;
-        itemsTruncated = itemsPage.IsTruncated;
-        epics = await QueryService.GetEpicsForListAsync(ListId);
+        var itemsTask = QueryService.GetWorkItemsForListAsync(ListId);
+        var epicsTask = QueryService.GetEpicsForListAsync(ListId);
+        await Task.WhenAll(itemsTask, epicsTask);
+        workItems = itemsTask.Result.Items;
+        itemsTruncated = itemsTask.Result.IsTruncated;
+        epics = epicsTask.Result;
     }
 
     private void OpenCreate() => panel?.OpenForCreate();

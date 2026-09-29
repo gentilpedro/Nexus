@@ -53,6 +53,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
 
         // Take(cap + 1) so truncation is detected by the same query — no second COUNT round trip.
         var items = await db.WorkItems
+            .AsNoTrackingWithIdentityResolution()
             .Where(w => w.TaskListId == taskListId)
             .Include(w => w.Status)
             .Include(w => w.Assignee)
@@ -74,6 +75,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.Labels
+            .AsNoTracking()
             .Where(l => l.TaskListId == taskListId)
             .OrderBy(l => l.SortOrder)
             .ToListAsync(ct);
@@ -83,6 +85,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.TaskStatusDefinitions
+            .AsNoTracking()
             .Where(s => s.TaskListId == taskListId)
             .OrderBy(s => s.SortOrder)
             .ToListAsync(ct);
@@ -161,6 +164,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.StatusTransitions
+            .AsNoTrackingWithIdentityResolution()
             .Where(t => t.FromStatus.TaskListId == taskListId)
             .Include(t => t.FromStatus)
             .Include(t => t.ToStatus)
@@ -171,6 +175,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.WorkItems
+            .AsNoTrackingWithIdentityResolution()
             .Where(w => w.AssigneeId == userId && w.Status.Category != StatusCategory.Done)
             .Include(w => w.Status)
             .Include(w => w.Assignee)
@@ -185,6 +190,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.WorkItems
+            .AsNoTrackingWithIdentityResolution()
             .Where(w => w.AssigneeId == userId && w.Status.Category == StatusCategory.Done)
             .Include(w => w.Status)
             .Include(w => w.Assignee)
@@ -198,6 +204,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.WorkItems
+            .AsNoTrackingWithIdentityResolution()
             .Where(w => w.CreatedByUserId == userId && w.AssigneeId != null && w.AssigneeId != userId)
             .Include(w => w.Status)
             .Include(w => w.Assignee)
@@ -212,6 +219,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.CustomFieldDefinitions
+            .AsNoTracking()
             .Where(f => f.TaskListId == taskListId)
             .Include(f => f.Options.OrderBy(o => o.SortOrder))
             .OrderBy(f => f.SortOrder)
@@ -232,12 +240,15 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     public async Task<List<Sprint>> GetSprintsForListAsync(Guid taskListId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        // Split: WorkItems and their WorkItemLabels are two nested collections, and a single
+        // JOIN would repeat every sprint row per item and every item row per label.
         return await db.Sprints
+            .AsNoTrackingWithIdentityResolution()
+            .AsSplitQuery()
             .Where(s => s.TaskListId == taskListId && s.Status != SprintStatus.Completed)
             .Include(s => s.WorkItems).ThenInclude(w => w.Status)
             .Include(s => s.WorkItems).ThenInclude(w => w.Assignee)
             .Include(s => s.WorkItems).ThenInclude(w => w.WorkItemLabels).ThenInclude(l => l.Label)
-            .Include(s => s.WorkItems).ThenInclude(w => w.Comments)
             .OrderBy(s => s.StartDateUtc)
             .ToListAsync(ct);
     }
@@ -245,9 +256,11 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     public async Task<List<Sprint>> GetCompletedSprintsForListAsync(Guid taskListId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        // Status is needed: the backlog's history and velocity count items in the Done category.
         return await db.Sprints
+            .AsNoTrackingWithIdentityResolution()
             .Where(s => s.TaskListId == taskListId && s.Status == SprintStatus.Completed)
-            .Include(s => s.WorkItems)
+            .Include(s => s.WorkItems).ThenInclude(w => w.Status)
             .OrderByDescending(s => s.CompletedAtUtc)
             .ToListAsync(ct);
     }
@@ -257,18 +270,18 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     /// </summary>
     /// <remarks>
     /// Capped for the same reason as <see cref="GetWorkItemsForListAsync"/>, and it matters more
-    /// here: the backlog is the pile that grows without bound by definition, and this query also
-    /// pulls every Comment of every item, so each row is heavier than in the other views.
+    /// here: the backlog is the pile that grows without bound by definition. Comments are not
+    /// loaded — the backlog only shows how many there are (see <see cref="GetCommentCountsForListAsync"/>).
     /// </remarks>
     public async Task<WorkItemPage> GetBacklogItemsAsync(Guid taskListId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var items = await db.WorkItems
+            .AsNoTrackingWithIdentityResolution()
             .Where(w => w.TaskListId == taskListId && w.SprintId == null)
             .Include(w => w.Status)
             .Include(w => w.Assignee)
             .Include(w => w.WorkItemLabels).ThenInclude(l => l.Label)
-            .Include(w => w.Comments)
             .OrderBy(w => w.SortOrder)
             .Take(MaxItemsPerView + 1)
             .ToListAsync(ct);
@@ -280,6 +293,24 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         }
 
         return new WorkItemPage(items, isTruncated);
+    }
+
+    /// <summary>
+    /// Comment count per work item of the list, for the backlog rows. Items without comments are
+    /// absent from the dictionary.
+    /// </summary>
+    /// <remarks>
+    /// Replaces an <c>Include(w => w.Comments)</c> that pulled every comment body of every row
+    /// only to render <c>Comments.Count</c>.
+    /// </remarks>
+    public async Task<Dictionary<Guid, int>> GetCommentCountsForListAsync(Guid taskListId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.WorkItemComments
+            .Where(c => c.WorkItem.TaskListId == taskListId)
+            .GroupBy(c => c.WorkItemId)
+            .Select(g => new { WorkItemId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.WorkItemId, x => x.Count, ct);
     }
 
     // listId-scoped for the same IDOR reason as UpdateWorkItemStatusAsync above — both the
@@ -323,6 +354,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.WorkItems
+            .AsNoTracking()
             .Where(w => w.TaskListId == taskListId && w.Type == WorkItemType.Epic)
             .OrderBy(w => w.Title)
             .ToListAsync(ct);
