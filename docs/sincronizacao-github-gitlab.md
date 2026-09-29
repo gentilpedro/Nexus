@@ -43,14 +43,19 @@ O preço é uma regra: **ninguém reescreve o histórico da main** (nada de `--f
 
 ### GitHub → GitLab: espelhamento direto
 
-`.github/workflows/sync-gitlab.yml` roda a cada push (em qualquer branch) e ao fim da workflow
-`Deploy Nexus`, e empurra branches e tags para o GitLab.
+`.github/workflows/sync-gitlab.yml` roda a cada push (em qualquer branch, menos `sync/**`) e ao
+fim da workflow `Deploy Nexus` quando ela rodou por push na main, e empurra branches e tags para o
+GitLab.
 
 - A `main` é empurrada **sem `--force`**. Se o push falhar, é porque a main do GitLab tem commit
   que não existe no GitHub — e nesse caso a workflow falha com um aviso em vez de apagar o
   trabalho. O caminho certo é mergear o PR de sincronização (abaixo) e rodar de novo.
 - As outras branches vão junto para que o GitLab mostre o trabalho como ele aconteceu, não só a
-  main. Branches `sync/*` ficam de fora — são artefato da sincronização, não trabalho.
+  main. Branches `sync/*` ficam de fora — são artefato da sincronização, não trabalho. Um push
+  nelas também não dispara a workflow: ele acontece exatamente quando a main do GitLab está à
+  frente da daqui (o PR de volta ainda não foi mergeado), e o espelhamento falharia sempre. O
+  mesmo vale para o `Deploy Nexus` rodando no `pull_request` desse PR — só a execução por push
+  na main dispara o espelhamento.
 - O segundo gatilho (`workflow_run` de `Deploy Nexus`) existe porque a tag da release é criada
   pelo `GITHUB_TOKEN`, e o GitHub de propósito não dispara workflows para refs criadas com esse
   token. Sem ele, a tag ficaria só no GitHub.
@@ -200,7 +205,8 @@ de um lado faz o outro divergir na hora.
 ## Quando algo dá errado
 
 **A workflow `Sincronizar com o GitLab` falhou dizendo que a main divergiu.**
-Alguém commitou direto na main do GitLab. Procure o PR aberto pelo job `sync-github` no GitHub,
+Alguém commitou direto na main do GitLab (ou um MR foi mergeado lá) e o PR de volta ainda não
+foi mergeado aqui — por exemplo, um push em outra branch do GitHub nesse meio-tempo. Procure o PR aberto pelo job `sync-github` no GitHub,
 mergeie, e rode a workflow de novo (`Actions → Sincronizar com o GitLab → Run workflow`). Não
 resolva com `--force`: isso apagaria o commit feito no GitLab.
 
