@@ -19,6 +19,7 @@
 @inject AttachmentStorageService Storage
 @inject ToastService Toasts
 @inject DocChangeNotifier DocChanges
+@inject IDocPresenceStore Presence
 
 <PageTitle>@(doc?.Title ?? "Novo documento") · Nexus</PageTitle>
 
@@ -73,6 +74,7 @@
                     <input id="doc-title" class="doc-title-input" type="text" maxlength="200"
                            @bind="titleInput" @bind:after="SaveTitleAsync" placeholder="Sem título" />
                     <div class="doc-edit-actions">
+                        @PresenceBadge
                         <span class="doc-sync doc-sync--@syncState.Status" role="status" aria-live="polite">
                             <Icon Name="@SyncIcon()" Class="icon--sm" /> @SyncLabel()
                         </span>
@@ -118,6 +120,7 @@
                             <p class="page-meta">
                                 <span><Avatar Name="@AuthorLabel(doc.UpdatedByUser ?? doc.CreatedByUser)" Size="xs" /> @LastEditedLabel()</span>
                                 <span>@WordCount() palavras</span>
+                                @PresenceBadge
                             </p>
                             <div class="button-row">
                                 <button type="button" class="btn btn-secondary btn-sm" @onclick="EnterEditMode"><Icon Name="edit" /> Editar</button>
@@ -188,6 +191,43 @@
     private DocCollabEditor? collabEditor;
     private DocSyncState syncState = DocSyncState.Initial;
     private bool isFinishing;
+    private IReadOnlyList<DocEditor> otherEditors = [];
+
+    // Quem mais está editando agora (a própria pessoa não aparece, nem em outra aba).
+    private RenderFragment PresenceBadge => __builder =>
+    {
+        if (otherEditors.Count > 0)
+        {
+            <span class="doc-presence" title="@PresenceLabel()">
+                <span class="doc-presence-avatars" aria-hidden="true">
+                    @foreach (var editor in otherEditors.Take(3))
+                    {
+                        <Avatar Name="@editor.Name" Size="xs" />
+                    }
+                </span>
+                <span>@PresenceLabel()</span>
+            </span>
+        }
+    };
+
+    private string PresenceLabel() => otherEditors.Count switch
+    {
+        0 => "",
+        1 => $"{otherEditors[0].Name} está editando",
+        2 => $"{otherEditors[0].Name} e {otherEditors[1].Name} estão editando",
+        _ => $"{otherEditors[0].Name} e mais {otherEditors.Count - 1} pessoas estão editando",
+    };
+
+    private async Task LoadEditorsAsync()
+    {
+        if (doc is null)
+        {
+            otherEditors = [];
+            return;
+        }
+        var editors = await Presence.ListAsync(doc.Id);
+        otherEditors = editors.Where(e => e.UserId != userId).ToList();
+    }
 
     // O HTML do documento é sanitizado e não traz ids nos títulos; o sumário rola até o
     // N-ésimo h1–h3 do conteúdo.
@@ -206,7 +246,20 @@
 
     private void OnDocChanged(DocChange change)
     {
-        if (change.Kind != DocChangeKind.Content || doc is null || change.DocPageId != doc.Id)
+        if (doc is null || change.DocPageId != doc.Id)
+        {
+            return;
+        }
+        if (change.Kind == DocChangeKind.Presence)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                await LoadEditorsAsync();
+                StateHasChanged();
+            });
+            return;
+        }
+        if (change.Kind != DocChangeKind.Content)
         {
             return;
         }
@@ -320,6 +373,7 @@
         }
 
         canDelete = isAdmin || doc.CreatedByUserId == userId;
+        await LoadEditorsAsync();
         titleInput = doc.Title;
     }
 
