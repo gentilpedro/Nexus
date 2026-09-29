@@ -1,0 +1,26 @@
+@* Navegação entre as áreas de um workspace. Aparece no topo de todas as páginas dele, para
+   deixar claro onde a pessoa está e o que mais existe ali. *@
+
+<nav class="view-tabs workspace-tabs" aria-label="Áreas do workspace">
+    <a class="@Cls("overview")" href="@($"/workspaces/{WorkspaceId}")" aria-current="@Current("overview")"><Icon Name="dashboard" /> Visão geral</a>
+    <a class="@Cls("docs")" href="@($"/workspaces/{WorkspaceId}/docs")" aria-current="@Current("docs")"><Icon Name="doc" /> Documentos</a>
+    <a class="@Cls("chat")" href="@($"/workspaces/{WorkspaceId}/chat")" aria-current="@Current("chat")"><Icon Name="chat" /> Chat</a>
+    <a class="@Cls("members")" href="@($"/workspaces/{WorkspaceId}/members")" aria-current="@Current("members")"><Icon Name="team" /> Membros</a>
+    @if (CanManage)
+    {
+        <a class="@Cls("settings")" href="@($"/workspaces/{WorkspaceId}/settings")" aria-current="@Current("settings")"><Icon Name="settings" /> Configurações</a>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public Guid WorkspaceId { get; set; }
+
+    /// <summary>overview, docs, chat, members ou settings.</summary>
+    [Parameter, EditorRequired] public string Active { get; set; } = "overview";
+
+    [Parameter] public bool CanManage { get; set; }
+
+    private string Cls(string key) => Active == key ? "active" : "";
+
+    private string? Current(string key) => Active == key ? "page" : null;
+}
