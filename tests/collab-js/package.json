@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "vectors": "node gen-vectors.mjs",
-    "test": "node --test"
+    "test": "node --test --disable-warning=MODULE_TYPELESS_PACKAGE_JSON"
   },
   "devDependencies": {
     "quill-delta": "5.1.0"
