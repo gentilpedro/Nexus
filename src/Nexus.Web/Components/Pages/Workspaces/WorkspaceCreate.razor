@@ -37,7 +37,8 @@
                 <div class="identity-fields">
                     <div class="form-field">
                         <label for="name" class="required">Nome do workspace</label>
-                        <InputText id="name" @bind-Value="model.Name" @bind-Value:event="oninput" placeholder="Ex.: Agência Norte, Time de Produto" autofocus />
+                        <InputText id="name" @bind-Value="model.Name" @bind-Value:after="() => model.Name = model.Name.Trim()"
+                                   @oninput="e => model.Name = e.Value?.ToString() ?? string.Empty" placeholder="Ex.: Agência Norte, Time de Produto" autofocus />
                         <ValidationMessage For="() => model.Name" />
                     </div>
                     <fieldset class="form-fieldset">
