@@ -294,7 +294,12 @@
     margin-bottom: 0;
 }
 
-.invite-input-row + .validation-message {
+.invite-hint {
+    display: block;
+    margin: var(--space-1) 0 0;
+}
+
+.invite-hint + .validation-message {
     margin: var(--space-1) 0 0;
     min-height: 1.25rem;
 }
@@ -332,7 +337,7 @@
 }
 
 .invite-suggestions {
-    margin-top: var(--space-5);
+    margin: var(--space-5) 0 0;
 }
 
 .invite-suggestions .field-label {
@@ -363,6 +368,13 @@
 .invite-suggestion:hover {
     border-color: var(--color-accent);
     border-style: solid;
+    color: var(--color-accent-text);
+}
+
+.invite-suggestion.is-selected {
+    border-style: solid;
+    border-color: var(--color-accent);
+    background: var(--color-accent-soft);
     color: var(--color-accent-text);
 }
 

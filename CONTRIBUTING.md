@@ -56,6 +56,25 @@ dotnet user-secrets set "ConnectionStrings:DefaultConnection" \
 dotnet run --project src/Nexus.Web
 ```
 
+Se o `dotnet run` falhar com `28P01: autenticação do tipo senha falhou` mesmo com a senha certa,
+provavelmente outro Postgres já ocupa a porta 5432 da sua máquina (por exemplo, um PostgreSQL instalado
+direto no Windows). Nesse caso, publique o container em outra porta com um `docker-compose.override.yml`
+(já ignorado pelo git) e use essa porta nos user-secrets:
+
+```yaml
+# docker-compose.override.yml
+services:
+  db:
+    ports:
+      - "5433:5432"
+```
+
+```bash
+docker compose up db -d
+dotnet user-secrets set "ConnectionStrings:DefaultConnection"   "Host=localhost;Port=5433;Database=Nexus;Username=postgres;Password=<a mesma do seu .env>"   --project src/Nexus.Web
+```
+
+As contas de demonstração estão em [`docs/dados-demonstracao.md`](docs/dados-demonstracao.md).
 Passo a passo completo (incluindo dados de demonstração) na página
 [Como Rodar Localmente](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/Como-Rodar-Localmente)
 da wiki.

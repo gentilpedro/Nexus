@@ -41,7 +41,8 @@
                 <DataAnnotationsValidator />
                 <div class="form-field">
                     <label for="label-name" class="required">Nome</label>
-                    <InputText id="label-name" @bind-Value="createModel.Name" @bind-Value:event="oninput" placeholder="Ex.: Cliente VIP, Retrabalho" />
+                    <InputText id="label-name" @bind-Value="createModel.Name" @bind-Value:after="() => createModel.Name = createModel.Name.Trim()"
+                               @oninput="e => createModel.Name = e.Value?.ToString() ?? string.Empty" placeholder="Ex.: Cliente VIP, Retrabalho" />
                     <ValidationMessage For="() => createModel.Name" />
                 </div>
                 <div class="form-field">

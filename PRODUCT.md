@@ -46,14 +46,14 @@ Frente a ClickUp, Jira e Notion, o Nexus defende quatro coisas juntas:
 ## Brand Commitments
 
 - Nome **Nexus** e o logo `src/Nexus.Web/wwwroot/IconNexus.png` ficam.
-- A paleta de `paletadecor.md` é decisão tomada, não ponto de partida: primário `#5B5CEB` (hover `#4B4CD8`, active `#3F40BF`, soft `#EEF0FF`) e os tokens de tema claro e escuro definidos ali.
+- A paleta de `docs/design/paleta-de-cores.md` é decisão tomada, não ponto de partida: primário `#5B5CEB` (hover `#4B4CD8`, active `#3F40BF`, soft `#EEF0FF`) e os tokens de tema claro e escuro definidos ali.
 - Voz: português direto e informal ("pra", "a gente"), sem jargão em inglês, falando com o time e não com o comprador corporativo.
 - Textos legais (Política de Privacidade, Termos de Uso, retenção de dados LGPD, plano de resposta a incidente) fazem parte do produto e devem ser preservados.
 
 ## Evidence on Hand
 
 - Screenshots e imagens do produto: `src/Nexus.Web/wwwroot/Home.png`, `LoginImage.png`, `foto1Landing.png`, `foto2Landing.png`.
-- Dados de demonstração locais (fictícios): workspaces "Nexus App - Desenvolvimento" e "Venda - Cliente Josapar", descritos no `README.md`. Josapar é cliente de exemplo, não cliente real.
+- Dados de demonstração locais (fictícios): workspaces "Agência Norte" e "Venda - Cliente Josapar", descritos em `docs/dados-demonstracao.md`. Josapar é cliente de exemplo, não cliente real.
 - Documentação operacional em `docs/` (backup, escalabilidade horizontal, sincronização, releases, LGPD).
 - **Não existem**: depoimentos, clientes pagantes, logos de clientes, métricas de uso ou benchmarks. Nenhum trabalho futuro deve inventá-los.
 - A Política de Privacidade ainda é um modelo com trechos `[PREENCHER]`; não apresentar como texto jurídico final.
