@@ -115,7 +115,18 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
 });
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+// appsettings.json ships this empty on purpose: the real value comes from User Secrets (dev), the
+// ConnectionStrings__DefaultConnection env var (Docker) or appsettings.Production.json (deploy).
+// A placeholder password here used to fail later as a misleading "28P01 password authentication
+// failed" instead of saying the configuration was simply missing.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "Connection string 'DefaultConnection' is not configured. For local development set it with " +
+        "`dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" ... --project src/Nexus.Web` " +
+        "(see CONTRIBUTING.md, \"Rodando localmente\").");
+}
 builder.Services.AddInfrastructure(connectionString, builder.Configuration);
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
