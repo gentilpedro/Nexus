@@ -67,8 +67,12 @@ O job `sync-github` do `.gitlab-ci.yml` roda na branch default, **depois do `ver
 1. Compara o commit com a main do GitHub. Se ele já estiver lá (chegou pelo espelhamento), para
    por aqui — é esta verificação que impede o laço infinito de um lado empurrando para o outro
    para sempre.
-2. Se for commit novo, empurra para a branch `sync/gitlab` no GitHub e abre um Pull Request para
-   a `main`.
+2. Confere se o commit ainda é o topo da `main` do GitLab. Dois MRs mergeados em sequência geram
+   dois pipelines que podem terminar fora de ordem; se a `main` já avançou, quem sincroniza é o
+   pipeline do commit mais novo (que inclui este), e este job para. Sem essa checagem, o pipeline
+   mais lento empurrava o commit antigo por cima do novo e o PR perdia o último merge.
+3. Se for o commit mais recente, empurra para a branch `sync/gitlab` no GitHub e abre um Pull
+   Request para a `main`.
 
 O PR **não é mergeado automaticamente**. Ele espera aprovação, como qualquer outra mudança — o
 merge é o que dispara o deploy em produção, e isso não acontece sem alguém olhar. Se já houver um

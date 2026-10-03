@@ -172,6 +172,17 @@ sync-github:
         exit 1
       fi
 
+      # Dois merges seguidos geram dois pipelines, e eles podem terminar fora de ordem. Se a
+      # branch default daqui já avançou além deste commit, o pipeline do commit mais novo
+      # sincroniza (ele inclui este); empurrar agora faria a sync/gitlab voltar para trás e o PR
+      # perder o merge mais recente. Se a consulta falhar, segue como antes.
+      topo="$(git ls-remote origin "refs/heads/${CI_DEFAULT_BRANCH}" 2>/dev/null | cut -f1 || true)"
+      if [ -n "$topo" ] && [ "$topo" != "$CI_COMMIT_SHA" ]; then
+        echo "A ${CI_DEFAULT_BRANCH} já está em ${topo}, depois de ${CI_COMMIT_SHA}."
+        echo "O pipeline daquele commit faz a sincronização. Nada a fazer aqui."
+        exit 0
+      fi
+
       # --force na branch de sincronização (e só nela): ela é descartável, sempre reescrita para
       # apontar ao commit atual da main daqui. A main do GitHub nunca é tocada por este job.
       git push --force "$remote" "${CI_COMMIT_SHA}:refs/heads/${GITHUB_SYNC_BRANCH}"
