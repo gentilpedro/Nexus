@@ -240,7 +240,7 @@ O Nexus é uma ferramenta de trabalho diário, e o sistema visual se comporta co
 
 Um só sistema serve dois modos. No app (modo Operate) a escala tipográfica é fixa em rem, os títulos pesam 600 e a cor aparece só como informação: status, prioridade, tipo, workspace. Na landing pública (modo Persuade) o mesmo mundo ganha títulos fluidos em peso 700, respiros de 64px entre seções e uma peça assinatura, a janela do produto, que mostra o próprio Nexus funcionando em vez de ilustração. Nada na landing usa cor, fonte ou forma que o app não tenha.
 
-Os dois temas, claro e escuro, são obrigatórios e cumprem WCAG AA. Cada cor é declarada uma única vez com `light-dark()` em `tokens.css`; o tema vem do sistema operacional ou do `data-theme` gravado quando a pessoa escolhe. A paleta de `paletadecor.md` é compromisso de marca; os únicos afastamentos dela existem por contraste e estão registrados em Colors.
+Os dois temas, claro e escuro, são obrigatórios e cumprem WCAG AA. Cada cor é declarada uma única vez com `light-dark()` em `tokens.css`; o tema vem do sistema operacional ou do `data-theme` gravado quando a pessoa escolhe. A paleta de `docs/design/paleta-de-cores.md` é compromisso de marca; os únicos afastamentos dela existem por contraste e estão registrados em Colors.
 
 **Key Characteristics:**
 - Índigo #5B5CEB como acento único, em ações primárias, item ativo e foco.

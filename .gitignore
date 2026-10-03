@@ -37,3 +37,31 @@ Wireframes/
 .impeccable/questions/
 .impeccable/hook.cache.json
 .impeccable/config.local.json
+
+# Variações locais do .env (o modelo versionado é o .env.example)
+.env.*
+!.env.example
+
+# Override local do docker compose (ex.: publicar o Postgres em outra porta)
+docker-compose.override.yml
+
+# Claude Code: configuração pessoal de cada máquina (as skills do projeto são versionadas)
+.claude/settings.local.json
+
+# Dependências Node em qualquer pasta
+node_modules/
+
+# Resultados de teste e cobertura
+TestResults/
+coverage/
+*.coverage
+coverage*.xml
+
+# Dumps e backups de banco feitos à mão (contêm dado pessoal; ver docs/backup-restore.md)
+*.dump
+*.backup
+*.sql.gz
+
+# Logs locais
+*.log
+logs/

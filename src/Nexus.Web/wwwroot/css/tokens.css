@@ -1,5 +1,5 @@
 /* Inter, auto-hospedada (a CSP só aceita fontes do próprio domínio). Fonte e pesos definidos em
-   paletadecor.md › Typography. Licença: wwwroot/fonts/OFL-Inter.txt. */
+   docs/design/paleta-de-cores.md › Typography. Licença: wwwroot/fonts/OFL-Inter.txt. */
 @font-face {
     font-family: "Inter";
     font-style: normal;
@@ -19,13 +19,13 @@
 }
 
 /* Nexus design tokens.
-   Paleta de origem: paletadecor.md (primário #5B5CEB). Cada cor é declarada uma única vez com
+   Paleta de origem: docs/design/paleta-de-cores.md (primário #5B5CEB). Cada cor é declarada uma única vez com
    light-dark(): o valor da esquerda vale no tema claro, o da direita no escuro. Quem decide o
    tema é `color-scheme` — o sistema operacional por padrão, ou o data-theme que theme-interop.js
    grava quando a pessoa escolhe um tema. Assim o tema escuro não precisa ser repetido em blocos
    @media e [data-theme] separados.
 
-   Onde este arquivo se afasta do paletadecor.md é por contraste (WCAG AA, compromisso do
+   Onde este arquivo se afasta do docs/design/paleta-de-cores.md é por contraste (WCAG AA, compromisso do
    PRODUCT.md): texto em primário sobre fundo tingido usa --color-accent-text, e o botão de
    perigo usa #DC2626 porque branco sobre #EF4444 fica em 3,8:1. */
 
@@ -86,7 +86,7 @@
     --color-info-soft: light-dark(#EFF6FF, rgb(59 130 246 / 0.14));
     --color-info-border: light-dark(#BFDBFE, rgb(59 130 246 / 0.35));
 
-    /* ---- Status do fluxo (paletadecor.md › Kanban) ---- */
+    /* ---- Status do fluxo (docs/design/paleta-de-cores.md › Kanban) ---- */
     --status-todo: #94A3B8;
     --status-inprogress: #3B82F6;
     --status-review: #A855F7;
@@ -100,7 +100,7 @@
     --badge-status-done-bg: light-dark(#DCFCE7, rgb(74 222 128 / 0.16));
     --badge-status-done-fg: light-dark(#15803D, #86EFAC);
 
-    /* ---- Prioridade (paletadecor.md › Priority) ---- */
+    /* ---- Prioridade (docs/design/paleta-de-cores.md › Priority) ---- */
     --priority-low: #10B981;
     --priority-medium: #FBBF24;
     --priority-high: #F97316;
@@ -115,7 +115,7 @@
     --badge-priority-highest-bg: light-dark(#FEE2E2, rgb(220 38 38 / 0.20));
     --badge-priority-highest-fg: light-dark(#B91C1C, #FCA5A5);
 
-    /* ---- Séries de gráfico (paletadecor.md › Charts) ---- */
+    /* ---- Séries de gráfico (docs/design/paleta-de-cores.md › Charts) ---- */
     --chart-1: #5B5CEB;
     --chart-2: #3B82F6;
     --chart-3: #10B981;

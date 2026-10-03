@@ -14,7 +14,7 @@
         "rule": "overused-font",
         "value": "inter",
         "createdAt": "2026-09-28T23:49:37.246Z",
-        "reason": "User confirmed paletadecor.md as a binding brand commitment (init answer); its Typography section pins Inter with system-ui fallback"
+        "reason": "User confirmed docs/design/paleta-de-cores.md as a binding brand commitment (init answer); its Typography section pins Inter with system-ui fallback"
       }
     ]
   }
