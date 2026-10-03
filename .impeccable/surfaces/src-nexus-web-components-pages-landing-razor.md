@@ -13,7 +13,7 @@ Prova disponível: o próprio produto (telas em HTML com dados de exemplo rotula
 
 THESIS: A primeira dobra é o Nexus funcionando, em português, com abas entre as visões. Recusa o hero de ilustração genérica e o mockup de notebook falso.
 
-OWN-WORLD: O mesmo mundo do app — índigo #5B5CEB como único acento, fundo #F7F8FC, Inter (paletadecor.md), cromo de janela do próprio produto, cantos 8/12px, sombras suaves. Faixa escura (superfície escura do tema) só no fechamento, com o índigo só no botão.
+OWN-WORLD: O mesmo mundo do app — índigo #5B5CEB como único acento, fundo #F7F8FC, Inter (docs/design/paleta-de-cores.md), cromo de janela do próprio produto, cantos 8/12px, sombras suaves. Faixa escura (superfície escura do tema) só no fechamento, com o índigo só no botão.
 
 STORY: Em segundos o visitante entende "tarefas, documentos e conversa do time num lugar só, em português"; troca de aba e vê cada visão com trabalho reconhecível; lê os quatro diferenciais e os planos; cria a conta.
 
