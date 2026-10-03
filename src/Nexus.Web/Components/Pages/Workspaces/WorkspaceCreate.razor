@@ -10,6 +10,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkspaceInviteService InviteService
 @inject NavigationManager NavigationManager
+@inject ILogger<WorkspaceCreate> Logger
 
 <PageTitle>Novo workspace · Nexus</PageTitle>
 
@@ -36,7 +37,8 @@
                 <div class="identity-fields">
                     <div class="form-field">
                         <label for="name" class="required">Nome do workspace</label>
-                        <InputText id="name" @bind-Value="model.Name" @bind-Value:event="oninput" placeholder="Ex.: Agência Norte, Time de Produto" autofocus />
+                        <InputText id="name" @bind-Value="model.Name" @bind-Value:after="() => model.Name = model.Name.Trim()"
+                                   @oninput="e => model.Name = e.Value?.ToString() ?? string.Empty" placeholder="Ex.: Agência Norte, Time de Produto" autofocus />
                         <ValidationMessage For="() => model.Name" />
                     </div>
                     <fieldset class="form-fieldset">
@@ -60,13 +62,16 @@
 
             <div class="invite-input-row">
                 <div class="form-field">
-                    <label for="invite-email" class="sr-only">E-mail para convidar</label>
-                    <input id="invite-email" type="email" placeholder="nome@empresa.com.br" autocomplete="off"
+                    <label for="invite-email" class="sr-only">E-mails para convidar</label>
+                    @* type="text", não "email": com type="email" o navegador barra o envio do formulário
+                       inteiro quando o campo tem mais de um endereço — e aqui a ideia é poder colar vários. *@
+                    <input id="invite-email" type="text" inputmode="email" placeholder="nome@empresa.com.br, outra@empresa.com.br" autocomplete="off"
                            @bind="inviteEmail" @bind:event="oninput"
-                           aria-invalid="@(inviteError is null ? null : "true")" aria-describedby="invite-email-error" />
+                           aria-invalid="@(inviteError is null ? null : "true")" aria-describedby="invite-email-hint invite-email-error" />
                 </div>
-                <button type="button" class="btn btn-secondary" @onclick="AddInvite"><Icon Name="plus" /> Adicionar</button>
+                <button type="button" class="btn btn-secondary" @onclick="() => AddInvites()"><Icon Name="plus" /> Adicionar</button>
             </div>
+            <p id="invite-email-hint" class="field-hint invite-hint">Digite ou cole vários e-mails de uma vez, separados por vírgula, espaço ou linha.</p>
             <p id="invite-email-error" class="validation-message" role="alert">@inviteError</p>
 
             @if (pendingInvites.Count > 0)
@@ -74,11 +79,12 @@
                 <ul class="invite-chips" aria-label="Pessoas que serão convidadas">
                     @foreach (var email in pendingInvites)
                     {
-                        <li class="invite-chip">
-                            <Avatar Name="@email" Size="xs" />
-                            <span>@email</span>
-                            <button type="button" class="icon-btn icon-btn--sm" @onclick="() => pendingInvites.Remove(email)">
-                                <Icon Name="x" Label="@($"Remover {email}")" />
+                        var label = LabelFor(email);
+                        <li class="invite-chip" @key="email">
+                            <Avatar Name="@label" Size="xs" />
+                            <span title="@email">@label</span>
+                            <button type="button" class="icon-btn icon-btn--sm" @onclick="() => RemoveInvite(email)">
+                                <Icon Name="x" Label="@($"Remover {label}")" />
                             </button>
                         </li>
                     }
@@ -87,23 +93,21 @@
 
             @if (suggestions is { Count: > 0 })
             {
-                var remaining = suggestions.Where(p => p.Email is not null && !pendingInvites.Contains(p.Email, StringComparer.OrdinalIgnoreCase)).ToList();
-                @if (remaining.Count > 0)
-                {
-                    <div class="invite-suggestions">
-                        <p class="field-label">Pessoas com quem você já trabalha</p>
-                        <div class="invite-suggestion-row">
-                            @foreach (var person in remaining)
-                            {
-                                <button type="button" class="invite-suggestion" @onclick="() => AddSuggestion(person.Email!)">
-                                    <Avatar Name="@(person.DisplayName ?? person.Email!)" Size="xs" />
-                                    <span>@(person.DisplayName ?? person.Email)</span>
-                                    <Icon Name="plus" Class="icon--sm" />
-                                </button>
-                            }
-                        </div>
+                <fieldset class="invite-suggestions form-fieldset">
+                    <legend class="field-label">Pessoas com quem você já trabalha</legend>
+                    <div class="invite-suggestion-row">
+                        @foreach (var person in suggestions)
+                        {
+                            var selected = IsPending(person.Email);
+                            <button type="button" class="invite-suggestion @(selected ? "is-selected" : "")" @key="person.Email"
+                                    aria-pressed="@(selected ? "true" : "false")" @onclick="() => ToggleSuggestion(person.Email)">
+                                <Avatar Name="@person.Label" Size="xs" />
+                                <span>@person.Label</span>
+                                <Icon Name="@(selected ? "check" : "plus")" Class="icon--sm" />
+                            </button>
+                        }
                     </div>
-                }
+                </fieldset>
             }
         </section>
 
@@ -121,6 +125,8 @@
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     private static readonly (string Hex, string Name)[] AvailableColors = WorkspaceColors.Options;
+    private static readonly char[] EmailSeparators = [',', ';', ' ', '\t', '\r', '\n'];
+    private const int MaxSuggestions = 30;
 
     private readonly CreateWorkspaceModel model = new() { Color = AvailableColors[0].Hex };
     private string? inviteError;
@@ -128,7 +134,7 @@
     private string? errorMessage;
     private string inviteEmail = "";
     private readonly List<string> pendingInvites = new();
-    private List<ApplicationUser>? suggestions;
+    private List<InviteSuggestion>? suggestions;
     private string? userId;
 
     protected override async Task OnInitializedAsync()
@@ -143,46 +149,57 @@
         await using var db = await DbFactory.CreateDbContextAsync();
         var myWorkspaceIds = await db.WorkspaceMembers.Where(m => m.UserId == userId).Select(m => m.WorkspaceId).ToListAsync();
 
-        suggestions = await db.WorkspaceMembers
-            .Where(m => myWorkspaceIds.Contains(m.WorkspaceId) && m.UserId != userId)
-            .Select(m => m.User)
+        var people = await db.WorkspaceMembers
+            .Where(m => myWorkspaceIds.Contains(m.WorkspaceId) && m.UserId != userId && m.User.Email != null)
+            .Select(m => new { m.User.Email, m.User.DisplayName })
             .Distinct()
-            .Take(5)
+            .OrderBy(p => p.DisplayName)
+            .Take(MaxSuggestions)
             .ToListAsync();
+
+        suggestions = people
+            .Select(p => new InviteSuggestion(p.Email!, string.IsNullOrWhiteSpace(p.DisplayName) ? p.Email! : p.DisplayName))
+            .ToList();
     }
 
-    private void AddInvite()
+    // Aceita um ou vários endereços de uma vez. Os válidos entram na lista, os repetidos são
+    // ignorados sem erro, e só os inválidos ficam no campo, com a mensagem dizendo quais são.
+    // Devolve false quando sobrou algum inválido.
+    private bool AddInvites()
     {
-        var email = inviteEmail.Trim();
         inviteError = null;
-        if (string.IsNullOrEmpty(email))
+        var invalid = new List<string>();
+
+        foreach (var email in inviteEmail.Split(EmailSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            return;
+            if (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || !email.Contains('.'))
+            {
+                invalid.Add(email);
+            }
+            else if (!IsPending(email))
+            {
+                pendingInvites.Add(email);
+            }
         }
 
-        if (!new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email) || !email.Contains('.'))
+        inviteEmail = string.Join(", ", invalid);
+        if (invalid.Count == 0)
         {
-            inviteError = "Esse e-mail não parece válido. Confira e tente de novo.";
-            return;
+            return true;
         }
 
-        if (pendingInvites.Contains(email, StringComparer.OrdinalIgnoreCase))
-        {
-            inviteError = "Essa pessoa já está na lista.";
-            return;
-        }
-
-        pendingInvites.Add(email);
-        inviteEmail = "";
+        inviteError = invalid.Count == 1
+            ? $"\"{invalid[0]}\" não parece um e-mail válido. Corrija ou apague para continuar."
+            : $"Estes não parecem e-mails válidos: {string.Join(", ", invalid)}. Corrija ou apague para continuar.";
+        return false;
     }
 
-    // Enter dentro do formulário o envia. Se ainda há um e-mail digitado no campo de convite,
-    // a intenção é adicioná-lo à lista — não criar o workspace sem ele.
+    // Enter dentro do formulário o envia. O que estiver digitado no campo de convite entra na lista
+    // antes de criar; só um endereço inválido segura a criação, para não perder um convite em silêncio.
     private async Task HandleSubmit(EditContext context)
     {
-        if (!string.IsNullOrWhiteSpace(inviteEmail))
+        if (!string.IsNullOrWhiteSpace(inviteEmail) && !AddInvites())
         {
-            AddInvite();
             return;
         }
 
@@ -192,13 +209,26 @@
         }
     }
 
-    private void AddSuggestion(string email)
+    private bool IsPending(string email) => pendingInvites.Contains(email, StringComparer.OrdinalIgnoreCase);
+
+    private void RemoveInvite(string email) =>
+        pendingInvites.RemoveAll(e => string.Equals(e, email, StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleSuggestion(string email)
     {
-        if (!pendingInvites.Contains(email, StringComparer.OrdinalIgnoreCase))
+        if (IsPending(email))
+        {
+            RemoveInvite(email);
+        }
+        else
         {
             pendingInvites.Add(email);
         }
     }
+
+    // Para quem já trabalha com você, o chip mostra o nome em vez do e-mail.
+    private string LabelFor(string email) =>
+        suggestions?.FirstOrDefault(p => string.Equals(p.Email, email, StringComparison.OrdinalIgnoreCase))?.Label ?? email;
 
     private async Task HandleCreate()
     {
@@ -262,19 +292,31 @@
                 workspace.Slug = await GenerateUniqueSlugAsync(db, model.Name);
                 await db.SaveChangesAsync();
             }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Falha ao criar workspace");
+            errorMessage = "Não foi possível criar o workspace. Tente novamente.";
+            isSaving = false;
+            return;
+        }
 
-            foreach (var email in inviteEmails)
+        // From here on the workspace exists: a failed invite must not surface as "could not create"
+        // — retrying would create a duplicate workspace. Anyone left out can be re-invited from the
+        // members page.
+        foreach (var email in inviteEmails)
+        {
+            try
             {
                 await InviteService.CreateAndSendAsync(workspace.Id, workspace.Name, email, WorkspaceRole.Member, currentUserId);
             }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Falha ao convidar um e-mail para o workspace {WorkspaceId}", workspace.Id);
+            }
+        }
 
-            NavigationManager.NavigateTo($"/workspaces/{workspace.Id}");
-        }
-        catch (Exception)
-        {
-            errorMessage = "Não foi possível criar o workspace. Tente novamente.";
-            isSaving = false;
-        }
+        NavigationManager.NavigateTo($"/workspaces/{workspace.Id}");
     }
 
     private static async Task<string> GenerateUniqueSlugAsync(AppDbContext db, string name)
@@ -304,6 +346,7 @@
         return slug;
     }
 
+    private sealed record InviteSuggestion(string Email, string Label);
 
     private class CreateWorkspaceModel
     {

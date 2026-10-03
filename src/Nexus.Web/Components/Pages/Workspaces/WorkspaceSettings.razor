@@ -61,7 +61,8 @@
                             <div class="identity-fields">
                                 <div class="form-field">
                                     <label for="ws-name" class="required">Nome do workspace</label>
-                                    <InputText id="ws-name" @bind-Value="generalModel.Name" @bind-Value:event="oninput" />
+                                    <InputText id="ws-name" @bind-Value="generalModel.Name" @bind-Value:after="() => generalModel.Name = generalModel.Name.Trim()"
+                                               @oninput="e => generalModel.Name = e.Value?.ToString() ?? string.Empty" />
                                     <ValidationMessage For="() => generalModel.Name" />
                                 </div>
                                 <fieldset class="form-fieldset">
