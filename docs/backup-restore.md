@@ -5,6 +5,10 @@
 > backup sem cópia recuperável" no [plano de resposta a incidente](lgpd/plano-resposta-incidente.md),
 > que pressupunha um backup que não existia.
 
+> **Desde a virada para a VPS (10/2026)** o banco e os anexos vivem em containers na VPS e o
+> backup é o `nexus-backup` do servidor — ver [deploy-vps.md](deploy-vps.md). As rotinas por FTP e
+> pelo Neon abaixo ficam como histórico; os comandos de `pg_dump`/`pg_restore` continuam valendo.
+
 Um backup só conta se já foi restaurado pelo menos uma vez. As seções abaixo descrevem o que
 precisa ser copiado, como copiar e — principalmente — como restaurar.
 
@@ -114,11 +118,15 @@ restaurado deve ser tratado como inexistente.
 
 ## 5. Automação
 
-O backup do banco (seção 2.1) está automatizado em
-[`.github/workflows/backup-nexus.yml`](../.github/workflows/backup-nexus.yml): roda todo dia às
-03:00 UTC (meia-noite em São Paulo), gera o dump, **verifica que ele é restaurável**
-(`pg_restore --list` + checagem de tamanho mínimo) e o publica como artefato com retenção de 30
-dias. Também pode ser disparado sob demanda (`workflow_dispatch`).
+Na VPS, `/usr/local/bin/nexus-backup` roda todo dia às 03:45 (horário do servidor): faz o dump do
+banco, **verifica que ele é restaurável** (`pg_restore --list`), empacota os anexos do volume
+`nexus_uploads` e guarda os dois em `/opt/nexus/backups` por 7 dias.
+
+> **Limitação:** as cópias ficam no mesmo servidor. Perder a VPS perde também os backups — falta
+> uma cópia fora dela (bucket sob nosso controle, por exemplo).
+
+O texto abaixo descreve o workflow `backup-nexus.yml`, removido na virada (ele copiava o Neon,
+que deixou de ser o banco de produção).
 
 > **Ele começa desligado, de propósito.** Só executa depois que a variável de repositório
 > `BACKUP_ENABLED` for definida como `true`.
