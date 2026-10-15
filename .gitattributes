@@ -7,3 +7,6 @@
 # Escopo deliberadamente restrito aos .sh: um "* text=auto" abrangente renormalizaria o
 # repositório inteiro num commit gigante, sem necessidade.
 *.sh text eol=lf
+
+# Vão direto para o servidor Linux: CRLF quebra o shebang e o Nginx/compose.
+deploy/vps/** text eol=lf
