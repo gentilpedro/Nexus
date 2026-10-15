@@ -34,11 +34,11 @@
          only reachable via ClosedXML's CSS parsing for spreadsheet styling. Revisit once
          HtmlSanitizer/ClosedXML ship AngleSharp 1.x-compatible releases. -->
     <PackageReference Include="HtmlSanitizer" Version="9.0.967" />
-    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.10" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" PrivateAssets="all" />
     <!-- Backs the /health/ready endpoint's database probe (AddDbContextCheck). -->
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.10" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.13" />
     <!-- Backplane entre instancias: pub/sub do chat e contador do rate limiter compartilhado
          (ver Services/Backplane). So e usado quando Redis:ConnectionString esta configurado. -->
     <PackageReference Include="StackExchange.Redis" Version="2.8.24" />
