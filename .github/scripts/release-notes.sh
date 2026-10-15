@@ -199,7 +199,7 @@ if [ -n "$previous_tag" ]; then
     "$compare_base_url" "$previous_tag" "$version"
 fi
 
-printf 'Para confirmar qual versão está no ar: `GET https://usenexus.runasp.net/version`\n'
+printf 'Para confirmar qual versão está no ar: `GET https://nexus.aamora.com.br/version`\n'
 }
 
 # A primeira release não é uma diferença entre versões, é o inventário de tudo que já existe —
