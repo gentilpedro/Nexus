@@ -4,6 +4,13 @@
 #   set-secrets          stdin: BREVO_API_KEY=... / BREVO_SENDER_EMAIL=...
 #   load-image <versão>  stdin: docker save | gzip
 #   up <versão>          sobe a versão; volta para a anterior se não ficar saudável
+#   import-db            stdin: pg_dump --format=custom. SUBSTITUI o banco inteiro.
+#   import-uploads       stdin: tar.gz dos anexos. Acrescenta ao volume de uploads.
+#   import-check         só confere se o import está liberado
+#
+# Os dois import-* só funcionam enquanto existir /opt/nexus/.allow-import, criado à mão pelo
+# root na hora da migração e apagado em seguida: no dia a dia, a chave de deploy não consegue
+# sobrescrever dados mesmo que vaze.
 set -euo pipefail
 umask 077
 DIR=/opt/nexus
@@ -11,6 +18,8 @@ read -r -a ARGS <<< "${SSH_ORIGINAL_COMMAND:-$*}"
 CMD="${ARGS[0]:-}"; VER="${ARGS[1]:-}"
 valid_ver() { [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "versão inválida: '$VER'" >&2; exit 2; }; }
 cd "$DIR"
+export NEXUS_VERSION=$(cat .version 2>/dev/null || echo none)
+require_import() { [ -f "$DIR/.allow-import" ] || { echo "importação desabilitada (crie $DIR/.allow-import)" >&2; exit 3; }; }
 
 case "$CMD" in
   set-secrets)
@@ -42,6 +51,29 @@ case "$CMD" in
       fi
       exit 1
     fi ;;
+  import-check)
+    require_import
+    echo "ok: import liberado" ;;
+  import-db)
+    require_import
+    TMP=$(mktemp "$DIR/backups/import.XXXX.dump")
+    trap 'rm -f "$TMP"' EXIT
+    cat > "$TMP"
+    docker compose exec -T db pg_restore --list < "$TMP" >/dev/null
+    # Rede de segurança: o banco atual vai para backups/ antes de ser apagado.
+    docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner' > "backups/pre-import-$(date +%F-%H%M%S).dump"
+    docker compose stop web
+    docker compose exec -T db sh -c 'dropdb -U "$POSTGRES_USER" --force "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+    docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --no-privileges --exit-on-error' < "$TMP"
+    # As chaves de Data Protection de origem foram cifradas com DPAPI (Windows) e não abrem aqui.
+    # Apagar faz o app gerar chaves novas: todo mundo entra de novo, nenhum dado se perde.
+    docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -c "DELETE FROM \"DataProtectionKeys\";"'
+    docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "SELECT count(*) || '"'"' usuários'"'"' FROM \"AspNetUsers\";"'
+    if [ "$NEXUS_VERSION" != none ]; then docker compose up -d --wait --wait-timeout 180 web; fi
+    echo "ok: banco importado" ;;
+  import-uploads)
+    require_import
+    docker run --rm -i -v nexus_uploads:/u alpine sh -c 'tar xzf - -C /u && chown -R 1654:1654 /u && echo "ok: $(find /u -type f | wc -l) arquivos no volume"' ;;
   *)
     echo "comando não permitido: '$CMD'" >&2; exit 2 ;;
 esac

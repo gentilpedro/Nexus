@@ -24,7 +24,7 @@ nota de release meses depois. Um commit `fix: ajustes` gera uma nota inútil.
 1. Crie uma branch a partir da `main`.
 2. Abra um Pull Request para `main`. Isso dispara os jobs `version` (calcula a versão que o merge geraria)
    e `verify` (build, testes, checagem de dependências vulneráveis, análise estática) — sem publicar nada.
-3. Após aprovação e merge na `main`, o pipeline roda `deploy` (FTPS → IIS) e `release` (tag + GitHub
+3. Após aprovação e merge na `main`, o pipeline roda `deploy-vps` (container na VPS) e `release` (tag + GitHub
    Release), automaticamente.
 
 Detalhes completos do pipeline na página [CI/CD e Deploy](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/CI-CD-e-Deploy)

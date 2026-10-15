@@ -38,7 +38,7 @@ A primeira release é a `v1.0.0` — o Nexus já está em produção com usuári
 **Ao entrar na `main`:**
 
 1. `version` e `verify`, iguais aos de cima.
-2. `deploy` — publica por FTPS no IIS.
+2. `deploy-vps` — publica o container na VPS (ver `docs/deploy-vps.md`).
 3. `release` — cria a tag `vX.Y.Z` e a GitHub Release com as notas.
 
 A tag é criada **depois** do deploy, de propósito: ela significa "esta versão está no ar", não
@@ -61,7 +61,7 @@ link para o commit completo.
 **Pelo endpoint:**
 
 ```
-GET https://usenexus.runasp.net/version
+GET https://nexus.aamora.com.br/version
 
 {
   "version": "1.4.0",

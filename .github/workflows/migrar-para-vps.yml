@@ -1,0 +1,147 @@
+name: Migrar para a VPS
+
+# Virada única do MonsterASP + Neon para a VPS (docs/deploy-vps.md, seção 4). Manual e com
+# confirmação digitada porque SUBSTITUI o banco da VPS pelo do Neon.
+#
+# Antes de rodar: no servidor, `touch /opt/nexus/.allow-import` (sem esse arquivo o import é
+# recusado). Depois: `rm /opt/nexus/.allow-import`.
+#
+# Só lê do Neon e do FTP. A única escrita do lado antigo é o app_offline.htm, que tira o
+# MonsterASP do ar com um link para o endereço novo — sem isso, o que alguém gravasse lá durante
+# ou depois da cópia se perderia.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Digite MIGRAR para substituir o banco da VPS pelo do Neon'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-nexus-vps
+  cancel-in-progress: false
+
+jobs:
+  migrar:
+    if: inputs.confirmar == 'MIGRAR'
+    runs-on: ubuntu-latest
+    environment:
+      name: vps
+      url: https://nexus.aamora.com.br
+
+    steps:
+      # Mesmo problema e mesma solução do deploy-nexus.yml: o FTP manda só o certificado folha.
+      - name: Completar a cadeia do certificado do FTP
+        run: |
+          set -euo pipefail
+          HOST="${{ secrets.FTP_SERVER }}"
+          D=$(mktemp -d)
+          openssl s_client -connect "$HOST:21" -starttls ftp </dev/null 2>/dev/null | openssl x509 -out "$D/0.pem"
+          CUR="$D/0.pem"; : > "$D/extra.pem"
+          for i in 1 2 3 4; do
+            URI=$(openssl x509 -in "$CUR" -noout -text | grep -oP 'CA Issuers - URI:\K\S+' | head -1 || true)
+            [ -n "$URI" ] || break
+            curl -fsSL -o "$D/$i.bin" "$URI"
+            openssl x509 -inform DER -in "$D/$i.bin" -out "$D/$i.pem" 2>/dev/null || openssl x509 -in "$D/$i.bin" -out "$D/$i.pem"
+            cat "$D/$i.pem" >> "$D/extra.pem"
+            CUR="$D/$i.pem"
+            openssl verify -untrusted "$D/extra.pem" "$CUR" >/dev/null 2>&1 && break
+          done
+          openssl verify -untrusted "$D/extra.pem" "$D/0.pem"
+          cat /etc/ssl/certs/ca-certificates.crt "$D/extra.pem" > "$GITHUB_WORKSPACE/ftps-ca-bundle.pem"
+          echo "FTPS_CA_BUNDLE=$GITHUB_WORKSPACE/ftps-ca-bundle.pem" >> "$GITHUB_ENV"
+
+      - name: Configurar o SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # Falha cedo, antes de tirar o site antigo do ar, se o import estiver desabilitado.
+      - name: Conferir que o import está liberado na VPS
+        run: |
+          ssh -o BatchMode=yes "deploy@${{ secrets.VPS_HOST }}" import-check
+
+      - name: Tirar o MonsterASP do ar (aponta para o endereço novo)
+        run: |
+          cat > app_offline.htm <<'HTML'
+          <!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+          <meta http-equiv="refresh" content="5;url=https://nexus.aamora.com.br">
+          <title>Nexus mudou de endereço</title></head>
+          <body style="font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem">
+          <h1>O Nexus mudou de endereço</h1>
+          <p>Agora ele fica em <a href="https://nexus.aamora.com.br">nexus.aamora.com.br</a>.
+          Seus dados vieram junto; basta entrar de novo.</p>
+          </body></html>
+          HTML
+          curl --ssl-reqd --ftp-pasv --cacert "$FTPS_CA_BUNDLE" -T app_offline.htm \
+            --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" \
+            "ftp://${{ secrets.FTP_SERVER }}/wwwroot/app_offline.htm"
+
+      # Mesma instalação e o mesmo parse do backup-nexus.yml.
+      - name: Instalar o cliente do PostgreSQL
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client lftp
+          PGBIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)
+          echo "$PGBIN" >> "$GITHUB_PATH"
+
+      - name: Ler a connection string do Neon
+        env:
+          CONNECTION_STRING: ${{ secrets.PROD_SQL_CONNECTION_STRING }}
+        run: |
+          field() {
+            local v
+            v=$(printf '%s' "$CONNECTION_STRING" | grep -oiP "(^|;)\s*$1\s*=\s*\"[^\"]*\"" | head -1 | sed -E 's/^[^"]*"//; s/"$//')
+            if [ -n "$v" ]; then printf '%s' "$v"; return; fi
+            printf '%s' "$CONNECTION_STRING" | grep -oiP "(^|;)\s*$1\s*=\s*[^;]*" | head -1 | sed -E 's/^;?\s*[^=]*=\s*//; s/\s+$//'
+          }
+          {
+            echo "PGHOST=$(field Host)"
+            echo "PGPORT=$(field Port)"
+            echo "PGDATABASE=$(field Database)"
+            echo "PGUSER=$(field Username)"
+            echo "PGPASSWORD=$(field Password)"
+            echo "PGSSLMODE=require"
+          } >> "$GITHUB_ENV"
+          echo "::add-mask::$(field Password)"
+
+      - name: Copiar o banco do Neon
+        run: |
+          pg_dump --format=custom --no-owner --no-privileges --file=nexus.dump
+          pg_restore --list nexus.dump > /dev/null
+          ls -lh nexus.dump
+
+      - name: Copiar os anexos do MonsterASP
+        run: |
+          mkdir -p uploads
+          lftp -u "${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }}" "${{ secrets.FTP_SERVER }}" -e "
+            set ftp:ssl-force true; set ftp:ssl-protect-data true; set ssl:ca-file $FTPS_CA_BUNDLE;
+            set ftp:passive-mode true;
+            mirror --verbose=1 /wwwroot/App_Data/uploads uploads; quit"
+          echo "$(find uploads -type f | wc -l) arquivos, $(du -sh uploads | cut -f1)"
+          tar czf uploads.tar.gz -C uploads .
+
+      - name: Importar o banco na VPS
+        run: ssh -o BatchMode=yes "deploy@${{ secrets.VPS_HOST }}" import-db < nexus.dump
+
+      - name: Importar os anexos na VPS
+        run: ssh -o BatchMode=yes "deploy@${{ secrets.VPS_HOST }}" import-uploads < uploads.tar.gz
+
+      - name: Conferir o site no ar
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS -m 10 https://nexus.aamora.com.br/health/ready; then echo; exit 0; fi
+            sleep 10
+          done
+          echo "::error::https://nexus.aamora.com.br/health/ready não respondeu depois da migração."
+          exit 1

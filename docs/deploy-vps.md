@@ -1,8 +1,8 @@
 # Deploy na VPS (nexus.aamora.com.br)
 
-O Nexus roda numa VPS Locaweb (Rocky Linux 10) que também hospeda o aamora. Por enquanto em
-paralelo com o MonsterASP: todo push na `main` publica nos dois lugares, cada um com o próprio
-banco, até a virada (seção 4).
+O Nexus roda numa VPS Locaweb (Rocky Linux 10) que também hospeda o aamora. Todo push na `main`
+publica aqui. Até 10/2026 rodava no MonsterASP (IIS, deploy por FTPS) com banco no Neon — a virada
+está na seção 4.
 
 ## 1. Como a requisição chega
 
@@ -41,6 +41,7 @@ Job `deploy-vps` em `.github/workflows/deploy-nexus.yml`:
 4. Confere `https://nexus.aamora.com.br/health/live` de fora.
 
 Secrets do repositório: `VPS_HOST`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS` (+ os da Brevo, já existentes).
+Os de FTP e `PROD_SQL_CONNECTION_STRING` só servem à migração e podem ser apagados depois dela.
 
 Rollback manual (o servidor guarda as 3 últimas imagens):
 
@@ -51,14 +52,21 @@ sudo /usr/local/bin/nexus-deploy up 1.4.2
 
 ## 4. Virada do MonsterASP para a VPS
 
-1. Tirar snapshot da VPS no painel da Locaweb.
-2. Colocar o MonsterASP em manutenção (`app_offline.htm`) para não entrar dado novo no Neon.
-3. Copiar o banco: `pg_dump --format=custom --no-owner` do Neon → `pg_restore --clean --no-owner`
-   no container `nexus-db-1`.
-4. Copiar `App_Data/uploads` do MonsterASP (FTP) para o volume `nexus_uploads`.
-5. Remover o job `deploy` (FTP) e trocar `release` para depender de `deploy-vps`; apontar o
-   `backup-nexus.yml` para o backup da VPS ou removê-lo.
-6. Restringir o environment `vps` à branch `main`.
+Feita uma vez, pelo workflow manual `migrar-para-vps.yml`, que usa os secrets do Neon e do FTP já
+cadastrados no repositório:
+
+1. Snapshot da VPS no painel da Locaweb.
+2. No servidor: `touch /opt/nexus/.allow-import` — sem esse arquivo o `nexus-deploy` recusa os
+   `import-*`, então a chave de deploy, no dia a dia, não consegue sobrescrever dados.
+3. Rodar o workflow digitando `MIGRAR`. Ele:
+   - põe um `app_offline.htm` no MonsterASP com link para o endereço novo (para nada novo ser
+     gravado no Neon);
+   - faz o `pg_dump` do Neon e baixa `App_Data/uploads` por FTPS;
+   - `import-db`: guarda o banco atual da VPS em `backups/pre-import-*.dump`, recria o banco e
+     restaura o dump;
+   - `import-uploads`: extrai os anexos no volume `nexus_uploads`;
+   - confere `/health/ready`.
+4. No servidor: `rm /opt/nexus/.allow-import`.
 
 As chaves de Data Protection do MonsterASP são DPAPI (Windows) e não abrem no Linux: depois da
 virada, todos os usuários precisam entrar de novo. Nenhum dado se perde.

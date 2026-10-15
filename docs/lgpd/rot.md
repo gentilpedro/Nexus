@@ -101,12 +101,12 @@ Controlador: Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física
 | | |
 |---|---|
 | **Dados tratados** | Cópia integral do banco de produção — contém tudo que está nas seções 1 a 7 (nome, e-mail, telefone, hash de senha, avatares, conteúdo de workspace, trilha de auditoria) |
-| **Onde vive** | Dump `pg_dump` gerado por `.github/workflows/backup-nexus.yml` e armazenado como *artifact* privado do repositório no GitHub Actions |
+| **Onde vive** | Desde 10/2026: dump `pg_dump` + anexos gerados por `nexus-backup` na VPS (Locaweb, Brasil), em `/opt/nexus/backups`, acesso só root. Até então: *artifact* privado do GitHub Actions gerado por `backup-nexus.yml` (removido) |
 | **Finalidade** | Recuperação de desastre e cumprimento do art. 46 (medidas de segurança); ver `docs/backup-restore.md` |
 | **Base legal** | Legítimo interesse (art. 7º, IX) e cumprimento de dever de segurança (art. 46) |
-| **Compartilhamento** | GitHub, Inc. como operador (art. 5º, VII) — armazena o artifact. Acesso restrito a quem tem permissão no repositório privado. Transferência internacional: servidores nos EUA |
-| **Retenção** | 30 dias por artifact (`retention-days: 30`), depois excluído automaticamente pelo GitHub |
-| **Observação** | Um pedido de exclusão de dados atendido no banco (seção 1) **não** apaga o titular dos dumps já gerados — eles somem sozinhos em até 30 dias. Isso é o prazo máximo de sobrevida do dado pessoal após a exclusão e deve constar da resposta ao titular |
+| **Compartilhamento** | Locaweb como operador (art. 5º, VII) — hospeda a VPS; servidores no Brasil, sem transferência internacional. Até a virada: GitHub, Inc. (artifacts, servidores nos EUA) |
+| **Retenção** | 7 dias na VPS. Os artifacts antigos do GitHub expiram sozinhos em até 30 dias após a virada |
+| **Observação** | Um pedido de exclusão de dados atendido no banco (seção 1) **não** apaga o titular dos dumps já gerados — eles somem sozinhos em até 7 dias. Isso é o prazo máximo de sobrevida do dado pessoal após a exclusão e deve constar da resposta ao titular |
 
 ---
 

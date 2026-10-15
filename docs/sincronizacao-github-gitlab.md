@@ -4,7 +4,7 @@ O Nexus vive em dois repositórios ao mesmo tempo:
 
 | | |
 |---|---|
-| [GitHub](https://github.com/gentilpedro/Nexus) | De onde sai o deploy para produção (FTPS → IIS) e onde as tags/releases são criadas. |
+| [GitHub](https://github.com/gentilpedro/Nexus) | De onde sai o deploy para produção (VPS) e onde as tags/releases são criadas. |
 | [GitLab](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus) | Repositório exigido pelo TCC — precisa refletir o mesmo código e o mesmo histórico. |
 
 Manter os dois iguais "na mão" não sobrevive a um dia corrido: basta esquecer um `git push` para o
@@ -29,7 +29,7 @@ O preço é uma regra: **ninguém reescreve o histórico da main** (nada de `--f
 ```
                      ┌──────────────────────────────────────────┐
                      │              GitHub (main)               │
-                     │   deploy FTPS → IIS + tag + release      │
+                     │   deploy na VPS + tag + release          │
                      └──────────────────────────────────────────┘
                           ▲                             │
        Pull Request para  │                             │  git push automático
