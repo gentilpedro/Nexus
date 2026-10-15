@@ -302,6 +302,82 @@ jobs:
           # but with the real error rather than an empty --cacert argument.
           curl --ssl-reqd --ftp-pasv --cacert "${FTPS_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}" --user "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" -Q "DELE /wwwroot/app_offline.htm" "ftp://${{ secrets.FTP_SERVER }}/"
 
+  # Deploy na VPS (nexus.aamora.com.br), em paralelo ao MonsterASP até a virada — ver
+  # docs/deploy-vps.md. Banco próprio na VPS: o PROD_SQL_CONNECTION_STRING não é usado aqui.
+  #
+  # A imagem é montada com a mesma pasta publish/ que o verify testou e enviada por SSH com
+  # `docker save`, sem registry. A chave VPS_SSH_KEY só consegue rodar /usr/local/bin/nexus-deploy
+  # no servidor (forced command): não abre shell nem lê arquivos.
+  #
+  # workflow_dispatch também publica aqui, para dar para testar uma branch na VPS antes do merge.
+  # Depois da virada, restrinja o environment "vps" à main nas configurações do repositório.
+  deploy-vps:
+    needs: [version, verify]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: vps
+      url: https://nexus.aamora.com.br
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download publish artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: publish
+          path: ./publish
+
+      - name: Montar a imagem
+        run: |
+          docker build -f deploy/vps/Dockerfile -t "nexus-web:${VERSION}" publish/
+          docker save "nexus-web:${VERSION}" | gzip > image.tar.gz
+          ls -lh image.tar.gz
+
+      # VPS_KNOWN_HOSTS fixa a chave do servidor: sem ela o ssh aceitaria qualquer host que
+      # respondesse no IP, e o deploy (com os segredos da Brevo) iria para quem estivesse lá.
+      - name: Configurar o SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Enviar os segredos da Brevo
+        env:
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
+        run: |
+          if [ -z "$BREVO_API_KEY" ] || [ -z "$BREVO_SENDER_EMAIL" ]; then
+            echo "::error::BREVO_API_KEY or BREVO_SENDER_EMAIL is not set. Account confirmation and workspace invites cannot work without them."
+            exit 1
+          fi
+          printf 'BREVO_API_KEY=%s\nBREVO_SENDER_EMAIL=%s\n' "$BREVO_API_KEY" "$BREVO_SENDER_EMAIL" \
+            | ssh -o BatchMode=yes "deploy@${{ secrets.VPS_HOST }}" set-secrets
+
+      - name: Enviar a imagem
+        run: ssh -o BatchMode=yes "deploy@${{ secrets.VPS_HOST }}" load-image "$VERSION" < image.tar.gz
+
+      # O script espera o container ficar saudável e volta para a versão anterior se não ficar.
+      - name: Subir a versão
+        run: ssh -o BatchMode=yes "deploy@${{ secrets.VPS_HOST }}" up "$VERSION"
+
+      # Confere de fora, pelo caminho real (Cloudflare → Nginx → container).
+      - name: Conferir o site no ar
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS -m 10 https://nexus.aamora.com.br/health/live; then echo; exit 0; fi
+            sleep 10
+          done
+          echo "::error::https://nexus.aamora.com.br/health/live não respondeu depois do deploy."
+          exit 1
+
   # Cria a tag e a GitHub Release com as notas do que mudou.
   #
   # Depois do deploy, de propósito: a tag passa a significar "esta versão está no ar", não "esta

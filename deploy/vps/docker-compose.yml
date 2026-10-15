@@ -1,0 +1,56 @@
+# Nexus em produção na VPS. Gerenciado por /usr/local/bin/nexus-deploy (chamado pelo GitHub
+# Actions); a imagem nexus-web:<versão> é carregada pelo próprio deploy, sem registry.
+name: nexus
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    mem_limit: 512m
+    env_file: .env
+    command: >
+      postgres -c shared_buffers=128MB -c effective_cache_size=384MB
+               -c max_connections=50 -c work_mem=4MB
+    volumes:
+      - pgdata:/var/lib/postgresql
+    networks: [nexus]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+
+  web:
+    image: nexus-web:${NEXUS_VERSION:?NEXUS_VERSION não definido}
+    restart: unless-stopped
+    mem_limit: 768m
+    # Só o Nginx do host fala com o app.
+    ports: ["127.0.0.1:5100:8080"]
+    env_file: [.env, brevo.env]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      APPLY_MIGRATIONS_ON_STARTUP: "true"
+      PUBLIC_BASE_URL: https://nexus.aamora.com.br
+      # localhost: o HEALTHCHECK do container (--healthcheck) sonda http://localhost:8080.
+      AllowedHosts: "nexus.aamora.com.br;localhost"
+      # Gateway fixo da rede abaixo: é por ele que o Nginx do host chega no container.
+      KNOWN_PROXIES: 172.30.0.1
+      DataProtection__CertificatePath: /app/dp/dataprotection.pfx
+      DataProtection__CertificatePassword: ${DP_CERT_PASSWORD}
+    volumes:
+      - uploads:/app/App_Data/uploads
+      - ./dataprotection.pfx:/app/dp/dataprotection.pfx:ro,z
+    networks: [nexus]
+    depends_on:
+      db: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  nexus:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1

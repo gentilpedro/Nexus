@@ -1,0 +1,47 @@
+#!/bin/bash
+# Único comando que a chave de deploy do GitHub Actions pode executar (forced command em
+# ~deploy/.ssh/authorized_keys, via sudo). Subcomandos:
+#   set-secrets          stdin: BREVO_API_KEY=... / BREVO_SENDER_EMAIL=...
+#   load-image <versão>  stdin: docker save | gzip
+#   up <versão>          sobe a versão; volta para a anterior se não ficar saudável
+set -euo pipefail
+umask 077
+DIR=/opt/nexus
+read -r -a ARGS <<< "${SSH_ORIGINAL_COMMAND:-$*}"
+CMD="${ARGS[0]:-}"; VER="${ARGS[1]:-}"
+valid_ver() { [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "versão inválida: '$VER'" >&2; exit 2; }; }
+cd "$DIR"
+
+case "$CMD" in
+  set-secrets)
+    TMP=$(mktemp "$DIR/.brevo.XXXX")
+    grep -E '^(BREVO_API_KEY|BREVO_SENDER_EMAIL)=' | head -n 2 | sed -E 's/^BREVO_API_KEY=/Brevo__ApiKey=/; s/^BREVO_SENDER_EMAIL=/Brevo__SenderEmail=/' > "$TMP"
+    [ "$(grep -c . "$TMP")" = 2 ] || { rm -f "$TMP"; echo "esperava BREVO_API_KEY e BREVO_SENDER_EMAIL" >&2; exit 2; }
+    mv "$TMP" brevo.env
+    echo "ok: segredos atualizados" ;;
+  load-image)
+    valid_ver
+    gunzip | docker load
+    docker image inspect "nexus-web:$VER" >/dev/null
+    echo "ok: nexus-web:$VER carregada" ;;
+  up)
+    valid_ver
+    docker image inspect "nexus-web:$VER" >/dev/null
+    PREV=$(cat .version 2>/dev/null || true)
+    echo "$VER" > .version
+    if NEXUS_VERSION="$VER" docker compose up -d --wait --wait-timeout 180 web; then
+      echo "ok: nexus $VER no ar (antes: ${PREV:-nenhuma})"
+      # Mantém as 3 imagens mais recentes para rollback manual.
+      docker images nexus-web --format '{{.CreatedAt}}\t{{.Repository}}:{{.Tag}}' | sort -r | tail -n +4 | cut -f2 | xargs -r docker rmi >/dev/null || true
+    else
+      echo "erro: $VER não ficou saudável; últimos logs:" >&2
+      NEXUS_VERSION="$VER" docker compose logs --tail 80 web >&2 || true
+      if [ -n "$PREV" ]; then
+        echo "$PREV" > .version
+        NEXUS_VERSION="$PREV" docker compose up -d --wait --wait-timeout 180 web >&2 && echo "rollback para $PREV feito" >&2
+      fi
+      exit 1
+    fi ;;
+  *)
+    echo "comando não permitido: '$CMD'" >&2; exit 2 ;;
+esac

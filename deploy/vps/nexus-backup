@@ -1,0 +1,30 @@
+#!/bin/bash
+# Backup diário do banco e dos anexos do Nexus; mantém 7 dias. Avisa o Healthchecks.io se
+# HC_NEXUS_BACKUP_URL estiver em /etc/aamora/monitor.env.
+set -euo pipefail
+umask 077
+[ -f /etc/aamora/monitor.env ] && . /etc/aamora/monitor.env
+HC="${HC_NEXUS_BACKUP_URL:-}"
+ping() { [ -n "$HC" ] && curl -fsS -m 10 --retry 3 -o /dev/null "$@" || true; }
+
+ping "$HC/start"
+LOG=$(mktemp)
+trap 'ping --data-binary @"$LOG" "$HC/fail"; rm -f "$LOG" /opt/nexus/backups/*.tmp' ERR
+
+cd /opt/nexus
+mkdir -p backups
+export NEXUS_VERSION=$(cat .version 2>/dev/null || echo none)
+DB="backups/db-$(date +%F).dump"
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --no-owner' 2>>"$LOG" > "$DB.tmp"
+docker compose exec -T db pg_restore --list < "$DB.tmp" >/dev/null 2>>"$LOG"
+mv "$DB.tmp" "$DB"
+UP="backups/uploads-$(date +%F).tar.gz"
+docker run --rm -v nexus_uploads:/u:ro alpine tar czf - -C /u . 2>>"$LOG" > "$UP.tmp"
+mv "$UP.tmp" "$UP"
+find backups -name "db-*.dump" -mtime +7 -delete
+find backups -name "uploads-*.tar.gz" -mtime +7 -delete
+
+trap - ERR
+echo "ok: $DB $(du -h "$DB" | cut -f1), $UP $(du -h "$UP" | cut -f1)" >>"$LOG"
+ping --data-binary @"$LOG" "$HC"
+rm -f "$LOG"
