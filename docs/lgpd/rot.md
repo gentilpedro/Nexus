@@ -108,6 +108,18 @@ Controlador: Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física
 | **Retenção** | 7 dias na VPS. Os artifacts antigos do GitHub expiram sozinhos em até 30 dias após a virada |
 | **Observação** | Um pedido de exclusão de dados atendido no banco (seção 1) **não** apaga o titular dos dumps já gerados — eles somem sozinhos em até 7 dias. Isso é o prazo máximo de sobrevida do dado pessoal após a exclusão e deve constar da resposta ao titular |
 
+## 9. Contato comercial (plano Business)
+
+| | |
+|---|---|
+| **Dados tratados** | Nome, empresa, e-mail, tamanho do time e mensagem livre informados no formulário público (pode ser de quem não tem conta) |
+| **Onde vive** | `CommercialContact` (`CommercialContacts`); cópia no e-mail enviado à caixa comercial, `Commercial:Email` (`CommercialContactService.cs`) |
+| **Finalidade** | Responder ao pedido de contato sobre o plano Business |
+| **Base legal** | Procedimentos preliminares a contrato, a pedido do titular (art. 7º, V) |
+| **Compartilhamento** | Brevo, como operador, entrega o e-mail com os dados à caixa comercial |
+| **Retenção** | 12 meses no banco (`COMMERCIAL_CONTACT_RETENTION_DAYS`, apagado por `DataRetentionHostedService`). A cópia na caixa de e-mail segue a política dessa caixa |
+| **Titular pode** | Pedir acesso ou exclusão pelo e-mail comercial ou de suporte |
+
 ---
 
 ## Pendências conhecidas (ver auditoria LGPD de 22/07/2026)

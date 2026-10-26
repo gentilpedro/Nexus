@@ -48,17 +48,17 @@ public class LandingPricingTests
 
     /// <summary>
     /// O botão do Business não pode levar para "Criar conta grátis": quem procura contrato e nota
-    /// fiscal não está pedindo uma conta. Até o contato comercial existir, ele fica desabilitado.
+    /// fiscal não está pedindo uma conta. Ele leva para o formulário de contato comercial (#56).
     /// </summary>
     [Fact]
-    public async Task BusinessCard_DoesNotLinkToRegistration()
+    public async Task BusinessCard_LinksToTheCommercialContactForm()
     {
         var html = await RenderLandingAsync();
         var business = html[html.IndexOf("<h3>Business</h3>", StringComparison.Ordinal)..];
         business = business[..business.IndexOf("</div>", StringComparison.Ordinal)];
 
         Assert.DoesNotContain("Account/Register", business);
-        Assert.Contains("""aria-disabled="true">Contato comercial em breve""", business);
+        Assert.Contains("""href="contato-comercial""", business);
     }
 
     private static async Task<string> RenderLandingAsync()

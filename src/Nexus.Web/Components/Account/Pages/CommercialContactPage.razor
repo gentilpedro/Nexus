@@ -1,0 +1,120 @@
+@page "/contato-comercial"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("commercial")]
+
+@using System.ComponentModel.DataAnnotations
+@using Nexus.Domain.Entities
+@using Nexus.Web.Services
+
+@inject CommercialContactService ContactService
+
+<PageTitle>Fale com a gente · Nexus</PageTitle>
+
+@* Static SSR, like the other public pages: a visitor without an account has no Blazor circuit. *@
+<div class="page-container legal-page">
+    <h1>Fale com a gente sobre o plano Business</h1>
+
+    @if (sent)
+    {
+        <div class="alert alert-success" role="status">
+            <Icon Name="check" />
+            <span>Recebemos seu contato. Vamos responder no e-mail informado.</span>
+        </div>
+        <p><a href="/">Voltar para a página inicial</a></p>
+    }
+    else
+    {
+        <p>Conte um pouco sobre a sua empresa. A resposta vem direto de quem constrói o Nexus, no e-mail que você informar.</p>
+
+        <EditForm Model="Input" FormName="commercial-contact" OnValidSubmit="SubmitAsync" method="post" class="card form-card">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="validation-errors" role="alert" />
+
+            <div class="form-field">
+                <label for="Input.Name" class="required">Nome</label>
+                <InputText @bind-Value="Input.Name" id="Input.Name" autocomplete="name" />
+            </div>
+            <div class="form-field">
+                <label for="Input.Company" class="required">Empresa</label>
+                <InputText @bind-Value="Input.Company" id="Input.Company" autocomplete="organization" />
+            </div>
+            <div class="form-field">
+                <label for="Input.Email" class="required">E-mail</label>
+                <InputText @bind-Value="Input.Email" id="Input.Email" type="email" autocomplete="email" placeholder="nome@empresa.com" />
+            </div>
+            <div class="form-field">
+                <label for="Input.TeamSize" class="required">Tamanho do time</label>
+                <InputSelect @bind-Value="Input.TeamSize" id="Input.TeamSize">
+                    <option value="">Selecione</option>
+                    @foreach (var size in CommercialContactService.TeamSizes)
+                    {
+                        <option value="@size">@size</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="form-field">
+                <label for="Input.Message">Mensagem</label>
+                <InputTextArea @bind-Value="Input.Message" id="Input.Message" rows="4" placeholder="O que vocês precisam? Contrato, volume, onboarding…" />
+            </div>
+
+            @* Honeypot: invisible and out of the tab order for people; bots fill it in. *@
+            <div class="honeypot" aria-hidden="true">
+                <label for="Input.Website">Site</label>
+                <InputText @bind-Value="Input.Website" id="Input.Website" tabindex="-1" autocomplete="off" />
+            </div>
+
+            <p class="form-section-description">
+                Usamos estes dados só para responder ao seu contato, e eles são apagados em até 12 meses.
+                Veja a <a href="/privacidade">Política de Privacidade</a>.
+            </p>
+
+            <div class="form-actions form-actions--end">
+                <button type="submit" class="btn">Enviar</button>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    private bool sent;
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task SubmitAsync()
+    {
+        await ContactService.SubmitAsync(new CommercialContactRequest(
+            Input.Name, Input.Company, Input.Email, Input.TeamSize, Input.Message, Input.Website));
+
+        // Same answer whatever happened (stored, e-mail failed, honeypot): the lead is stored
+        // before any e-mail, and a bot must not learn it was caught.
+        sent = true;
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Informe seu nome.")]
+        [StringLength(CommercialContact.MaxNameLength, ErrorMessage = "Nome muito longo.")]
+        public string Name { get; set; } = "";
+
+        [Required(ErrorMessage = "Informe a empresa.")]
+        [StringLength(CommercialContact.MaxCompanyLength, ErrorMessage = "Nome da empresa muito longo.")]
+        public string Company { get; set; } = "";
+
+        [Required(ErrorMessage = "Informe seu e-mail.")]
+        [EmailAddress(ErrorMessage = "Informe um e-mail válido.")]
+        [StringLength(CommercialContact.MaxEmailLength, ErrorMessage = "E-mail muito longo.")]
+        public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "Escolha o tamanho do time.")]
+        [StringLength(CommercialContact.MaxTeamSizeLength)]
+        public string TeamSize { get; set; } = "";
+
+        [StringLength(CommercialContact.MaxMessageLength, ErrorMessage = "Mensagem muito longa.")]
+        public string? Message { get; set; }
+
+        public string? Website { get; set; }
+    }
+}

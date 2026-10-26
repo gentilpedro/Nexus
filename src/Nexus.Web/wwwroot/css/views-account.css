@@ -503,6 +503,16 @@ table.table {
     margin-top: 2em;
 }
 
+/* Campo-isca do formulário de contato comercial: fora da tela para pessoas, visível para robôs.
+   Não usa display:none, que muitos robôs reconhecem e pulam. */
+.honeypot {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
 /* =========================================================================================
    Minha conta e configurações: seções com título, contexto e cards
    ========================================================================================= */
