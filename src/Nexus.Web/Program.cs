@@ -152,6 +152,8 @@ builder.Services.AddScoped<PublicUrlBuilder>();
 builder.Services.AddScoped<WorkspaceInviteService>();
 builder.Services.Configure<SupportOptions>(builder.Configuration.GetSection("Support"));
 builder.Services.AddSingleton<SupportLinks>();
+builder.Services.Configure<CommercialOptions>(builder.Configuration.GetSection("Commercial"));
+builder.Services.AddScoped<CommercialContactService>();
 builder.Services.Configure<PlanOptions>(builder.Configuration.GetSection("Plans"));
 // Singleton: stateless apart from configuration, and the burndown snapshot job (a singleton
 // hosted service) needs it too.
@@ -171,6 +173,17 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = 10,
             Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+
+    // Public Business-plan contact form (#56): anyone can post it, so it gets its own small
+    // bucket instead of sharing "auth" with login. GETs count too, which is fine at this size.
+    options.AddPolicy("commercial", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(10),
             QueueLimit = 0
         }));
 
