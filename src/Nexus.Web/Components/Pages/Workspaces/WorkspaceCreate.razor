@@ -9,6 +9,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkspaceInviteService InviteService
+@inject WorkspacePlanService PlanService
 @inject NavigationManager NavigationManager
 @inject ILogger<WorkspaceCreate> Logger
 
@@ -245,6 +246,14 @@
         var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 
         await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (!await PlanService.CanCreateWorkspaceAsync(db, currentUserId))
+        {
+            errorMessage = $"No plano Starter cada conta pode ter {PlanCapabilities.StarterMaxOwnedWorkspaces} workspace ativo. Arquive o atual ou aguarde os planos pagos para criar outro.";
+            isSaving = false;
+            return;
+        }
+
         var slug = await GenerateUniqueSlugAsync(db, model.Name);
 
         var workspace = new Workspace

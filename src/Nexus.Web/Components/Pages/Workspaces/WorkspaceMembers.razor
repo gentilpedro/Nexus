@@ -423,6 +423,13 @@
             return;
         }
 
+        if (outcome.Status == InviteSendStatus.PlanLimitReached)
+        {
+            errorMessage = $"O plano Starter permite até {PlanCapabilities.StarterMaxMembers} pessoas por workspace, contando os convites pendentes. Cancele um convite pendente ou aguarde os planos pagos.";
+            isSaving = false;
+            return;
+        }
+
         statusMessage = outcome.Status switch
         {
             InviteSendStatus.SentWithoutEmail => $"Convite criado para {email}, mas não conseguimos enviar o e-mail — avise a pessoa por outro canal.",

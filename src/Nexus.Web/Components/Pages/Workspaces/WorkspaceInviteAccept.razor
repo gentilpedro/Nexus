@@ -141,6 +141,9 @@
             case InviteAcceptResult.NotFound:
                 errorMessage = "Convite não encontrado.";
                 break;
+            case InviteAcceptResult.PlanLimitReached:
+                errorMessage = "Este workspace já atingiu o número máximo de membros do plano dele. O convite continua válido: avise quem te convidou.";
+                break;
         }
 
         isAccepting = false;
