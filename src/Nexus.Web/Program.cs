@@ -150,6 +150,10 @@ builder.Services.AddHttpClient(BrevoMailer.HttpClientName);
 builder.Services.AddSingleton<BrevoMailer>();
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, BrevoEmailSender>();
 builder.Services.AddScoped<PublicUrlBuilder>();
+builder.Services.Configure<Nexus.Web.Services.Billing.StripeOptions>(builder.Configuration.GetSection("Stripe"));
+builder.Services.AddSingleton<Nexus.Web.Services.Billing.IStripeGateway, Nexus.Web.Services.Billing.StripeGateway>();
+builder.Services.AddScoped<Nexus.Web.Services.Billing.BillingService>();
+builder.Services.AddScoped<Nexus.Web.Services.Billing.StripeWebhookHandler>();
 builder.Services.AddScoped<WorkspaceInviteService>();
 builder.Services.Configure<SupportOptions>(builder.Configuration.GetSection("Support"));
 builder.Services.AddSingleton<SupportLinks>();
@@ -371,6 +375,23 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 // atributos do assembly na inicialização, então a resposta é mais barata que servir o favicon —
 // não há pool de conexões nem nada a proteger. A versão também já aparece no rodapé de qualquer
 // página pública, então o endpoint não revela nada novo.
+// Stripe calls this for every subscription change (#50). Anonymous by necessity — Stripe has no
+// Nexus login — so the request is trusted only after its signature checks out against the
+// endpoint's signing secret (StripeWebhookHandler). 400 makes Stripe retry later; 404 while
+// billing is off.
+app.MapPost("/stripe/webhook", async (HttpRequest request, Nexus.Web.Services.Billing.StripeWebhookHandler handler, CancellationToken ct) =>
+{
+    using var reader = new StreamReader(request.Body);
+    var payload = await reader.ReadToEndAsync(ct);
+    var outcome = await handler.HandleAsync(payload, request.Headers["Stripe-Signature"], ct);
+    return outcome switch
+    {
+        Nexus.Web.Services.Billing.StripeWebhookOutcome.InvalidSignature => Results.BadRequest(),
+        Nexus.Web.Services.Billing.StripeWebhookOutcome.NotConfigured => Results.NotFound(),
+        _ => Results.Ok(),
+    };
+}).AllowAnonymous().DisableAntiforgery();
+
 app.MapGet("/version", () => Results.Json(new
 {
     version = AppVersion.Current.Version,

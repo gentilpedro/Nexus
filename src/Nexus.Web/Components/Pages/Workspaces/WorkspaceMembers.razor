@@ -16,6 +16,7 @@
 @inject NavigationContextService NavContext
 @inject Nexus.Web.Services.AuditLogService AuditLog
 @inject WorkspaceInviteService InviteService
+@inject Nexus.Web.Services.Billing.BillingService Billing
 @inject IJSRuntime JS
 
 <PageTitle>Membros · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
@@ -579,6 +580,7 @@
 
         await db.WorkspaceMembers.Where(m => m.Id == memberId && m.WorkspaceId == WorkspaceId).ExecuteDeleteAsync();
         await AuditLog.LogAsync(currentUserId, AuditAction.WorkspaceMemberRemoved, targetId: memberId.ToString(), detail: $"workspace={WorkspaceId};removedUserId={member.UserId}");
+        await Billing.SyncSeatsAsync(WorkspaceId);
         await LoadMembersAsync();
     }
 
