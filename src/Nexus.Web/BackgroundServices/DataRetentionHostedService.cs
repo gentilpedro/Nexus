@@ -25,7 +25,7 @@ public class DataRetentionHostedService(
         }
     }
 
-    private async Task PurgeAsync(CancellationToken ct)
+    internal async Task PurgeAsync(CancellationToken ct)
     {
         try
         {
@@ -36,6 +36,7 @@ public class DataRetentionHostedService(
             // risk assessment, not something to hardcode permanently.
             var auditLogRetentionDays = configuration.GetValue("AUDIT_LOG_RETENTION_DAYS", 730);
             var notificationRetentionDays = configuration.GetValue("NOTIFICATION_RETENTION_DAYS", 180);
+            var commercialContactRetentionDays = configuration.GetValue("COMMERCIAL_CONTACT_RETENTION_DAYS", 365);
 
             await using var db = await dbFactory.CreateDbContextAsync(ct);
 
@@ -52,11 +53,18 @@ public class DataRetentionHostedService(
                 .Where(n => n.CreatedAtUtc < notificationCutoff)
                 .ExecuteDeleteAsync(ct);
 
-            if (deletedAuditLogs > 0 || deletedNotifications > 0)
+            // A Business-plan contact request exists to answer one sales conversation. A year is
+            // long enough for that conversation to have happened, and the privacy policy promises it.
+            var commercialContactCutoff = DateTime.UtcNow.AddDays(-commercialContactRetentionDays);
+            var deletedContacts = await db.CommercialContacts
+                .Where(c => c.CreatedAtUtc < commercialContactCutoff)
+                .ExecuteDeleteAsync(ct);
+
+            if (deletedAuditLogs > 0 || deletedNotifications > 0 || deletedContacts > 0)
             {
                 logger.LogInformation(
-                    "Data retention sweep purged {AuditLogCount} audit log entries and {NotificationCount} notifications.",
-                    deletedAuditLogs, deletedNotifications);
+                    "Data retention sweep purged {AuditLogCount} audit log entries, {NotificationCount} notifications and {ContactCount} commercial contacts.",
+                    deletedAuditLogs, deletedNotifications, deletedContacts);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
