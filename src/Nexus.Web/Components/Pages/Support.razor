@@ -1,0 +1,81 @@
+@page "/ajuda"
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Nexus.Domain.Entities
+@using Nexus.Web.Services
+@inject SupportLinks Links
+@inject NavigationContextService NavContext
+@inject WorkspacePlanService PlanService
+
+<PageTitle>Ajuda e suporte · Nexus</PageTitle>
+
+<div class="page-container">
+    <PageHeader Title="Ajuda e suporte" />
+
+    @if (!Links.IsConfigured)
+    {
+        <EmptyState Icon="message-circle" Title="Canal de suporte em configuração"
+                    Description="Em breve você vai poder falar com o time do Nexus por aqui." />
+    }
+    else
+    {
+        <section class="card support-card" aria-labelledby="support-title">
+            <h2 id="support-title" class="form-section-title">
+                Fale direto com quem constrói o Nexus
+                @if (priority)
+                {
+                    <span class="badge badge--accent">Prioritário</span>
+                }
+            </h2>
+            <p class="form-section-description">
+                Dúvida, problema ou sugestão vai direto para o desenvolvedor, sem central de atendimento no meio.
+                @if (context.WorkspaceName is not null)
+                {
+                    @($" A mensagem já vai com o workspace {context.WorkspaceName} e a versão do app, para agilizar a resposta.")
+                }
+                @if (priority)
+                {
+                    @(" Este workspace tem atendimento prioritário.")
+                }
+            </p>
+            <div class="support-actions">
+                @if (Links.WhatsAppUrl(context) is { } whatsApp)
+                {
+                    <a class="btn" href="@whatsApp" target="_blank" rel="noopener noreferrer"><Icon Name="message-circle" /> Conversar no WhatsApp</a>
+                }
+                @if (Links.MailtoUrl(context) is { } mail)
+                {
+                    <a class="btn btn-secondary" href="@mail"><Icon Name="mail" /> Enviar e-mail</a>
+                }
+            </div>
+            @if (Links.Email is not null)
+            {
+                <p class="cell-muted">E-mail: @Links.Email</p>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private SupportContext context = new();
+    private bool priority;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The workspace the person was last in (sidebar context), so the message says what it is
+        // about. NavContext only ever holds a workspace the person has already been authorized for.
+        if (NavContext.WorkspaceId is { } workspaceId)
+        {
+            var plan = await PlanService.GetAsync(workspaceId);
+            context = new SupportContext(NavContext.WorkspaceName, PlanName(plan.EffectivePlan));
+            priority = plan.Capabilities.IncludesPrioritySupport;
+        }
+    }
+
+    private static string PlanName(WorkspacePlan plan) => plan switch
+    {
+        WorkspacePlan.Pro => "Pro",
+        WorkspacePlan.Business => "Business",
+        _ => "Starter"
+    };
+}
