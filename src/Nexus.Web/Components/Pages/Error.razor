@@ -1,6 +1,8 @@
 @page "/Error"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @using System.Diagnostics
+@using Nexus.Web.Services
+@inject SupportLinks Support
 
 <PageTitle>Algo deu errado · Nexus</PageTitle>
 
@@ -8,6 +10,14 @@
     <EmptyState Icon="alert" Title="Algo deu errado do nosso lado"
                 Description="Não foi possível concluir o pedido. Tente de novo em instantes. Se o problema continuar, envie o código abaixo para o suporte.">
         <a class="btn" href="/"><Icon Name="home" /> Voltar ao início</a>
+        @if (Support.WhatsAppUrl(new SupportContext(ErrorCode: RequestId)) is { } whatsApp)
+        {
+            <a class="btn btn-secondary" href="@whatsApp" target="_blank" rel="noopener noreferrer"><Icon Name="message-circle" /> Falar com o suporte</a>
+        }
+        else if (Support.MailtoUrl(new SupportContext(ErrorCode: RequestId)) is { } mail)
+        {
+            <a class="btn btn-secondary" href="@mail"><Icon Name="mail" /> Falar com o suporte</a>
+        }
     </EmptyState>
     @if (ShowRequestId)
     {

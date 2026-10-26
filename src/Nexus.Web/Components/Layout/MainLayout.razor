@@ -7,6 +7,7 @@
 @inject NavigationManager NavigationManager
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NotificationBadgeService Badge
+@inject Nexus.Web.Services.SupportLinks Support
 @implements IDisposable
 
 <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
@@ -95,6 +96,13 @@
                                 <Icon Name="workspace" />
                                 Meus workspaces
                             </a>
+                            @if (Support.IsConfigured)
+                            {
+                                <a href="/ajuda" role="menuitem">
+                                    <Icon Name="message-circle" />
+                                    Ajuda e suporte
+                                </a>
+                            }
                             <div class="menu-separator" role="separator"></div>
                             <form action="Account/Logout" method="post" data-enhance="false">
                                 <AntiforgeryToken />
