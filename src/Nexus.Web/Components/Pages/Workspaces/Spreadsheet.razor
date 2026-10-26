@@ -1,12 +1,15 @@
 @page "/workspaces/{WorkspaceId:guid}/spreadsheets/nova"
 @page "/workspaces/{WorkspaceId:guid}/spreadsheets/{DocId:guid}"
 @attribute [Authorize]
+@implements IAsyncDisposable
 @using System.Security.Claims
-@using System.Text.Json
+@using Nexus.Domain.Collab
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
 @using Nexus.Web.Services
+@using Nexus.Web.Services.Backplane
+@using Nexus.Web.Services.Collab
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
@@ -14,8 +17,13 @@
 @inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 @inject NavigationManager NavigationManager
+@inject SheetCollabService Sheets
+@inject DocChangeNotifier DocChanges
+@inject IDocPresenceStore Presence
+@inject DocPresenceCircuitHandler PresenceCircuit
+@inject ICircuitActionRateLimiter RateLimiter
 
-<PageTitle>@(doc?.Title ?? "Nova planilha") · Nexus</PageTitle>
+<PageTitle>@(isCreating ? "Nova planilha" : title) · Nexus</PageTitle>
 
 <div class="page-container page-container--full">
     @if (notFound)
@@ -25,7 +33,7 @@
             <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/docs")">Ver documentos</a>
         </EmptyState>
     }
-    else if (workspace is null)
+    else if (workspace is null || sheet is null)
     {
         <Skeleton Count="8" Label="Carregando planilha…" />
     }
@@ -44,43 +52,67 @@
             <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
         }
 
+        @if (conflict is not null)
+        {
+            <div class="alert alert-warning sheet-conflict" role="alert">
+                <Icon Name="alert" />
+                <div>
+                    <strong>Célula @conflict.Label: @conflict.Reason</strong>
+                    @if (conflict.Theirs is not null)
+                    {
+                        <p>Valor atual: “@conflict.Theirs”. O seu: “@conflict.Mine”.</p>
+                        <div class="button-row">
+                            <button type="button" class="btn btn-sm" @onclick="UseMineAsync">Usar o meu valor</button>
+                            <button type="button" class="btn btn-ghost btn-sm" @onclick="() => conflict = null">Manter o valor atual</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p>O que você escreveu: “@conflict.Mine”. Ele não foi salvo.</p>
+                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => conflict = null">Entendi</button>
+                    }
+                </div>
+            </div>
+        }
+
         @if (isEditing)
         {
             <label for="sheet-title" class="sr-only">Título da planilha</label>
-            <input id="sheet-title" class="doc-title-input" type="text" @bind="titleInput" placeholder="Planilha sem título" autofocus />
+            <input id="sheet-title" class="doc-title-input" type="text" @bind="titleInput" @bind:after="SaveTitleAsync" placeholder="Planilha sem título" autofocus />
 
             <div class="spreadsheet-toolbar" role="toolbar" aria-label="Estrutura da planilha">
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="AddRow"><Icon Name="plus" /> Linha</button>
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="AddColumn"><Icon Name="plus" /> Coluna</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="() => SubmitAsync(new SheetOperation.AddRow(NewId()))"
+                        disabled="@(sheet.Rows.Count >= SheetDocument.MaxRows)"><Icon Name="plus" /> Linha</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="() => SubmitAsync(new SheetOperation.AddColumn(NewId()))"
+                        disabled="@(sheet.Columns.Count >= SheetDocument.MaxColumns)"><Icon Name="plus" /> Coluna</button>
                 <span class="toolbar-separator" aria-hidden="true"></span>
-                <button type="button" class="btn btn-ghost btn-sm" @onclick="RemoveRow" disabled="@(grid.Count <= 1)">Remover última linha</button>
-                <button type="button" class="btn btn-ghost btn-sm" @onclick="RemoveColumn" disabled="@(grid.Count == 0 || grid[0].Count <= 1)">Remover última coluna</button>
-                <span class="spreadsheet-size">@grid.Count × @(grid.Count > 0 ? grid[0].Count : 0)</span>
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="() => SubmitAsync(new SheetOperation.RemoveRow(sheet.Rows[^1]))"
+                        disabled="@(sheet.Rows.Count <= 1)">Remover última linha</button>
+                <button type="button" class="btn btn-ghost btn-sm" @onclick="() => SubmitAsync(new SheetOperation.RemoveColumn(sheet.Columns[^1]))"
+                        disabled="@(sheet.Columns.Count <= 1)">Remover última coluna</button>
+                <span class="spreadsheet-size">@sheet.Rows.Count × @sheet.Columns.Count</span>
+                @PresenceBadge
             </div>
 
             <div class="table-scroll spreadsheet-scroll">
                 <table class="spreadsheet-grid">
-                    <thead>
-                        <tr>
-                            <th class="spreadsheet-corner" aria-hidden="true"></th>
-                            @for (var c = 0; c < (grid.Count > 0 ? grid[0].Count : 0); c++)
-                            {
-                                <th scope="col">@ColumnName(c)</th>
-                            }
-                        </tr>
-                    </thead>
+                    @GridHeader
                     <tbody>
-                        @for (var r = 0; r < grid.Count; r++)
+                        @for (var r = 0; r < sheet.Rows.Count; r++)
                         {
-                            var row = r;
-                            <tr>
-                                <th scope="row">@(row + 1)</th>
-                                @for (var c = 0; c < grid[row].Count; c++)
+                            var rowId = sheet.Rows[r];
+                            var rowNumber = r + 1;
+                            <tr @key="rowId">
+                                <th scope="row">@rowNumber</th>
+                                @for (var c = 0; c < sheet.Columns.Count; c++)
                                 {
-                                    var col = c;
-                                    <td>
-                                        <input type="text" value="@grid[row][col]" aria-label="@($"Célula {ColumnName(col)}{row + 1}")"
-                                               @onchange="@(e => grid[row][col] = e.Value?.ToString() ?? "")" />
+                                    var columnId = sheet.Columns[c];
+                                    var label = $"{ColumnName(c)}{rowNumber}";
+                                    <td @key="columnId">
+                                        <input type="text" maxlength="@SheetDocument.MaxCellLength" value="@CellValue(rowId, columnId)" aria-label="@($"Célula {label}")"
+                                               @onfocus="() => FocusCell(rowId, columnId)"
+                                               @onblur="() => BlurCell(rowId, columnId)"
+                                               @onchange="@(e => ChangeCellAsync(rowId, columnId, label, e.Value?.ToString() ?? ""))" />
                                     </td>
                                 }
                             </tr>
@@ -90,18 +122,29 @@
             </div>
 
             <div class="doc-edit-bar">
-                <p class="field-hint"><Icon Name="info" Class="icon--sm" /> Se outra pessoa salvar esta planilha enquanto você edita, a versão salva por último é a que fica.</p>
-                <div class="button-row">
-                    <button type="button" class="btn btn-ghost" @onclick="HandleCancel">Cancelar</button>
-                    <button type="button" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving" @onclick="HandleSave">@(isCreating ? "Criar planilha" : "Salvar")</button>
-                </div>
+                @if (isCreating)
+                {
+                    <p class="field-hint"><Icon Name="info" Class="icon--sm" /> Depois de criada, a planilha pode ser editada por várias pessoas ao mesmo tempo.</p>
+                    <div class="button-row">
+                        <button type="button" class="btn btn-ghost" @onclick="@(() => NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs"))">Cancelar</button>
+                        <button type="button" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving" @onclick="CreateAsync">Criar planilha</button>
+                    </div>
+                }
+                else
+                {
+                    <p class="field-hint"><Icon Name="info" Class="icon--sm" /> Cada célula é salva ao sair dela e aparece na hora para quem estiver com a planilha aberta.</p>
+                    <div class="button-row">
+                        <button type="button" class="btn" @onclick="FinishEditingAsync">Concluir</button>
+                    </div>
+                }
             </div>
         }
-        else if (doc is not null)
+        else
         {
-            <PageHeader Title="@doc.Title">
+            <PageHeader Title="@title">
                 <Details>
-                    <span><Icon Name="sheet" Class="icon--sm" /> @grid.Count linhas × @(grid.Count > 0 ? grid[0].Count : 0) colunas</span>
+                    <span><Icon Name="sheet" Class="icon--sm" /> @sheet.Rows.Count linhas × @sheet.Columns.Count colunas</span>
+                    @PresenceBadge
                 </Details>
                 <Actions>
                     @if (canDelete)
@@ -110,28 +153,22 @@
                             <Icon Name="trash" Label="Excluir planilha" />
                         </button>
                     }
-                    <a class="btn btn-ghost" href="@($"/spreadsheets/{doc.Id}/download.xlsx")"><Icon Name="download" /> <span class="label-collapsible">Baixar .xlsx</span></a>
-                    <button type="button" class="btn" @onclick="EnterEditMode"><Icon Name="edit" /> Editar</button>
+                    <a class="btn btn-ghost" href="@($"/spreadsheets/{DocId}/download.xlsx")"><Icon Name="download" /> <span class="label-collapsible">Baixar .xlsx</span></a>
+                    <button type="button" class="btn" @onclick="EnterEditModeAsync"><Icon Name="edit" /> Editar</button>
                 </Actions>
             </PageHeader>
             <div class="table-scroll spreadsheet-scroll">
                 <table class="spreadsheet-grid spreadsheet-grid--readonly">
-                    <thead>
-                        <tr>
-                            <th class="spreadsheet-corner" aria-hidden="true"></th>
-                            @for (var c = 0; c < (grid.Count > 0 ? grid[0].Count : 0); c++)
-                            {
-                                <th scope="col">@ColumnName(c)</th>
-                            }
-                        </tr>
-                    </thead>
+                    @GridHeader
                     <tbody>
-                        @for (var r = 0; r < grid.Count; r++)
+                        @for (var r = 0; r < sheet.Rows.Count; r++)
                         {
-                            <tr>
+                            var rowId = sheet.Rows[r];
+                            <tr @key="rowId">
                                 <th scope="row">@(r + 1)</th>
-                                @foreach (var cell in grid[r])
+                                @foreach (var columnId in sheet.Columns)
                                 {
+                                    var cell = sheet.Get(rowId, columnId);
                                     <td title="@cell">@cell</td>
                                 }
                             </tr>
@@ -155,35 +192,62 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private const int MaxRows = 50;
-    private const int MaxColumns = 20;
+    // Proteção contra cliente adulterado, não contra quem edita rápido: cada célula é um envio.
+    private const int OperationsPerMinute = 600;
+    private static readonly TimeSpan AccessCacheDuration = TimeSpan.FromSeconds(20);
+
+    private sealed record CellConflict(string RowId, string ColumnId, string Label, string Reason, string Mine, string? Theirs);
 
     private Workspace? workspace;
-    private DocPage? doc;
+    private SheetDocument? sheet;
+    private string title = "";
+    private string titleInput = "";
+    private string? createdByUserId;
     private bool notFound;
     private bool isEditing;
     private bool isSaving;
     private bool canDelete;
     private string? errorMessage;
-    private string titleInput = "";
+    private CellConflict? conflict;
     private string? userId;
     private (Guid WorkspaceId, Guid? DocId)? loaded;
-    private List<List<string>> grid = [];
+    private ConfirmDialog? confirm;
+
+    // Identifica esta aba nas mudanças, para não recarregar por causa do próprio aviso.
+    private readonly Guid clientId = Guid.NewGuid();
+
+    // A célula em que a pessoa está digitando continua mostrando o valor de quando ela entrou nela,
+    // mesmo que outra pessoa mude essa célula no meio: senão o texto sumiria debaixo dos dedos. O
+    // choque aparece como conflito quando ela sai da célula.
+    private string? focusedKey;
+    private string focusedBase = "";
+
+    private bool hasAccess;
+    private DateTime accessCheckedUntilUtc;
+
+    private readonly Guid presenceSessionId = Guid.NewGuid();
+    private DocEditor? presence;
+    private PeriodicTimer? heartbeat;
+    private List<DocEditor> otherEditors = [];
 
     private bool isCreating => DocId is null;
+
+    protected override void OnInitialized() => DocChanges.Changed += OnDocChanged;
 
     protected override async Task OnParametersSetAsync()
     {
         if (loaded == (WorkspaceId, DocId)) return;
         loaded = (WorkspaceId, DocId);
 
+        await LeavePresenceAsync();
         notFound = false;
         workspace = null;
-        doc = null;
+        sheet = null;
         isEditing = false;
         isSaving = false;
         canDelete = false;
         errorMessage = null;
+        conflict = null;
 
         var authState = await AuthStateTask!;
         userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -198,7 +262,6 @@
 
         var adminResult = await AuthorizationService.AuthorizeAsync(
             authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
-        var isAdmin = adminResult.Succeeded;
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
@@ -215,14 +278,15 @@
         if (DocId is null)
         {
             titleInput = "";
-            grid = NewBlankGrid();
+            sheet = SheetDocument.Blank();
             isEditing = true;
             return;
         }
 
-        await using (var db2 = await DbFactory.CreateDbContextAsync())
+        DocPage? doc;
+        await using (var db = await DbFactory.CreateDbContextAsync())
         {
-            doc = await db2.DocPages.FirstOrDefaultAsync(d => d.Id == DocId && d.WorkspaceId == WorkspaceId);
+            doc = await db.DocPages.AsNoTracking().FirstOrDefaultAsync(d => d.Id == DocId && d.WorkspaceId == WorkspaceId);
         }
 
         if (doc is null)
@@ -239,39 +303,351 @@
             return;
         }
 
-        canDelete = isAdmin || doc.CreatedByUserId == userId;
-        titleInput = doc.Title;
-        grid = DeserializeGrid(doc.GridDataJson);
+        createdByUserId = doc.CreatedByUserId;
+        canDelete = adminResult.Succeeded || doc.CreatedByUserId == userId;
+        await ReloadAsync();
+        await LoadEditorsAsync();
     }
 
-    private static List<List<string>> NewBlankGrid() =>
-        Enumerable.Range(0, 5).Select(_ => Enumerable.Range(0, 4).Select(_ => "").ToList()).ToList();
-
-    private static List<List<string>> DeserializeGrid(string? json)
+    private async Task ReloadAsync()
     {
-        if (string.IsNullOrWhiteSpace(json))
+        var snapshot = await Sheets.LoadAsync(WorkspaceId, DocId!.Value);
+        if (snapshot is null)
         {
-            return NewBlankGrid();
+            notFound = true;
+            return;
+        }
+        sheet = snapshot.Document;
+        title = snapshot.Title;
+        if (!isEditing)
+        {
+            titleInput = title;
+        }
+    }
+
+    private string CellValue(string rowId, string columnId) =>
+        SheetDocument.Key(rowId, columnId) == focusedKey ? focusedBase : sheet!.Get(rowId, columnId);
+
+    private void FocusCell(string rowId, string columnId)
+    {
+        focusedKey = SheetDocument.Key(rowId, columnId);
+        focusedBase = sheet!.Get(rowId, columnId);
+    }
+
+    private void BlurCell(string rowId, string columnId)
+    {
+        if (focusedKey == SheetDocument.Key(rowId, columnId))
+        {
+            focusedKey = null;
+        }
+    }
+
+    private async Task ChangeCellAsync(string rowId, string columnId, string label, string value)
+    {
+        var key = SheetDocument.Key(rowId, columnId);
+        var expected = focusedKey == key ? focusedBase : sheet!.Get(rowId, columnId);
+
+        var result = await SubmitAsync(new SheetOperation.SetCell(rowId, columnId, expected, value));
+        if (result?.Status == "conflict")
+        {
+            conflict = new CellConflict(rowId, columnId, label, result.Error ?? "", value, result.Current);
+        }
+        else if (result?.IsAck == true && focusedKey == key)
+        {
+            focusedBase = value;
+        }
+    }
+
+    // A planilha já foi recarregada no conflito, então a base do novo envio é o valor da outra
+    // pessoa. Se alguém mudar a célula de novo nesse meio-tempo, o conflito simplesmente reaparece.
+    private async Task UseMineAsync()
+    {
+        if (conflict is not { Theirs: not null } current)
+        {
+            return;
+        }
+        conflict = null;
+        await ChangeCellAsync(current.RowId, current.ColumnId, current.Label, current.Mine);
+    }
+
+    /// <summary>
+    /// Envia uma alteração. Na criação, ainda não há planilha no servidor: a alteração vale só aqui
+    /// até "Criar planilha".
+    /// </summary>
+    private async Task<SheetSubmitResult?> SubmitAsync(SheetOperation operation)
+    {
+        errorMessage = null;
+
+        if (isCreating)
+        {
+            switch (SheetSequencer.Apply(sheet!, operation))
+            {
+                case SheetApplyResult.Applied applied:
+                    sheet = applied.Document;
+                    return new SheetSubmitResult("ack");
+                case SheetApplyResult.Rejected rejected:
+                    errorMessage = rejected.Reason;
+                    return new SheetSubmitResult("rejected", Error: rejected.Reason);
+                default:
+                    return new SheetSubmitResult("ack");
+            }
         }
 
+        if (!await HasAccessAsync())
+        {
+            errorMessage = "Você não tem mais acesso a este workspace.";
+            return null;
+        }
+        if (!await RateLimiter.TryAcquireAsync($"sheet-op:{userId}", OperationsPerMinute, TimeSpan.FromMinutes(1)))
+        {
+            errorMessage = "Muitas alterações em pouco tempo. Espere um instante.";
+            return null;
+        }
+
+        var result = await Sheets.SubmitAsync(WorkspaceId, DocId!.Value, userId, clientId, operation);
+        if (result.Status is "rejected" or "busy" or "notfound")
+        {
+            errorMessage = result.Error;
+        }
+
+        await ReloadAsync();
+        return result;
+    }
+
+    private async Task SaveTitleAsync()
+    {
+        if (isCreating)
+        {
+            return;
+        }
+        var newTitle = titleInput.Trim();
+        if (newTitle.Length == 0)
+        {
+            errorMessage = "Informe um título.";
+            return;
+        }
+        if (newTitle == title)
+        {
+            return;
+        }
+        if (!await HasAccessAsync())
+        {
+            errorMessage = "Você não tem mais acesso a este workspace.";
+            return;
+        }
+        if (await Sheets.RenameAsync(WorkspaceId, DocId!.Value, userId, newTitle))
+        {
+            title = newTitle;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(titleInput))
+        {
+            errorMessage = "Informe um título.";
+            return;
+        }
+
+        // Re-check membership at write time: this circuit may have been open since before the
+        // user was removed from (or demoted in) the workspace. See WorkspaceAccessGuard.
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member))
+        {
+            errorMessage = "Você não tem mais acesso a este workspace.";
+            return;
+        }
+
+        var json = SheetJson.Serialize(sheet!);
+        if (json.Length > DocPage.MaxGridDataJsonLength)
+        {
+            errorMessage = $"A planilha excede o limite de {DocPage.MaxGridDataJsonLength:N0} caracteres.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = null;
+
+        var newDoc = new DocPage
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = WorkspaceId,
+            Title = titleInput.Trim(),
+            Type = DocPageType.Spreadsheet,
+            GridDataJson = json,
+            CreatedByUserId = userId,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            db.DocPages.Add(newDoc);
+            await db.SaveChangesAsync();
+        }
+
+        NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/spreadsheets/{newDoc.Id}");
+    }
+
+    private async Task EnterEditModeAsync()
+    {
+        titleInput = title;
+        isEditing = true;
+        await JoinPresenceAsync();
+    }
+
+    private async Task FinishEditingAsync()
+    {
+        isEditing = false;
+        focusedKey = null;
+        conflict = null;
+        await LeavePresenceAsync();
+        await ReloadAsync();
+    }
+
+    // Revalidar a cada célula consultaria o banco a cada envio; um cache curto mantém a garantia de
+    // que alguém removido do workspace para de conseguir editar em segundos (como nos Docs).
+    private async Task<bool> HasAccessAsync()
+    {
+        var now = DateTime.UtcNow;
+        if (now < accessCheckedUntilUtc)
+        {
+            return hasAccess;
+        }
+        hasAccess = await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member);
+        accessCheckedUntilUtc = now + AccessCacheDuration;
+        return hasAccess;
+    }
+
+    private void OnDocChanged(DocChange change)
+    {
+        if (DocId is not { } id || change.DocPageId != id)
+        {
+            return;
+        }
+
+        // Vem de qualquer thread (inclusive do backplane): volta para o contexto do circuito.
+        _ = InvokeAsync(async () =>
+        {
+            if (change.Kind == DocChangeKind.Presence)
+            {
+                await LoadEditorsAsync();
+            }
+            else if (change.ClientId != clientId)
+            {
+                await ReloadAsync();
+            }
+            StateHasChanged();
+        });
+    }
+
+    // Presença: igual à do editor de texto (DocCollabEditor) — entra ao editar, renova
+    // periodicamente e sai ao concluir; se o circuito morrer, expira sozinha.
+    private async Task JoinPresenceAsync()
+    {
+        if (userId is null || DocId is not { } id || presence is not null)
+        {
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var user = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.DisplayName, u.Email })
+                .FirstOrDefaultAsync();
+            var name = string.IsNullOrWhiteSpace(user?.DisplayName) ? user?.Email ?? "Alguém" : user.DisplayName;
+            presence = new DocEditor(userId, name);
+        }
+
+        PresenceCircuit.Register(presenceSessionId, id, presence);
+        await Presence.JoinAsync(id, presenceSessionId, presence);
+        await DocChanges.PublishAsync(new DocChange(id, 0, Guid.Empty, DocChangeKind.Presence));
+
+        heartbeat = new PeriodicTimer(IDocPresenceStore.Heartbeat);
+        _ = RenewPresenceAsync(heartbeat, id, presence);
+    }
+
+    private async Task RenewPresenceAsync(PeriodicTimer timer, Guid id, DocEditor editor)
+    {
         try
         {
-            return JsonSerializer.Deserialize<List<List<string>>>(json) ?? NewBlankGrid();
+            while (await timer.WaitForNextTickAsync())
+            {
+                if (PresenceCircuit.IsConnected)
+                {
+                    await Presence.JoinAsync(id, presenceSessionId, editor);
+                }
+            }
         }
-        catch (JsonException)
+        catch (ObjectDisposedException)
         {
-            return NewBlankGrid();
+            // Timer descartado ao concluir a edição.
         }
     }
 
-    private void AddRow()
+    private async Task LeavePresenceAsync()
     {
-        if (grid.Count >= MaxRows) return;
-        var columns = grid.Count > 0 ? grid[0].Count : 4;
-        grid.Add(Enumerable.Range(0, columns).Select(_ => "").ToList());
+        heartbeat?.Dispose();
+        heartbeat = null;
+        if (presence is null || DocId is not { } id)
+        {
+            presence = null;
+            return;
+        }
+        presence = null;
+        PresenceCircuit.Unregister(presenceSessionId);
+        await Presence.LeaveAsync(id, presenceSessionId);
+        await DocChanges.PublishAsync(new DocChange(id, 0, Guid.Empty, DocChangeKind.Presence));
     }
 
-    private ConfirmDialog? confirm;
+    private async Task LoadEditorsAsync()
+    {
+        if (DocId is not { } id)
+        {
+            otherEditors = [];
+            return;
+        }
+        var editors = await Presence.ListAsync(id);
+        otherEditors = editors.Where(e => e.UserId != userId).ToList();
+    }
+
+    private RenderFragment PresenceBadge => __builder =>
+    {
+        if (otherEditors.Count > 0)
+        {
+            <span class="doc-presence" title="@PresenceLabel()">
+                <span class="doc-presence-avatars" aria-hidden="true">
+                    @foreach (var editor in otherEditors.Take(3))
+                    {
+                        <Avatar Name="@editor.Name" Size="xs" />
+                    }
+                </span>
+                <span>@PresenceLabel()</span>
+            </span>
+        }
+    };
+
+    private string PresenceLabel() => otherEditors.Count switch
+    {
+        0 => "",
+        1 => $"{otherEditors[0].Name} está editando",
+        2 => $"{otherEditors[0].Name} e {otherEditors[1].Name} estão editando",
+        _ => $"{otherEditors[0].Name} e mais {otherEditors.Count - 1} pessoas estão editando",
+    };
+
+    private RenderFragment GridHeader => __builder =>
+    {
+        <thead>
+            <tr>
+                <th class="spreadsheet-corner" aria-hidden="true"></th>
+                @for (var c = 0; c < sheet!.Columns.Count; c++)
+                {
+                    <th scope="col">@ColumnName(c)</th>
+                }
+            </tr>
+        </thead>
+    };
+
+    private static string NewId() => Guid.NewGuid().ToString("N");
 
     // A, B, …, Z, AA, AB… — o cabeçalho que qualquer pessoa reconhece de uma planilha.
     private static string ColumnName(int index)
@@ -288,137 +664,21 @@
         return name;
     }
 
-    private void RemoveRow()
-    {
-        if (grid.Count > 1)
-        {
-            grid.RemoveAt(grid.Count - 1);
-        }
-    }
-
-    private void AddColumn()
-    {
-        if (grid.Count > 0 && grid[0].Count >= MaxColumns) return;
-        foreach (var row in grid)
-        {
-            row.Add("");
-        }
-    }
-
-    private void RemoveColumn()
-    {
-        if (grid.Count > 0 && grid[0].Count > 1)
-        {
-            foreach (var row in grid)
-            {
-                row.RemoveAt(row.Count - 1);
-            }
-        }
-    }
-
-    private void EnterEditMode()
-    {
-        titleInput = doc!.Title;
-        isEditing = true;
-    }
-
-    private void HandleCancel()
-    {
-        if (isCreating)
-        {
-            NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
-            return;
-        }
-
-        grid = DeserializeGrid(doc!.GridDataJson);
-        isEditing = false;
-        errorMessage = null;
-    }
-
-    private async Task HandleSave()
-    {
-        if (string.IsNullOrWhiteSpace(titleInput))
-        {
-            errorMessage = "Informe um título.";
-            return;
-        }
-
-        // Re-check membership at write time: this circuit may have been open since before the
-        // user was removed from (or demoted in) the workspace. See WorkspaceAccessGuard.
-        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member))
-        {
-            errorMessage = "Você não tem mais acesso a este workspace.";
-            return;
-        }
-
-        isSaving = true;
-        errorMessage = null;
-
-        var gridJson = JsonSerializer.Serialize(grid);
-
-        // Row and column counts are already capped by the UI, but individual cell contents were
-        // not bounded at all, so the serialized payload could still grow without limit.
-        if (gridJson.Length > DocPage.MaxGridDataJsonLength)
-        {
-            errorMessage = $"A planilha excede o limite de {DocPage.MaxGridDataJsonLength:N0} caracteres.";
-            isSaving = false;
-            return;
-        }
-
-        await using var db = await DbFactory.CreateDbContextAsync();
-
-        if (isCreating)
-        {
-            var newDoc = new DocPage
-            {
-                Id = Guid.NewGuid(),
-                WorkspaceId = WorkspaceId,
-                Title = titleInput.Trim(),
-                Type = DocPageType.Spreadsheet,
-                GridDataJson = gridJson,
-                CreatedByUserId = userId,
-                CreatedAtUtc = DateTime.UtcNow
-            };
-            db.DocPages.Add(newDoc);
-            await db.SaveChangesAsync();
-
-            NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/spreadsheets/{newDoc.Id}");
-            return;
-        }
-
-        // WorkspaceId is part of the predicate as well as the Id: the authorization above is
-        // scoped to this workspace, so the row being written must be too.
-        await db.DocPages
-            .Where(d => d.Id == doc!.Id && d.WorkspaceId == WorkspaceId)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(d => d.Title, titleInput.Trim())
-                .SetProperty(d => d.GridDataJson, gridJson)
-                .SetProperty(d => d.UpdatedByUserId, userId)
-                .SetProperty(d => d.UpdatedAtUtc, DateTime.UtcNow));
-
-        isSaving = false;
-        isEditing = false;
-
-        doc = await db.DocPages.FirstOrDefaultAsync(d => d.Id == doc!.Id);
-    }
-
     private async Task HandleDelete()
     {
-        if (!canDelete || doc is null)
+        if (!canDelete || DocId is not { } id)
         {
             return;
         }
 
-        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("planilha", doc.Title,
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("planilha", title,
                 "Os dados são apagados para todo o workspace, e mensagens do chat que citam a planilha perdem o link.")))
         {
             return;
         }
 
         // Autor pode excluir a própria planilha; os demais precisam ser admin agora (ver WorkspaceAccessGuard).
-        var authState = await AuthStateTask!;
-        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var required = doc.CreatedByUserId == userId ? WorkspaceRole.Member : WorkspaceRole.Admin;
+        var required = createdByUserId == userId ? WorkspaceRole.Member : WorkspaceRole.Admin;
         if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, required))
         {
             errorMessage = "Você não tem mais permissão para excluir esta planilha.";
@@ -433,10 +693,16 @@
         // Same fix as Doc.razor.HandleDelete; a spreadsheet is a DocPage too, so it can be
         // referenced from chat the same way a text doc can.
         await db.ChatMessages
-            .Where(m => m.ReferencedDocPageId == doc.Id)
+            .Where(m => m.ReferencedDocPageId == id)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.ReferencedDocPageId, (Guid?)null));
 
-        await db.DocPages.Where(d => d.Id == doc.Id).ExecuteDeleteAsync();
+        await db.DocPages.Where(d => d.Id == id && d.WorkspaceId == WorkspaceId).ExecuteDeleteAsync();
         NavigationManager.NavigateTo($"/workspaces/{WorkspaceId}/docs");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        DocChanges.Changed -= OnDocChanged;
+        await LeavePresenceAsync();
     }
 }

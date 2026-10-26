@@ -74,6 +74,7 @@ builder.Services.AddScoped<AuditLogService>();
 // registra as implementacoes de instancia unica — o comportamento anterior.
 builder.Services.AddChatBackplane(builder.Configuration);
 builder.Services.AddSingleton<Nexus.Web.Services.Collab.DocCollabService>();
+builder.Services.AddSingleton<Nexus.Web.Services.Collab.SheetCollabService>();
 // Presença nos Docs acompanha a conexão do circuito: sai quando a aba fecha, não minutos depois.
 builder.Services.AddScoped<Nexus.Web.Services.Collab.DocPresenceCircuitHandler>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler>(
@@ -546,7 +547,8 @@ app.MapGet("/spreadsheets/{id:guid}/download.xlsx", async (
         return Results.StatusCode(StatusCodes.Status403Forbidden);
     }
 
-    var grid = System.Text.Json.JsonSerializer.Deserialize<List<List<string>>>(doc.GridDataJson ?? "[]") ?? [];
+    // Lê o formato colaborativo e o antigo (lista de linhas) — ver SheetJson.
+    var grid = Nexus.Domain.Collab.SheetJson.Parse(doc.GridDataJson).ToGrid();
     var bytes = SpreadsheetExportService.BuildXlsx(doc.Title, grid);
 
     return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{doc.Title}.xlsx");
