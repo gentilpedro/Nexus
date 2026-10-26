@@ -265,6 +265,8 @@
             JoinedAtUtc = DateTime.UtcNow
         });
 
+        workspace.Subscription = WorkspaceSubscription.StartStarter(workspace.Id, DateTime.UtcNow);
+
         db.Workspaces.Add(workspace);
 
         // Everyone listed here gets a pending invite, whether or not the address already has an

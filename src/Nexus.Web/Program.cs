@@ -150,6 +150,7 @@ builder.Services.AddSingleton<BrevoMailer>();
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, BrevoEmailSender>();
 builder.Services.AddScoped<PublicUrlBuilder>();
 builder.Services.AddScoped<WorkspaceInviteService>();
+builder.Services.AddScoped<WorkspacePlanService>();
 
 // Login/Register/ForgotPassword are static SSR pages (not interactive — see
 // AcceptsInteractiveRouting in App.razor), so their form posts are real discrete HTTP
