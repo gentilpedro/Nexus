@@ -150,6 +150,8 @@ builder.Services.AddSingleton<BrevoMailer>();
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, BrevoEmailSender>();
 builder.Services.AddScoped<PublicUrlBuilder>();
 builder.Services.AddScoped<WorkspaceInviteService>();
+builder.Services.Configure<SupportOptions>(builder.Configuration.GetSection("Support"));
+builder.Services.AddSingleton<SupportLinks>();
 builder.Services.Configure<PlanOptions>(builder.Configuration.GetSection("Plans"));
 // Singleton: stateless apart from configuration, and the burndown snapshot job (a singleton
 // hosted service) needs it too.

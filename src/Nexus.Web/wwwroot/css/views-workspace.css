@@ -378,6 +378,13 @@
     color: var(--color-accent-text);
 }
 
+.support-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
 .plan-summary {
     display: flex;
     flex-wrap: wrap;
