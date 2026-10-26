@@ -378,6 +378,23 @@
     color: var(--color-accent-text);
 }
 
+.plan-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--color-text-secondary);
+    font-size: var(--text-small);
+}
+
+.plan-summary li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
 .danger-zone {
     border-color: var(--color-danger-border);
 }

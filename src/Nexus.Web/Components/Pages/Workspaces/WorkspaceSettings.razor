@@ -13,6 +13,7 @@
 @inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
 @inject NavigationContextService NavContext
 @inject ToastService Toasts
+@inject WorkspacePlanService PlanService
 
 <PageTitle>Configurações · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
 
@@ -82,6 +83,18 @@
                             <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving">Salvar alterações</button>
                         </div>
                     </EditForm>
+
+                    @if (plan is not null)
+                    {
+                        <section class="card" aria-labelledby="plan-title">
+                            <h2 id="plan-title" class="form-section-title">Plano <span class="badge badge--accent">@PlanName(plan.EffectivePlan)</span></h2>
+                            <p class="form-section-description">Durante o lançamento, todos os recursos estão liberados. A troca de plano estará disponível em breve.</p>
+                            <ul class="plan-summary">
+                                <li><Icon Name="team" Class="icon--sm" /> @memberCount @(memberCount == 1 ? "membro" : "membros")@(plan.Capabilities.MaxMembers is { } max ? $" de {max} no plano" : "")</li>
+                                <li><Icon Name="@(plan.Capabilities.IncludesSprintsGanttAndBurndown ? "check" : "lock")" Class="icon--sm" /> Sprints, Gantt e burndown @(plan.Capabilities.IncludesSprintsGanttAndBurndown ? "incluídos" : "no plano Pro")</li>
+                            </ul>
+                        </section>
+                    }
 
                     <section class="card danger-zone" aria-labelledby="danger-zone-title">
                         <h2 id="danger-zone-title" class="form-section-title">@(workspace.IsArchived ? "Workspace arquivado" : "Arquivar workspace")</h2>
@@ -171,6 +184,15 @@
     private string tab = "geral";
     private readonly GeneralModel generalModel = new();
     private Guid? loadedWorkspaceId;
+    private WorkspacePlanInfo? plan;
+    private int memberCount;
+
+    private static string PlanName(WorkspacePlan p) => p switch
+    {
+        WorkspacePlan.Pro => "Pro",
+        WorkspacePlan.Business => "Business",
+        _ => "Starter"
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -206,8 +228,12 @@
 
         NavContext.SetWorkspace(WorkspaceId, workspace.Name);
 
+        plan = await PlanService.GetAsync(WorkspaceId);
+
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
+            memberCount = await db.WorkspaceMembers.CountAsync(m => m.WorkspaceId == WorkspaceId);
+
             spaces = await db.Spaces
                 .Where(s => s.WorkspaceId == WorkspaceId)
                 .Include(s => s.Lists)

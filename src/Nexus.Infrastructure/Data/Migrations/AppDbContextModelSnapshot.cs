@@ -17,7 +17,7 @@ namespace Nexus.Infrastructure.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1139,6 +1139,37 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.ToTable("WorkspaceMembers");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceSubscription", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CurrentPeriodEndUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CurrentPeriodStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Plan")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Seats")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("WorkspaceId");
+
+                    b.ToTable("WorkspaceSubscriptions");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -1639,6 +1670,17 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceSubscription", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithOne("Subscription")
+                        .HasForeignKey("Nexus.Domain.Entities.WorkspaceSubscription", "WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.ChatMessage", b =>
                 {
                     b.Navigation("Attachments");
@@ -1690,6 +1732,8 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Members");
 
                     b.Navigation("Spaces");
+
+                    b.Navigation("Subscription");
                 });
 #pragma warning restore 612, 618
         }

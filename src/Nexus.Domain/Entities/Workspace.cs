@@ -11,4 +11,8 @@ public class Workspace
 
     public ICollection<WorkspaceMember> Members { get; set; } = new List<WorkspaceMember>();
     public ICollection<Space> Spaces { get; set; } = new List<Space>();
+
+    // Null only for workspaces created before plans existed and not yet backfilled; readers treat
+    // a missing subscription as Starter.
+    public WorkspaceSubscription? Subscription { get; set; }
 }
