@@ -150,6 +150,7 @@ builder.Services.AddSingleton<BrevoMailer>();
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, BrevoEmailSender>();
 builder.Services.AddScoped<PublicUrlBuilder>();
 builder.Services.AddScoped<WorkspaceInviteService>();
+builder.Services.Configure<PlanOptions>(builder.Configuration.GetSection("Plans"));
 builder.Services.AddScoped<WorkspacePlanService>();
 
 // Login/Register/ForgotPassword are static SSR pages (not interactive — see
