@@ -14,6 +14,7 @@
 @inject ListViewLoader ListLoader
 @inject NavigationContextService NavContext
 @inject ToastService Toasts
+@inject WorkspacePlanService PlanService
 
 <PageTitle>@(taskList?.Name ?? "Backlog")</PageTitle>
 
@@ -37,13 +38,13 @@
                         ActiveView="backlog" CanManage="canManageFields"
                         OnCreate="OpenCreate" ShowCreate="canManage">
             <ExtraActions>
-                @if (completedSprints is { Count: > 0 })
+                @if (!sprintsLocked && completedSprints is { Count: > 0 })
                 {
                     <button type="button" class="btn btn-ghost" aria-pressed="@(showHistory ? "true" : "false")" @onclick="() => showHistory = !showHistory">
                         <Icon Name="clock" /> <span class="label-collapsible">Histórico</span>
                     </button>
                 }
-                @if (canManage)
+                @if (canManage && !sprintsLocked)
                 {
                     <button type="button" class="btn btn-secondary" @onclick="ToggleCreateSprintForm">
                         <Icon Name="zap" /> Criar sprint
@@ -126,7 +127,11 @@
                 <span class="list-summary-hint">Arraste tarefas entre o backlog e as sprints para planejar.</span>
             </p>
 
-            @if (sprints.Count == 0 && canManage && !showCreateSprintForm)
+            @if (sprintsLocked)
+            {
+                <ProFeatureNotice Feature="As sprints" Icon="zap" Compact="true" />
+            }
+            else if (sprints.Count == 0 && canManage && !showCreateSprintForm)
             {
                 <div class="callout">
                     <Icon Name="zap" />
@@ -138,7 +143,7 @@
                 </div>
             }
 
-            @foreach (var sprint in sprints)
+            @foreach (var sprint in sprintsLocked ? Enumerable.Empty<Sprint>() : sprints)
             {
                 <SprintSection Sprint="sprint"
                                Items="FilteredItems(sprint.WorkItems.OrderBy(w => w.SortOrder))"
@@ -217,6 +222,7 @@
     private List<Label>? labels;
     private bool notFound;
     private bool canManage;
+    private bool sprintsLocked;
     private bool canManageFields;
     private ConfirmDialog? confirm;
 
@@ -306,6 +312,7 @@
 
         taskList = shell.TaskList;
         workspaceId = shell.WorkspaceId;
+        sprintsLocked = !await PlanService.HasProFeaturesAsync(workspaceId);
         workspaceName = taskList.Space.Workspace.Name;
         spaceName = taskList.Space.Name;
         canManageFields = shell.CanManage;
@@ -395,6 +402,15 @@
         if (createSprintModel.EndDate <= createSprintModel.StartDate)
         {
             errorMessage = "A data de término precisa ser depois da data de início.";
+            return;
+        }
+
+        // Re-checked at the write, not just when the page loaded: the circuit can outlive a
+        // downgrade.
+        if (!await PlanService.HasProFeaturesAsync(workspaceId))
+        {
+            sprintsLocked = true;
+            showCreateSprintForm = false;
             return;
         }
 

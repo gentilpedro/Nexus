@@ -1,6 +1,7 @@
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Nexus.Web.Services;
 
 namespace Nexus.Web.BackgroundServices;
 
@@ -11,7 +12,8 @@ namespace Nexus.Web.BackgroundServices;
 /// </summary>
 public class SprintSnapshotHostedService(
     IDbContextFactory<AppDbContext> dbFactory,
-    ILogger<SprintSnapshotHostedService> logger) : BackgroundService
+    ILogger<SprintSnapshotHostedService> logger,
+    WorkspacePlanService? plans = null) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -24,19 +26,27 @@ public class SprintSnapshotHostedService(
         }
     }
 
-    private async Task TakeSnapshotsAsync(CancellationToken ct)
+    internal async Task TakeSnapshotsAsync(CancellationToken ct)
     {
         try
         {
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var today = DateTime.UtcNow.Date;
 
-            var activeSprintIds = await db.Sprints
+            var activeSprints = await db.Sprints
                 .Where(s => s.Status == SprintStatus.Active)
-                .Select(s => s.Id)
+                .Select(s => new { s.Id, s.TaskList.Space.WorkspaceId })
                 .ToListAsync(ct);
 
-            foreach (var sprintId in activeSprintIds)
+            // Burndown is a Pro feature (#53): no new snapshots for a workspace without it. The
+            // ones already taken stay, so the chart comes back intact after an upgrade.
+            var allowed = new Dictionary<Guid, bool>();
+            foreach (var workspaceId in activeSprints.Select(s => s.WorkspaceId).Distinct())
+            {
+                allowed[workspaceId] = plans is null || await plans.HasProFeaturesAsync(workspaceId, ct);
+            }
+
+            foreach (var sprintId in activeSprints.Where(s => allowed[s.WorkspaceId]).Select(s => s.Id))
             {
                 var totalCount = await db.WorkItems.CountAsync(w => w.SprintId == sprintId, ct);
                 var remainingCount = await db.WorkItems.CountAsync(

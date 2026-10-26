@@ -1,0 +1,18 @@
+@* Shown in place of a Pro-only feature (sprints, Gantt, burndown — #53) when the workspace's plan
+   does not include it. Says plainly that nothing was deleted: a downgraded workspace keeps its
+   sprints and snapshots, and they come back with the upgrade. *@
+
+<EmptyState Icon="@Icon" Title="@($"{Feature} faz parte do plano Pro")" Compact="Compact"
+            Description="Este workspace está no plano Starter. O que já foi criado continua guardado e volta assim que o workspace tiver o plano Pro. Os planos pagos chegam em breve." />
+
+@code {
+    /// <summary>Feature name as it reads at the start of a sentence, e.g. "O Gantt".</summary>
+    [Parameter, EditorRequired]
+    public string Feature { get; set; } = "";
+
+    [Parameter]
+    public string Icon { get; set; } = "lock";
+
+    [Parameter]
+    public bool Compact { get; set; }
+}

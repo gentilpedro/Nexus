@@ -9,7 +9,7 @@ namespace Nexus.Web.Services;
 // Uses IDbContextFactory (not an injected AppDbContext) so each call gets a
 // short-lived context, rather than accumulating tracked entities for the
 // lifetime of the Blazor Server circuit.
-public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
+public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory, WorkspacePlanService? plans = null)
 {
     public async Task<Guid?> GetWorkspaceIdForListAsync(Guid taskListId, CancellationToken ct = default)
     {
@@ -328,7 +328,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         if (sprintId is not null)
         {
             var sprintBelongsToList = await db.Sprints.AnyAsync(s => s.Id == sprintId && s.TaskListId == listId, ct);
-            if (!sprintBelongsToList)
+            if (!sprintBelongsToList || !await SprintsAllowedAsync(listId, ct))
             {
                 return false;
             }
@@ -348,6 +348,19 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
         }
 
         return true;
+    }
+
+    // Planning work into a sprint is a Pro feature (#53). Taking work out of a sprint, or
+    // finishing one, stays allowed so a downgraded workspace can wind its sprints down.
+    private async Task<bool> SprintsAllowedAsync(Guid listId, CancellationToken ct)
+    {
+        if (plans is null)
+        {
+            return true;
+        }
+
+        var workspaceId = await GetWorkspaceIdForListAsync(listId, ct);
+        return workspaceId is { } id && await plans.HasProFeaturesAsync(id, ct);
     }
 
     public async Task<List<WorkItem>> GetEpicsForListAsync(Guid taskListId, CancellationToken ct = default)
@@ -372,7 +385,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var sprint = await db.Sprints.FirstOrDefaultAsync(s => s.Id == sprintId && s.TaskListId == listId, ct);
-        if (sprint is null)
+        if (sprint is null || !await SprintsAllowedAsync(listId, ct))
         {
             return false;
         }
