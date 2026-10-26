@@ -136,9 +136,14 @@ código:
 
 ## O que este backplane não resolve
 
-- **Título e planilhas continuam "vence o último".** O título fica fora do Delta de propósito
-  (mesclar dois títulos digitados ao mesmo tempo produziria um terceiro que ninguém escreveu).
-  As planilhas não entraram na #32.
+- **O título continua "vence o último".** Ele fica fora do Delta de propósito (mesclar dois
+  títulos digitados ao mesmo tempo produziria um terceiro que ninguém escreveu). Vale também
+  para o título das planilhas.
+- **Planilhas usam outro protocolo (#57).** Não há transformação: cada alteração aponta para a
+  célula por identificador de linha e coluna (`SheetSequencer`), então edições em células
+  diferentes se aplicam em qualquer ordem. Duas pessoas na **mesma** célula viram conflito com o
+  valor atual, para quem chegou depois escolher. O aviso entre instâncias é o mesmo
+  `DocChangeNotifier` (canal `nexus:docs:changed`), e a presença usa o mesmo `IDocPresenceStore`.
 - **Cursores dos outros editores.** A presença mostra quem está editando, não onde. Mostrar o
   cursor exigiria vendorizar o `quill-cursors` e transformar a posição de cada pessoa a cada
   operação.

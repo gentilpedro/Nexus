@@ -1044,6 +1044,10 @@
     font-variant-numeric: tabular-nums;
 }
 
+.sheet-conflict p {
+    margin: var(--space-1) 0 var(--space-2);
+}
+
 .spreadsheet-scroll {
     max-height: calc(100dvh - var(--topbar-height) - 16rem);
     overflow: auto;
