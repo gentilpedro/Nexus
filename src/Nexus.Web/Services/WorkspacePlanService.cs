@@ -17,9 +17,10 @@ public sealed class PlanOptions
     public List<string> UnlimitedAccounts { get; set; } = [];
 
     /// <summary>
-    /// Whether the Starter limits (members per workspace, workspaces per owner) are applied. Off
-    /// during the launch period, while the public page promises Nexus is free and unlimited; turn
-    /// it on together with the paid plans.
+    /// Whether plans restrict anything: the Starter limits (members per workspace, workspaces per
+    /// owner) and the Pro-only features (sprints, Gantt, burndown). Off during the launch period,
+    /// while the public page promises Nexus is free and unlimited; turn it on together with the
+    /// paid plans.
     /// </summary>
     public bool EnforceLimits { get; set; }
 }
@@ -99,6 +100,21 @@ public class WorkspacePlanService(
 
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         return await IsUnlimitedUserAsync(db, userId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Whether the workspace may use sprints, Gantt and burndown (#53). Checked by the pages and,
+    /// at write time, by the sprint operations themselves.
+    /// </summary>
+    public async Task<bool> HasProFeaturesAsync(Guid workspaceId, CancellationToken cancellationToken = default)
+    {
+        if (!enforceLimits)
+        {
+            return true;
+        }
+
+        var plan = await GetAsync(workspaceId, cancellationToken);
+        return plan.Capabilities.IncludesSprintsGanttAndBurndown;
     }
 
     /// <summary>

@@ -10,6 +10,7 @@
 @inject WorkItemQueryService QueryService
 @inject ListViewLoader ListLoader
 @inject NavigationContextService NavContext
+@inject WorkspacePlanService PlanService
 
 <PageTitle>@(taskList?.Name ?? "Gantt")</PageTitle>
 
@@ -33,7 +34,11 @@
                         ActiveView="gantt" CanManage="canManageFields"
                         OnCreate="OpenCreate" />
 
-        @if (workItems is null)
+        @if (proLocked)
+        {
+            <ProFeatureNotice Feature="O Gantt" Icon="gantt" />
+        }
+        else if (workItems is null)
         {
             <Skeleton Count="8" Label="Carregando o cronograma…" />
         }
@@ -180,6 +185,7 @@
     private List<StatusTransition>? statusTransitions;
     private List<Label>? labels;
     private bool notFound;
+    private bool proLocked;
     private bool canManageFields;
     private TaskDetailPanel? panel;
     private Guid? loadedListId;
@@ -318,6 +324,7 @@
         loadedListId = ListId;
 
         notFound = false;
+        proLocked = false;
         taskList = null;
         workItems = null;
         statuses = null;
@@ -336,6 +343,7 @@
 
         taskList = shell.TaskList;
         workspaceId = shell.WorkspaceId;
+        proLocked = !await PlanService.HasProFeaturesAsync(workspaceId);
         workspaceName = taskList.Space.Workspace.Name;
         spaceName = taskList.Space.Name;
         canManageFields = shell.CanManage;

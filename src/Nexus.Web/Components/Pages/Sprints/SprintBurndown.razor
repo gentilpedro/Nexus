@@ -10,6 +10,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject IAuthorizationService AuthorizationService
 @inject NavigationContextService NavContext
+@inject WorkspacePlanService PlanService
 
 <PageTitle>Burndown · @(sprint?.Name ?? "Sprint") · Nexus</PageTitle>
 
@@ -20,6 +21,10 @@
                     Description="Ela pode ter sido excluída, ou você não tem mais acesso ao workspace dela.">
             <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
         </EmptyState>
+    }
+    else if (proLocked)
+    {
+        <ProFeatureNotice Feature="O burndown" Icon="trending-down" />
     }
     else if (sprint is null)
     {
@@ -95,6 +100,7 @@
     private Sprint? sprint;
     private List<SprintBurndownSnapshot>? snapshots;
     private bool notFound;
+    private bool proLocked;
     private Guid? loadedSprintId;
 
     private string statusLabel => sprint?.Status switch
@@ -111,6 +117,7 @@
         loadedSprintId = SprintId;
 
         notFound = false;
+        proLocked = false;
         sprint = null;
         snapshots = null;
 
@@ -136,6 +143,12 @@
         if (!authResult.Succeeded)
         {
             notFound = true;
+            return;
+        }
+
+        if (!await PlanService.HasProFeaturesAsync(workspaceId.Value))
+        {
+            proLocked = true;
             return;
         }
 

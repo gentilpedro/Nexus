@@ -151,7 +151,9 @@ builder.Services.AddSingleton<IEmailSender<ApplicationUser>, BrevoEmailSender>()
 builder.Services.AddScoped<PublicUrlBuilder>();
 builder.Services.AddScoped<WorkspaceInviteService>();
 builder.Services.Configure<PlanOptions>(builder.Configuration.GetSection("Plans"));
-builder.Services.AddScoped<WorkspacePlanService>();
+// Singleton: stateless apart from configuration, and the burndown snapshot job (a singleton
+// hosted service) needs it too.
+builder.Services.AddSingleton<WorkspacePlanService>();
 
 // Login/Register/ForgotPassword are static SSR pages (not interactive — see
 // AcceptsInteractiveRouting in App.razor), so their form posts are real discrete HTTP
