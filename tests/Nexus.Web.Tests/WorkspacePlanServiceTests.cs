@@ -87,6 +87,83 @@ public class WorkspacePlanServiceTests
         Assert.Equal(WorkspacePlan.Starter, (await service.GetAsync(starter, ct)).EffectivePlan);
     }
 
+    [Theory]
+    [InlineData("dono@nexus.dev")]
+    [InlineData("  DONO@Nexus.dev ")]
+    public async Task WorkspaceOwnedByAnUnlimitedAccount_GetsEverything_RegardlessOfSubscription(string configured)
+    {
+        var factory = TestDb.CreateFactory();
+        var workspaceId = await AddWorkspaceAsync(factory, id => WorkspaceSubscription.StartStarter(id, Now.UtcDateTime));
+        await AddMemberAsync(factory, workspaceId, "dono@nexus.dev", WorkspaceRole.Owner);
+
+        var info = await Service(factory, configured).GetAsync(workspaceId, TestContext.Current.CancellationToken);
+
+        Assert.True(info.OwnedByUnlimitedAccount);
+        Assert.Equal(WorkspacePlan.Business, info.EffectivePlan);
+        Assert.Null(info.Capabilities.MaxMembers);
+        Assert.True(info.Capabilities.IncludesSprintsGanttAndBurndown);
+    }
+
+    // Being a plain member of someone else's workspace must not upgrade that workspace — the
+    // exemption follows what the account owns, not every place it has been invited to.
+    [Fact]
+    public async Task UnlimitedAccountAsPlainMember_DoesNotUpgradeTheWorkspace()
+    {
+        var factory = TestDb.CreateFactory();
+        var workspaceId = await AddWorkspaceAsync(factory, id => WorkspaceSubscription.StartStarter(id, Now.UtcDateTime));
+        await AddMemberAsync(factory, workspaceId, "outro@nexus.dev", WorkspaceRole.Owner);
+        await AddMemberAsync(factory, workspaceId, "dono@nexus.dev", WorkspaceRole.Member);
+
+        var info = await Service(factory, "dono@nexus.dev").GetAsync(workspaceId, TestContext.Current.CancellationToken);
+
+        Assert.False(info.OwnedByUnlimitedAccount);
+        Assert.Equal(WorkspacePlan.Starter, info.EffectivePlan);
+    }
+
+    [Fact]
+    public async Task UserHasUnlimitedAccount_OnlyForConfiguredLogins()
+    {
+        var factory = TestDb.CreateFactory();
+        var workspaceId = await AddWorkspaceAsync(factory, subscription: null);
+        var unlimited = await AddMemberAsync(factory, workspaceId, "dono@nexus.dev", WorkspaceRole.Owner);
+        var regular = await AddMemberAsync(factory, workspaceId, "outro@nexus.dev", WorkspaceRole.Admin);
+        var ct = TestContext.Current.CancellationToken;
+
+        Assert.True(await Service(factory, "dono@nexus.dev").UserHasUnlimitedAccountAsync(unlimited, ct));
+        Assert.False(await Service(factory, "dono@nexus.dev").UserHasUnlimitedAccountAsync(regular, ct));
+        Assert.False(await new WorkspacePlanService(factory).UserHasUnlimitedAccountAsync(unlimited, ct));
+    }
+
+    private static WorkspacePlanService Service(
+        Microsoft.EntityFrameworkCore.IDbContextFactory<Nexus.Infrastructure.Data.AppDbContext> factory, string unlimitedEmail) =>
+        new(factory, new FakeTimeProvider(Now),
+            Microsoft.Extensions.Options.Options.Create(new PlanOptions { UnlimitedAccounts = [unlimitedEmail] }));
+
+    private static async Task<string> AddMemberAsync(
+        Microsoft.EntityFrameworkCore.IDbContextFactory<Nexus.Infrastructure.Data.AppDbContext> factory,
+        Guid workspaceId, string email, WorkspaceRole role)
+    {
+        var userId = Guid.NewGuid().ToString();
+        await using var db = factory.CreateDbContext();
+        db.Users.Add(new ApplicationUser
+        {
+            Id = userId,
+            DisplayName = email,
+            UserName = email,
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant()
+        });
+        db.WorkspaceMembers.Add(new WorkspaceMember
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = workspaceId,
+            UserId = userId,
+            Role = role
+        });
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return userId;
+    }
+
     private static async Task<Guid> AddWorkspaceAsync(
         Microsoft.EntityFrameworkCore.IDbContextFactory<Nexus.Infrastructure.Data.AppDbContext> factory,
         Func<Guid, WorkspaceSubscription>? subscription)

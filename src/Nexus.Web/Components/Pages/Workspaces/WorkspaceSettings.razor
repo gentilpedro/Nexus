@@ -88,7 +88,16 @@
                     {
                         <section class="card" aria-labelledby="plan-title">
                             <h2 id="plan-title" class="form-section-title">Plano <span class="badge badge--accent">@PlanName(plan.EffectivePlan)</span></h2>
-                            <p class="form-section-description">Durante o lançamento, todos os recursos estão liberados. A troca de plano estará disponível em breve.</p>
+                            <p class="form-section-description">
+                                @if (plan.OwnedByUnlimitedAccount)
+                                {
+                                    @("O dono deste workspace é uma conta sem limites: todos os recursos estão liberados, sem depender de plano.")
+                                }
+                                else
+                                {
+                                    @("Durante o lançamento, todos os recursos estão liberados. A troca de plano estará disponível em breve.")
+                                }
+                            </p>
                             <ul class="plan-summary">
                                 <li><Icon Name="team" Class="icon--sm" /> @memberCount @(memberCount == 1 ? "membro" : "membros")@(plan.Capabilities.MaxMembers is { } max ? $" de {max} no plano" : "")</li>
                                 <li><Icon Name="@(plan.Capabilities.IncludesSprintsGanttAndBurndown ? "check" : "lock")" Class="icon--sm" /> Sprints, Gantt e burndown @(plan.Capabilities.IncludesSprintsGanttAndBurndown ? "incluídos" : "no plano Pro")</li>
