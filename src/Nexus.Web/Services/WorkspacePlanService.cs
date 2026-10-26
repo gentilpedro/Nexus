@@ -15,6 +15,13 @@ public sealed class PlanOptions
     /// production. Workspaces they own behave as Business no matter what the subscription says.
     /// </summary>
     public List<string> UnlimitedAccounts { get; set; } = [];
+
+    /// <summary>
+    /// Whether the Starter limits (members per workspace, workspaces per owner) are applied. Off
+    /// during the launch period, while the public page promises Nexus is free and unlimited; turn
+    /// it on together with the paid plans.
+    /// </summary>
+    public bool EnforceLimits { get; set; }
 }
 
 /// <summary>
@@ -39,6 +46,7 @@ public class WorkspacePlanService(
     IOptions<PlanOptions>? options = null)
 {
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
+    private readonly bool enforceLimits = options?.Value.EnforceLimits ?? false;
 
     // Compared against Identity's NormalizedEmail, which is upper-cased invariant.
     private readonly HashSet<string> unlimitedAccounts = (options?.Value.UnlimitedAccounts ?? [])
@@ -49,7 +57,15 @@ public class WorkspacePlanService(
     public async Task<WorkspacePlanInfo> GetAsync(Guid workspaceId, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        return await GetAsync(db, workspaceId, cancellationToken);
+    }
 
+    /// <summary>
+    /// Same as <see cref="GetAsync(Guid, CancellationToken)"/>, on the caller's context — so a
+    /// write path can read the plan inside its own transaction.
+    /// </summary>
+    public async Task<WorkspacePlanInfo> GetAsync(AppDbContext db, Guid workspaceId, CancellationToken cancellationToken = default)
+    {
         var subscription = await db.WorkspaceSubscriptions
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.WorkspaceId == workspaceId, cancellationToken);
@@ -82,7 +98,82 @@ public class WorkspacePlanService(
         }
 
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-
-        return await db.Users.AnyAsync(u => u.Id == userId && unlimitedAccounts.Contains(u.NormalizedEmail!), cancellationToken);
+        return await IsUnlimitedUserAsync(db, userId, cancellationToken);
     }
+
+    /// <summary>
+    /// Whether one more person fits in the workspace's plan. With <paramref name="countPendingInvites"/>,
+    /// invites still waiting for an answer take a seat too — otherwise a Starter admin could send
+    /// twenty invites and the plan would only notice when they were accepted.
+    /// </summary>
+    /// <remarks>
+    /// Callers that add a member must hold <see cref="LockWorkspaceAsync"/> first, in the same
+    /// transaction, or two concurrent accepts can both see four members and both add a fifth.
+    /// </remarks>
+    public async Task<bool> CanAddMemberAsync(AppDbContext db, Guid workspaceId, bool countPendingInvites, CancellationToken cancellationToken = default)
+    {
+        if (!enforceLimits)
+        {
+            return true;
+        }
+
+        var plan = await GetAsync(db, workspaceId, cancellationToken);
+        if (plan.Capabilities.MaxMembers is not { } max)
+        {
+            return true;
+        }
+
+        var seats = await db.WorkspaceMembers.CountAsync(m => m.WorkspaceId == workspaceId, cancellationToken);
+        if (countPendingInvites)
+        {
+            var now = clock.GetUtcNow().UtcDateTime;
+            seats += await db.WorkspaceInvites.CountAsync(
+                i => i.WorkspaceId == workspaceId && i.AcceptedAtUtc == null && i.ExpiresAtUtc > now, cancellationToken);
+        }
+
+        return seats < max;
+    }
+
+    /// <summary>
+    /// Whether the user may create one more workspace. A new workspace starts on Starter, and an
+    /// account may own <see cref="PlanCapabilities.StarterMaxOwnedWorkspaces"/> active Starter
+    /// workspace; paid and archived ones do not count.
+    /// </summary>
+    public async Task<bool> CanCreateWorkspaceAsync(AppDbContext db, string userId, CancellationToken cancellationToken = default)
+    {
+        if (!enforceLimits || await IsUnlimitedUserAsync(db, userId, cancellationToken))
+        {
+            return true;
+        }
+
+        var owned = await db.WorkspaceMembers
+            .AsNoTracking()
+            .Where(m => m.UserId == userId && m.Role == WorkspaceRole.Owner && !m.Workspace.IsArchived)
+            .Select(m => m.Workspace.Subscription)
+            .ToListAsync(cancellationToken);
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var ownedStarter = owned.Count(s => (s?.EffectivePlan(now) ?? WorkspacePlan.Starter) == WorkspacePlan.Starter);
+
+        return ownedStarter < PlanCapabilities.StarterMaxOwnedWorkspaces;
+    }
+
+    /// <summary>
+    /// Takes a row lock on the workspace for the rest of the caller's transaction, serializing
+    /// everything that changes its member count. A no-op on providers without row locks (the
+    /// in-memory database the unit tests use).
+    /// </summary>
+    public static async Task LockWorkspaceAsync(AppDbContext db, Guid workspaceId, CancellationToken cancellationToken = default)
+    {
+        if (db.Database.IsRelational())
+        {
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"""SELECT 1 FROM "Workspaces" WHERE "Id" = {workspaceId} FOR UPDATE""", cancellationToken);
+        }
+    }
+
+    private Task<bool> IsUnlimitedUserAsync(AppDbContext db, string userId, CancellationToken cancellationToken) =>
+        unlimitedAccounts.Count == 0
+            ? Task.FromResult(false)
+            : db.Users.AnyAsync(u => u.Id == userId && unlimitedAccounts.Contains(u.NormalizedEmail!), cancellationToken);
 }
