@@ -47,13 +47,13 @@ public class WorkspaceInviteServiceTests
     private static WorkspaceInviteService CreateService(IDbContextFactory<AppDbContext> factory)
         => CreateService(factory, new FakeMailer());
 
-    private static WorkspaceInviteService CreateService(IDbContextFactory<AppDbContext> factory, BrevoMailer mailer)
+    private static WorkspaceInviteService CreateService(IDbContextFactory<AppDbContext> factory, BrevoMailer mailer, WorkspacePlanService? plans = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["PUBLIC_BASE_URL"] = "https://usenexus.runasp.net" })
             .Build();
 
-        return new WorkspaceInviteService(factory, mailer, new PublicUrlBuilder(config, new FakeNavigationManager()));
+        return new WorkspaceInviteService(factory, mailer, new PublicUrlBuilder(config, new FakeNavigationManager()), plans);
     }
 
     private static async Task<Guid> SeedWorkspaceAsync(IDbContextFactory<AppDbContext> factory)
@@ -492,5 +492,105 @@ public class WorkspaceInviteServiceTests
 
         Assert.False(await service.CancelAsync(inviteId, Guid.NewGuid()));
         Assert.Equal(InviteAcceptResult.Accepted, await service.AcceptAsync(token, "user-1", "pendente@example.com"));
+    }
+
+    // ---------------------------------------------------------------- Limites do Starter (#52)
+
+    private static WorkspaceInviteService CreateLimitedService(IDbContextFactory<AppDbContext> factory) =>
+        CreateService(factory, new FakeMailer(),
+            new WorkspacePlanService(factory, options: Options.Create(new PlanOptions { EnforceLimits = true })));
+
+    private static async Task AddMembersAsync(IDbContextFactory<AppDbContext> factory, Guid workspaceId, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var user = await SeedUserAsync(factory, $"membro{i}-{Guid.NewGuid():N}@example.com");
+            await using var db = factory.CreateDbContext();
+            db.WorkspaceMembers.Add(new WorkspaceMember
+            {
+                Id = Guid.NewGuid(),
+                WorkspaceId = workspaceId,
+                UserId = user.Id,
+                Role = i == 0 ? WorkspaceRole.Owner : WorkspaceRole.Member,
+            });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task StarterWorkspace_RefusesTheSixthInvite_CountingPendingOnes()
+    {
+        var factory = TestDb.CreateFactory();
+        var service = CreateLimitedService(factory);
+        var workspaceId = await SeedWorkspaceAsync(factory);
+        await AddMembersAsync(factory, workspaceId, 3);
+
+        Assert.Equal(InviteSendStatus.Sent, (await service.CreateAndSendAsync(workspaceId, "W", "quatro@example.com", WorkspaceRole.Member, null)).Status);
+        Assert.Equal(InviteSendStatus.Sent, (await service.CreateAndSendAsync(workspaceId, "W", "cinco@example.com", WorkspaceRole.Member, null)).Status);
+
+        var sixth = await service.CreateAndSendAsync(workspaceId, "W", "seis@example.com", WorkspaceRole.Member, null);
+
+        Assert.Equal(InviteSendStatus.PlanLimitReached, sixth.Status);
+        await using var db = factory.CreateDbContext();
+        Assert.False(await db.WorkspaceInvites.AnyAsync(i => i.Email == "seis@example.com", TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>Re-sending an invite that already holds a seat must keep working at the limit.</summary>
+    [Fact]
+    public async Task StarterWorkspace_AtTheLimit_StillResendsAPendingInvite()
+    {
+        var factory = TestDb.CreateFactory();
+        var service = CreateLimitedService(factory);
+        var workspaceId = await SeedWorkspaceAsync(factory);
+        await AddMembersAsync(factory, workspaceId, 4);
+        await service.CreateAndSendAsync(workspaceId, "W", "cinco@example.com", WorkspaceRole.Member, null);
+
+        var again = await service.CreateAndSendAsync(workspaceId, "W", "CINCO@example.com", WorkspaceRole.Member, null);
+
+        Assert.Equal(InviteSendStatus.Resent, again.Status);
+    }
+
+    [Fact]
+    public async Task StarterWorkspace_WithFiveMembers_RefusesAcceptance_AndKeepsTheInviteUsable()
+    {
+        var factory = TestDb.CreateFactory();
+        var service = CreateLimitedService(factory);
+        var (workspaceId, token) = await SeedInviteAsync(factory, "seis@example.com");
+        await AddMembersAsync(factory, workspaceId, 5);
+
+        Assert.Equal(InviteAcceptResult.PlanLimitReached, await service.AcceptAsync(token, "user-6", "seis@example.com"));
+
+        await using var db = factory.CreateDbContext();
+        var invite = await db.WorkspaceInvites.SingleAsync(i => i.Token == token, TestContext.Current.CancellationToken);
+        Assert.Null(invite.AcceptedAtUtc);
+        Assert.Equal(5, await db.WorkspaceMembers.CountAsync(m => m.WorkspaceId == workspaceId, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ProWorkspace_IsNotLimited()
+    {
+        var factory = TestDb.CreateFactory();
+        var service = CreateLimitedService(factory);
+        var (workspaceId, token) = await SeedInviteAsync(factory, "seis@example.com");
+        await AddMembersAsync(factory, workspaceId, 5);
+        await using (var db = factory.CreateDbContext())
+        {
+            db.WorkspaceSubscriptions.Add(new WorkspaceSubscription { WorkspaceId = workspaceId, Plan = WorkspacePlan.Pro, Status = SubscriptionStatus.Active });
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(InviteAcceptResult.Accepted, await service.AcceptAsync(token, "user-6", "seis@example.com"));
+    }
+
+    /// <summary>With the switch off (the launch period), nothing is limited.</summary>
+    [Fact]
+    public async Task LimitsOff_StarterAcceptsASixthMember()
+    {
+        var factory = TestDb.CreateFactory();
+        var service = CreateService(factory, new FakeMailer(), new WorkspacePlanService(factory));
+        var (workspaceId, token) = await SeedInviteAsync(factory, "seis@example.com");
+        await AddMembersAsync(factory, workspaceId, 5);
+
+        Assert.Equal(InviteAcceptResult.Accepted, await service.AcceptAsync(token, "user-6", "seis@example.com"));
     }
 }

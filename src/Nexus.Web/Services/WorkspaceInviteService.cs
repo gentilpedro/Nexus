@@ -11,6 +11,9 @@ public enum InviteAcceptResult
     NotFound,
     Expired,
     EmailMismatch,
+
+    /// <summary>The workspace's plan has no seat left; the invite stays pending.</summary>
+    PlanLimitReached,
 }
 
 public enum InviteSendStatus
@@ -26,6 +29,9 @@ public enum InviteSendStatus
 
     /// <summary>The address already belongs to someone who is a member of the workspace.</summary>
     AlreadyMember,
+
+    /// <summary>The workspace's plan has no seat left for another member or pending invite.</summary>
+    PlanLimitReached,
 }
 
 /// <param name="Status">What happened to the invite.</param>
@@ -43,7 +49,8 @@ public readonly record struct InviteSendOutcome(InviteSendStatus Status, bool No
 public class WorkspaceInviteService(
     IDbContextFactory<AppDbContext> dbFactory,
     BrevoMailer mailer,
-    PublicUrlBuilder publicUrl)
+    PublicUrlBuilder publicUrl,
+    WorkspacePlanService? plans = null)
 {
     private static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(7);
 
@@ -76,6 +83,14 @@ public class WorkspaceInviteService(
                 .Where(i => i.WorkspaceId == workspaceId && i.Email.ToUpper() == normalizedEmail && i.AcceptedAtUtc == null)
                 .OrderByDescending(i => i.CreatedAtUtc)
                 .FirstOrDefaultAsync();
+
+            // Only a brand-new invite takes a seat: re-sending one that is already pending does
+            // not change how many people the workspace is waiting on.
+            if (pending is null && plans is not null
+                && !await plans.CanAddMemberAsync(db, workspaceId, countPendingInvites: true))
+            {
+                return new InviteSendOutcome(InviteSendStatus.PlanLimitReached, false);
+            }
 
             if (pending is not null)
             {
@@ -237,7 +252,19 @@ public class WorkspaceInviteService(
             return InviteAcceptResult.EmailMismatch;
         }
 
+        // Serializes accepts into the same workspace so the seat check below sees every member
+        // that a concurrent accept has already added — see WorkspacePlanService.CanAddMemberAsync.
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await WorkspacePlanService.LockWorkspaceAsync(db, invite.WorkspaceId);
+
         var alreadyMember = await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == invite.WorkspaceId && m.UserId == userId);
+        if (!alreadyMember && plans is not null
+            && !await plans.CanAddMemberAsync(db, invite.WorkspaceId, countPendingInvites: false))
+        {
+            // Not marked accepted: the invite stays usable if the workspace upgrades or frees a seat.
+            return InviteAcceptResult.PlanLimitReached;
+        }
+
         if (!alreadyMember)
         {
             // Re-check the inviter's standing instead of trusting the role captured at invite
@@ -273,15 +300,21 @@ public class WorkspaceInviteService(
         try
         {
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
         }
         catch (DbUpdateException) when (!alreadyMember)
         {
+            await transaction.RollbackAsync();
+
             // Lost a race with a concurrent accept of the same invite (double-click, two open
             // tabs) — the unique (WorkspaceId, UserId) index on WorkspaceMembers rejected our
             // insert because the other request's already landed and committed first. The end
             // state we wanted (user is a member) is already true, so this isn't a real failure;
             // only re-throw if that assumption turns out wrong.
-            var stillNotMember = !await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == invite.WorkspaceId && m.UserId == userId);
+            // Checked on a fresh context: after a failed statement PostgreSQL refuses further
+            // commands on this connection's aborted transaction.
+            await using var check = await dbFactory.CreateDbContextAsync();
+            var stillNotMember = !await check.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == invite.WorkspaceId && m.UserId == userId);
             if (stillNotMember)
             {
                 throw;
