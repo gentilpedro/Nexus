@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
+using Nexus.Web.Services;
 using Nexus.Web.Services.Billing;
 
 namespace Nexus.Web.Tests;
@@ -214,4 +215,47 @@ public class StripeWebhookHandlerTests
 
         Assert.Equal(StripeWebhookOutcome.Ignored, outcome);
     }
+
+    // #54: the Owner cancels in Stripe's portal. Pro (and its features) stays until the paid
+    // period ends; from then on the workspace is Starter, with nothing else having to run.
+    [Fact]
+    public async Task CanceledInThePortal_KeepsProUntilThePeriodEnds_ThenFallsBackToStarter()
+    {
+        var factory = TestDb.CreateFactory();
+        var workspaceId = await SeedWorkspaceAsync(factory);
+        var handler = Handler(factory);
+        await Send(handler, Event("evt_1", "checkout.session.completed", 1_761_480_000, Checkout(workspaceId)));
+        await Send(handler, Event("evt_2", "customer.subscription.updated", 1_761_480_100, Subscription(null, "active")));
+
+        await Send(handler, Event("evt_3", "customer.subscription.updated", 1_761_490_000, Subscription(null, "active", cancelAtPeriodEnd: true)));
+
+        var periodEnd = DateTimeOffset.FromUnixTimeSeconds(1_764_158_400);
+        var ct = TestContext.Current.CancellationToken;
+        var beforeEnd = Plans(factory, periodEnd.AddSeconds(-1));
+        var afterEnd = Plans(factory, periodEnd);
+        Assert.Equal(WorkspacePlan.Pro, (await beforeEnd.GetAsync(workspaceId, ct)).EffectivePlan);
+        Assert.True(await beforeEnd.HasProFeaturesAsync(workspaceId, ct));
+        Assert.Equal(WorkspacePlan.Starter, (await afterEnd.GetAsync(workspaceId, ct)).EffectivePlan);
+        Assert.False(await afterEnd.HasProFeaturesAsync(workspaceId, ct));
+    }
+
+    // Changing their mind in the portal before the period ends undoes the cancellation.
+    [Fact]
+    public async Task CancellationUndoneInThePortal_StaysPro()
+    {
+        var factory = TestDb.CreateFactory();
+        var workspaceId = await SeedWorkspaceAsync(factory);
+        var handler = Handler(factory);
+        await Send(handler, Event("evt_1", "checkout.session.completed", 1_761_480_000, Checkout(workspaceId)));
+        await Send(handler, Event("evt_2", "customer.subscription.updated", 1_761_480_100, Subscription(null, "active", cancelAtPeriodEnd: true)));
+
+        await Send(handler, Event("evt_3", "customer.subscription.updated", 1_761_480_200, Subscription(null, "active")));
+
+        var sub = await LoadAsync(factory, workspaceId);
+        Assert.Equal(SubscriptionStatus.Active, sub.Status);
+        Assert.Equal(WorkspacePlan.Pro, sub.EffectivePlan(DateTimeOffset.FromUnixTimeSeconds(1_764_158_400).AddDays(1).UtcDateTime));
+    }
+
+    private static WorkspacePlanService Plans(IDbContextFactory<AppDbContext> factory, DateTimeOffset now) =>
+        new(factory, new FakeTimeProvider(now), Options.Create(new PlanOptions { EnforceLimits = true }));
 }
