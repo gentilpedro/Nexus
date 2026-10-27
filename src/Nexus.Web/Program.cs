@@ -310,29 +310,11 @@ app.Use(async (context, next) =>
     headers.Append("X-Frame-Options", "DENY");
     headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
 
-    // Content-Security-Policy. The app renders user-authored HTML on doc pages as a raw
-    // MarkupString (Doc.razor), so HtmlSanitizer is the primary XSS defense and this is the
-    // second line: even if something slips past the sanitizer, an injected <script> has no way
-    // to execute and no origin it is allowed to exfiltrate to.
-    //
-    // script-src deliberately has no 'unsafe-inline' — the one inline script this app had (the
-    // theme bootstrap) was moved to wwwroot/js/theme-interop.js precisely so this could be
-    // strict. style-src does keep 'unsafe-inline': Quill and Chart.js both set element styles
-    // at runtime, and Blazor injects inline styles of its own.
-    //
-    // connect-src must allow ws:/wss: — Blazor Server's entire interactive layer is a SignalR
-    // WebSocket back to this same origin.
-    headers.Append("Content-Security-Policy", string.Join("; ",
-        "default-src 'self'",
-        "script-src 'self'",
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data:",
-        "font-src 'self' data:",
-        "connect-src 'self' ws: wss:",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-        "base-uri 'self'",
-        "object-src 'none'"));
+    // Content-Security-Policy: see ContentSecurityPolicy. The nonce lets App.razor's import map
+    // run without opening script-src to inline code.
+    var nonce = ContentSecurityPolicy.NewNonce();
+    context.Items[ContentSecurityPolicy.NonceItemKey] = nonce;
+    headers.Append("Content-Security-Policy", ContentSecurityPolicy.Build(nonce));
 
     // Denies access to device APIs this app never uses, so a successful injection cannot reach
     // for them either.
