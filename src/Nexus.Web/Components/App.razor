@@ -49,6 +49,13 @@
 
     private string? CspNonce => HttpContext.Items[ContentSecurityPolicy.NonceItemKey] as string;
 
+    // Visitors who aren't signed in get static SSR. The /_blazor hub requires authentication
+    // (FallbackPolicy), so an interactive render for them could never connect: the browser logged
+    // a redirected /_blazor/initializers, a 401 on negotiate and "Circuit host not initialized"
+    // on every public page (#65). None of those pages (landing, invite, 404) needs interactivity
+    // before login, and logging in reloads the page, which then renders interactive.
     private IComponentRenderMode? PageRenderMode =>
-        HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+        HttpContext.AcceptsInteractiveRouting() && HttpContext.User.Identity?.IsAuthenticated == true
+            ? InteractiveServer
+            : null;
 }
