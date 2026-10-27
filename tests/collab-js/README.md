@@ -10,7 +10,7 @@ exatamente o mesmo resultado. Este pacote usa o `quill-delta@5.1.0` oficial como
 cd tests/collab-js
 npm install
 npm run vectors   # regenera tests/Nexus.Domain.Tests/Collab/delta-vectors.json
-npm test          # testes do núcleo do cliente colaborativo
+npm test          # testes do núcleo do cliente colaborativo e do teclado das menções do chat (#61)
 ```
 
 A semente dos vetores é fixa, então o arquivo gerado só muda se o gerador mudar. Os testes em C#

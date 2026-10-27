@@ -164,6 +164,16 @@
         StateHasChanged();
     }
 
+    // Esc with the mention list open (chat-interop.js). The next keystroke reopens it if the
+    // text still ends in an "@query".
+    [JSInvokable]
+    public void DismissMentions()
+    {
+        showMentionDropdown = false;
+        showEveryoneOption = false;
+        StateHasChanged();
+    }
+
     private void UpdateMentionState(int caret)
     {
         var text = sendModel.Content;
