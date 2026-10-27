@@ -25,7 +25,8 @@
     <link rel="stylesheet" href="@Assets["css/views-account.css"]" />
     <link rel="stylesheet" href="@Assets["css/landing.css"]" />
     <link rel="stylesheet" href="@Assets["Nexus.Web.styles.css"]" />
-    <ImportMap />
+    @* Inline script: runs only with this response's CSP nonce (#62). *@
+    <ImportMap nonce="@CspNonce" />
     <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
@@ -45,6 +46,8 @@
 @code {
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
+
+    private string? CspNonce => HttpContext.Items[ContentSecurityPolicy.NonceItemKey] as string;
 
     private IComponentRenderMode? PageRenderMode =>
         HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
