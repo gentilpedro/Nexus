@@ -50,7 +50,8 @@ public class WorkspaceInviteService(
     IDbContextFactory<AppDbContext> dbFactory,
     BrevoMailer mailer,
     PublicUrlBuilder publicUrl,
-    WorkspacePlanService? plans = null)
+    WorkspacePlanService? plans = null,
+    Billing.BillingService? billing = null)
 {
     private static readonly TimeSpan InviteLifetime = TimeSpan.FromDays(7);
 
@@ -319,6 +320,12 @@ public class WorkspaceInviteService(
             {
                 throw;
             }
+        }
+
+        if (!alreadyMember && billing is not null)
+        {
+            // One more member is one more billed seat on a paying workspace (#50).
+            await billing.SyncSeatsAsync(invite.WorkspaceId);
         }
 
         return InviteAcceptResult.Accepted;

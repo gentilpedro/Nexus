@@ -40,7 +40,7 @@ Frente a ClickUp, Jira e Notion, o Nexus defende quatro coisas juntas:
 - **Papéis:** Owner, Admin, Member por workspace; convites por link.
 - **Conta:** Identity do ASP.NET com confirmação de e-mail, 2FA, passkeys e login externo; senha com no mínimo 10 caracteres com maiúscula, minúscula, dígito e símbolo.
 - **Idioma:** interface inteiramente em pt-BR.
-- **Planos (preços de referência, sujeitos a alteração):** Starter grátis, Pro R$ 29/usuário/mês, Business sob consulta.
+- **Planos (preços de referência, sujeitos a alteração):** Starter grátis (até 5 pessoas), Pro R$ 149/mês com até 10 pessoas + R$ 14,90 por pessoa extra, Business sob consulta.
 - **Em aberto:** edição colaborativa em tempo real nos Docs (CRDT/OT, issue #32); hoje os Docs são last-write-wins.
 
 ## Brand Commitments

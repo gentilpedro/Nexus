@@ -840,6 +840,27 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.ToTable("StatusTransitions");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.StripeWebhookEvent", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcessedAtUtc");
+
+                    b.ToTable("StripeWebhookEvents");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.TaskList", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1202,10 +1223,25 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<string>("StripeCustomerId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("StripeEventAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("StripeSubscriptionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("WorkspaceId");
+
+                    b.HasIndex("StripeSubscriptionId")
+                        .IsUnique()
+                        .HasFilter("\"StripeSubscriptionId\" IS NOT NULL");
 
                     b.ToTable("WorkspaceSubscriptions");
                 });
