@@ -1,3 +1,5 @@
+import { mentionKeyAction } from './chat-mention-keys.js';
+
 export function scrollToBottom(element) {
     if (element) {
         element.scrollTop = element.scrollHeight;
@@ -32,18 +34,56 @@ export function initComposeMentions(element, dotNetRef) {
     }
     element._mentionsInitialized = true;
     element.addEventListener('input', () => {
+        // New text means a new suggestion list: the highlight goes back to the first option.
+        element._mentionIndex = 0;
+        highlightMention(mentionOptions(element), -1);
         dotNetRef.invokeMethodAsync('OnComposeInput', element.value, element.selectionStart);
     });
 
     // <textarea> never submits its form on Enter by itself — only <input> does that natively.
     // Shift+Enter still falls through to the default behavior (a newline), matching the usual
-    // chat-app convention.
+    // chat-app convention. While the mention list is open, the keys drive the list instead
+    // (see chat-mention-keys.js).
     element.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            element.closest('form')?.requestSubmit();
+        const options = mentionOptions(element);
+        const result = mentionKeyAction(e, options.length, element._mentionIndex ?? 0);
+        switch (result.action) {
+            case 'send':
+                e.preventDefault();
+                element.closest('form')?.requestSubmit();
+                break;
+            case 'move':
+                e.preventDefault();
+                element._mentionIndex = result.index;
+                highlightMention(options, result.index);
+                break;
+            case 'pick':
+                e.preventDefault();
+                element._mentionIndex = 0;
+                options[result.index].click();
+                break;
+            case 'close':
+                // Without stopPropagation, Esc would also reach an enclosing <dialog>.
+                e.preventDefault();
+                e.stopPropagation();
+                dotNetRef.invokeMethodAsync('DismissMentions');
+                break;
         }
     });
+}
+
+function mentionOptions(element) {
+    const dropdown = element.parentElement?.querySelector('.chat-mention-dropdown');
+    return dropdown ? [...dropdown.querySelectorAll('[role="option"]')] : [];
+}
+
+// index -1 clears the highlight; CSS then marks the first option, which Enter picks.
+function highlightMention(options, index) {
+    options.forEach((option, i) => {
+        option.classList.toggle('is-active', i === index);
+        option.setAttribute('aria-selected', i === index ? 'true' : 'false');
+    });
+    options[index]?.scrollIntoView({ block: 'nearest' });
 }
 
 // Sets the textarea's DOM value directly. Needed anywhere the C# side wants to force what's

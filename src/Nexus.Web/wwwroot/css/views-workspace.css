@@ -1534,7 +1534,9 @@
 }
 
 .chat-mention-option:hover,
-.chat-mention-option:focus-visible {
+.chat-mention-option:focus-visible,
+.chat-mention-option.is-active,
+.chat-mention-dropdown:not(:has(.is-active)) .chat-mention-option:first-child {
     background: var(--color-hover);
     outline: none;
 }
