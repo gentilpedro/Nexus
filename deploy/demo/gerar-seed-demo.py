@@ -185,6 +185,7 @@ order_by_list = {}
 
 def item(key, lst, title, *, type_=0, status="todo", prio=2, who=None, by="mariana", start=None, due=None,
          sprint=None, epic=None, labels=(), points=None, plat=None, created=30, desc=None):
+    # A descrição da tarefa é texto puro (não HTML).
     wid = nid("item")
     ITEM[key] = wid
     order_by_list[lst] = order_by_list.get(lst, 0) + 1
@@ -206,15 +207,15 @@ T, BUG, STORY, EPIC = 0, 1, 2, 3
 
 # Épicos (Gantt)
 item("e_auth", "app", "Conta e login", type_=EPIC, status="done", prio=3, who="lucas", start=-34, due=-20, created=36,
-     desc="<p>Cadastro, login social e recuperação de senha.</p>")
+     desc="Cadastro, login social e recuperação de senha.")
 item("e_order", "app", "Pedido e carrinho", type_=EPIC, status="done", prio=3, who="mariana", start=-20, due=-6, created=36,
-     desc="<p>Do cardápio ao pedido confirmado, com acompanhamento em tempo real.</p>")
+     desc="Do cardápio ao pedido confirmado, com acompanhamento em tempo real.")
 item("e_pay", "app", "Pagamento", type_=EPIC, status="doing", prio=4, who="ana", start=-6, due=8, created=30,
-     desc="<p>Pix e cartão via gateway, com recibo por e-mail e estorno pelo suporte.</p>")
+     desc="Pix e cartão via gateway, com recibo por e-mail e estorno pelo suporte.")
 item("e_review", "app", "Avaliações e cupons", type_=EPIC, status="todo", prio=2, who="juliana", start=8, due=22, created=25,
-     desc="<p>Avaliar o restaurante depois da entrega e aplicar cupons no checkout.</p>")
+     desc="Avaliar o restaurante depois da entrega e aplicar cupons no checkout.")
 item("e_launch", "app", "Lançamento nas lojas", type_=EPIC, status="todo", prio=3, who="thiago", start=18, due=30, created=20,
-     desc="<p>Publicação na Play Store e na App Store, com testes beta antes.</p>")
+     desc="Publicação na Play Store e na App Store, com testes beta antes.")
 
 # Sprint 1 — concluída
 s1 = [
@@ -261,7 +262,7 @@ s3 = [
 for n, (title, tp, who, labels, pts, plat, st, prio) in enumerate(s3):
     item(f"s3_{n}", "app", title, type_=tp, status=st, prio=prio, who=who, start=-6 + (n % 4), due=2 + n,
          sprint="s3", epic="e_pay", labels=labels, points=pts, plat=plat, created=8 - (n % 5),
-         desc="<p>Critério de aceite combinado na planning. Ver o documento <strong>Especificação do checkout</strong>.</p>" if n < 3 else None)
+         desc="Critério de aceite combinado na planning. Ver o documento Especificação do checkout." if n < 3 else None)
 
 # Sprint 4 — planejada
 for n, (title, tp, who, labels, pts) in enumerate([
@@ -366,7 +367,7 @@ def burndown(sprint_key, start, end, total, remaining_by_day):
 burndown("s1", -34, -20, 8, [8, 8, 8, 7, 7, 6, 6, 5, 4, 4, 3, 2, 1, 1, 0])
 burndown("s2", -20, -6, 7, [7, 7, 7, 6, 6, 6, 5, 4, 4, 3, 2, 2, 1, 0, 0])
 # Ativa: de -6 até ontem; o SprintSnapshotHostedService grava o de hoje sozinho.
-burndown("s3", -6, -1, 10, [10, 10, 9, 9, 8, 8])
+burndown("s3", -6, -1, 11, [11, 11, 10, 10, 10, 9])
 
 # ---------------------------------------------------------------- documentos
 DOC = {}
