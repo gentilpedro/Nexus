@@ -20,6 +20,7 @@ namespace Nexus.Infrastructure.Data.Migrations
                 .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "unaccent");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
@@ -941,6 +942,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("DueDateUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("ParentEpicId")
                         .HasColumnType("uuid");
 
@@ -1106,6 +1110,9 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("LastWorkItemNumber")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()

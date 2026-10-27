@@ -325,7 +325,7 @@
 
         if (!string.IsNullOrWhiteSpace(textFilter))
         {
-            query = query.Where(d => d.Title.Contains(textFilter));
+            query = query.Where(SearchText.Matches<DocPage>(db, textFilter, null, d => d.Title));
         }
 
         docResults = await query.Where(d => d.Type == DocPageType.Text).OrderByDescending(d => d.UpdatedAtUtc ?? d.CreatedAtUtc).Take(50).ToListAsync();
@@ -347,7 +347,7 @@
 
         if (!string.IsNullOrWhiteSpace(textFilter))
         {
-            query = query.Where(u => (u.DisplayName != null && u.DisplayName.Contains(textFilter)) || (u.Email != null && u.Email.Contains(textFilter)));
+            query = query.Where(SearchText.Matches<ApplicationUser>(db, textFilter, null, u => u.DisplayName, u => u.Email));
         }
 
         peopleResults = await query.OrderBy(u => u.DisplayName).Take(50).ToListAsync();
