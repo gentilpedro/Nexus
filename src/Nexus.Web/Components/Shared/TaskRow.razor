@@ -9,6 +9,11 @@
     <div class="task-row-main">
         <button type="button" class="task-row-title" @onclick="() => OnClick.InvokeAsync(Item)">@Item.Title</button>
         <span class="task-row-path">
+            @if (Item.Number > 0)
+            {
+                <span class="task-row-code">@Item.Code</span>
+                <span class="breadcrumb-sep" aria-hidden="true">·</span>
+            }
             <a href="@($"/workspaces/{Item.TaskList.Space.WorkspaceId}")">@Item.TaskList.Space.Workspace.Name</a>
             <span class="breadcrumb-sep" aria-hidden="true">/</span>
             <a href="@($"/lists/{Item.TaskListId}/list")">@Item.TaskList.Name</a>

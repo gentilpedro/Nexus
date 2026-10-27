@@ -412,7 +412,7 @@
     private string newCommentText = "";
     private bool isSavingComment;
 
-    private string TicketCode => editingId is null ? "" : "TASK-" + editingId.Value.ToString("N")[..6].ToUpperInvariant();
+    private string TicketCode => editingItem?.Code ?? "";
 
     private TaskStatusDefinition? CurrentStatus => Statuses.FirstOrDefault(s => s.Id == model.StatusId);
 
@@ -891,7 +891,15 @@
             }
             else
             {
-                workItem = new WorkItem { Id = Guid.NewGuid(), TaskListId = TaskListId, CreatedAtUtc = DateTime.UtcNow, CreatedByUserId = currentUserId };
+                var workspaceId = await db.TaskLists.Where(l => l.Id == TaskListId).Select(l => l.Space.WorkspaceId).FirstAsync();
+                workItem = new WorkItem
+                {
+                    Id = Guid.NewGuid(),
+                    Number = await WorkItemNumbers.NextAsync(db, workspaceId),
+                    TaskListId = TaskListId,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    CreatedByUserId = currentUserId
+                };
                 db.WorkItems.Add(workItem);
             }
 
@@ -932,7 +940,7 @@
                     Id = Guid.NewGuid(),
                     UserId = workItem.AssigneeId,
                     Type = NotificationType.TaskAssigned,
-                    Message = Notification.TruncateMessage($"{assignerName} atribuiu \"{workItem.Title.Trim()}\" a você."),
+                    Message = Notification.TruncateMessage($"{assignerName} atribuiu {workItem.Code} \"{workItem.Title.Trim()}\" a você."),
                     WorkItemId = workItem.Id,
                     IsRead = false,
                     CreatedAtUtc = DateTime.UtcNow
@@ -951,7 +959,7 @@
                     await Mailer.SendAsync(
                         assigneeEmail,
                         $"{safeAssignerName} atribuiu uma tarefa a você no Nexus",
-                        $"<p>{safeAssignerName} atribuiu a tarefa <strong>{safeTitle}</strong> a você.</p><p><a href='{taskUrl}'>Clique aqui para abrir</a>.</p>");
+                        $"<p>{safeAssignerName} atribuiu a tarefa <strong>{workItem.Code} {safeTitle}</strong> a você.</p><p><a href='{taskUrl}'>Clique aqui para abrir</a>.</p>");
                 }
             }
 

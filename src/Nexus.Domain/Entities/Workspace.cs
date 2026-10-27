@@ -9,6 +9,9 @@ public class Workspace
     public bool IsArchived { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 
+    // Highest WorkItem.Number handed out in this workspace; the next task gets this + 1.
+    public int LastWorkItemNumber { get; set; }
+
     public ICollection<WorkspaceMember> Members { get; set; } = new List<WorkspaceMember>();
     public ICollection<Space> Spaces { get; set; } = new List<Space>();
 

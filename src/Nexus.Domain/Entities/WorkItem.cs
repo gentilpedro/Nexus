@@ -7,6 +7,14 @@ public class WorkItem
 
     public Guid Id { get; set; }
 
+    // Sequential per workspace (1, 2, 3…), shown to people as the task code. Assigned once at
+    // creation from Workspace.LastWorkItemNumber and never reused or renumbered.
+    public int Number { get; set; }
+
+    public string Code => FormatCode(Number);
+
+    public static string FormatCode(int number) => number > 0 ? $"TASK-{number}" : "";
+
     public Guid TaskListId { get; set; }
     public TaskList TaskList { get; set; } = null!;
 

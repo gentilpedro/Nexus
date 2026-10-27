@@ -357,4 +357,10 @@ INSERT INTO "CustomFieldValues" ("Id","WorkItemId","CustomFieldDefinitionId","Va
 INSERT INTO "Notifications" ("Id","UserId","Type","Message","WorkItemId","WorkspaceId","IsRead","CreatedAtUtc","LinkUrl") VALUES ('d3e70000-000d-4000-8000-000000000002',(SELECT "Id" FROM "AspNetUsers" WHERE "NormalizedEmail" = 'GENTIL.PEDRO21@GMAIL.COM'),0,'Mariana Costa atribuiu "Validar fluxo de pagamento" a você.','d3e70000-0008-4000-8000-000000000063','d3e70000-0001-4000-8000-000000000001',false,(now() - interval '3 hours'),NULL);
 INSERT INTO "Notifications" ("Id","UserId","Type","Message","WorkItemId","WorkspaceId","IsRead","CreatedAtUtc","LinkUrl") VALUES ('d3e70000-000d-4000-8000-000000000003',(SELECT "Id" FROM "AspNetUsers" WHERE "NormalizedEmail" = 'GENTIL.PEDRO21@GMAIL.COM'),1,'"Tratar pagamento recusado" vence amanhã.','d3e70000-0008-4000-8000-000000000026','d3e70000-0001-4000-8000-000000000001',true,(now() - interval '10 hours'),NULL);
 INSERT INTO "Notifications" ("Id","UserId","Type","Message","WorkItemId","WorkspaceId","IsRead","CreatedAtUtc","LinkUrl") VALUES ('d3e70000-000d-4000-8000-000000000004',(SELECT "Id" FROM "AspNetUsers" WHERE "NormalizedEmail" = 'GENTIL.PEDRO21@GMAIL.COM'),2,'Nova mensagem de Lucas Almeida em Aurora Digital.',NULL,'d3e70000-0001-4000-8000-000000000001',true,(now() - interval '4 hours'),NULL);
+UPDATE "WorkItems" w SET "Number" = n.rn FROM (
+  SELECT wi."Id", row_number() OVER (ORDER BY wi."CreatedAtUtc", wi."Id") AS rn
+  FROM "WorkItems" wi JOIN "TaskLists" l ON l."Id" = wi."TaskListId" JOIN "Spaces" s ON s."Id" = l."SpaceId"
+  WHERE s."WorkspaceId" = 'd3e70000-0001-4000-8000-000000000001') n
+WHERE w."Id" = n."Id";
+UPDATE "Workspaces" SET "LastWorkItemNumber" = 63 WHERE "Id" = 'd3e70000-0001-4000-8000-000000000001';
 COMMIT;

@@ -485,5 +485,14 @@ for type_, msg, item_key, hours, read in [
     emit(f'INSERT INTO "Notifications" ("Id","UserId","Type","Message","WorkItemId","WorkspaceId","IsRead","CreatedAtUtc","LinkUrl") VALUES '
          f"('{nid('notif')}',{PEDRO},{type_},{q(msg)},{q(ITEM[item_key]) if item_key else 'NULL'},'{WS}',{'true' if read else 'false'},{ago(0, hours)},NULL);")
 
+# Código das tarefas (TASK-1, TASK-2…): numera pela data de criação, como a migration
+# AddWorkItemNumber, e acerta o contador do workspace para as próximas.
+emit(f'''UPDATE "WorkItems" w SET "Number" = n.rn FROM (
+  SELECT wi."Id", row_number() OVER (ORDER BY wi."CreatedAtUtc", wi."Id") AS rn
+  FROM "WorkItems" wi JOIN "TaskLists" l ON l."Id" = wi."TaskListId" JOIN "Spaces" s ON s."Id" = l."SpaceId"
+  WHERE s."WorkspaceId" = '{WS}') n
+WHERE w."Id" = n."Id";''')
+emit(f'''UPDATE "Workspaces" SET "LastWorkItemNumber" = {len(ITEM)} WHERE "Id" = '{WS}';''')
+
 emit("COMMIT;")
 print("\n".join(out))
