@@ -406,6 +406,13 @@
     border-color: var(--color-danger-border);
 }
 
+/* Mesmo respiro entre todos os cards das configurações: só o .form-card tinha margin-bottom, e
+   o card do plano encostava no de arquivar (#64). As margens verticais colapsam, então o par
+   form-card + card continua com um único --space-5. */
+.settings-content > .card + .card {
+    margin-top: var(--space-5);
+}
+
 .danger-zone-row {
     display: flex;
     align-items: center;
