@@ -103,24 +103,14 @@
                                     @("Durante o lançamento, todos os recursos estão liberados. A troca de plano estará disponível em breve.")
                                 }
                             </p>
-                            @if (Assinatura == "ok" && plan.EffectivePlan == WorkspacePlan.Starter)
-                            {
-                                <div class="alert alert-info" role="status"><Icon Name="info" /> <span>Pagamento recebido. O plano Pro aparece aqui assim que o Stripe confirmar, em poucos segundos — recarregue a página se ainda não mudou.</span></div>
-                            }
-                            @if (!string.IsNullOrEmpty(billingError))
-                            {
-                                <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@billingError</span></div>
-                            }
                             <ul class="plan-summary">
                                 <li><Icon Name="team" Class="icon--sm" /> @memberCount @(memberCount == 1 ? "membro" : "membros")@(plan.Capabilities.MaxMembers is { } max ? $" de {max} no plano" : "")</li>
                                 <li><Icon Name="@(plan.Capabilities.IncludesSprintsGanttAndBurndown ? "check" : "lock")" Class="icon--sm" /> Sprints, Gantt e burndown @(plan.Capabilities.IncludesSprintsGanttAndBurndown ? "incluídos" : "no plano Pro")</li>
                             </ul>
-                            @if (CanSubscribe)
+                            @if (isOwner)
                             {
                                 <div class="form-actions">
-                                    <button type="button" class="btn @(isStartingCheckout ? "is-loading" : "")" disabled="@isStartingCheckout" @onclick="StartCheckoutAsync">
-                                        Assinar o Pro
-                                    </button>
+                                    <a class="btn btn-secondary" href="@($"/workspaces/{WorkspaceId}/billing")"><Icon Name="credit-card" /> Plano e cobrança</a>
                                 </div>
                             }
                         </section>
@@ -217,37 +207,6 @@
     private WorkspacePlanInfo? plan;
     private int memberCount;
     private bool isOwner;
-    private bool isStartingCheckout;
-    private string? billingError;
-
-    // Back from Stripe Checkout (?assinatura=ok). Says nothing about the payment: the plan only
-    // changes when Stripe's webhook confirms it.
-    [SupplyParameterFromQuery]
-    public string? Assinatura { get; set; }
-
-    private bool CanSubscribe =>
-        Billing.IsEnabled && isOwner && plan is { EffectivePlan: WorkspacePlan.Starter, OwnedByUnlimitedAccount: false };
-
-    private async Task StartCheckoutAsync()
-    {
-        isStartingCheckout = true;
-        billingError = null;
-
-        var authState = await AuthStateTask!;
-        var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        var start = userId is null
-            ? new Nexus.Web.Services.Billing.CheckoutStart(null, "Entre de novo para assinar.")
-            : await Billing.StartCheckoutAsync(WorkspaceId, userId);
-
-        if (start.Url is not null)
-        {
-            NavigationManager.NavigateTo(start.Url, forceLoad: true);
-            return;
-        }
-
-        billingError = start.Error;
-        isStartingCheckout = false;
-    }
 
     private static string PlanName(WorkspacePlan p) => p switch
     {

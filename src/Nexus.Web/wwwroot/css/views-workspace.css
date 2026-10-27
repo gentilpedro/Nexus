@@ -1895,3 +1895,28 @@
         flex: 1;
     }
 }
+
+/* Plano e cobrança (#54) */
+.billing-layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.billing-price {
+    margin-top: var(--space-3);
+}
+
+.billing-hint {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-small);
+}
+
+.billing-downgrade {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding-left: var(--space-5);
+    color: var(--color-text-secondary);
+}

@@ -37,6 +37,17 @@ public sealed record StripeCheckoutRequest(
     string SuccessUrl,
     string CancelUrl);
 
+/// <summary>One invoice of a workspace, as the "Plano e cobrança" page lists it (#54).</summary>
+/// <param name="Total">In the currency's smallest unit (centavos for BRL).</param>
+/// <param name="Url">Stripe's hosted page for the invoice, with the PDF and the receipt.</param>
+public sealed record StripeInvoice(
+    string? Number,
+    DateTime CreatedUtc,
+    long Total,
+    string Currency,
+    string? Status,
+    string? Url);
+
 /// <summary>The calls Nexus makes to Stripe. Faked in tests: nothing here is reachable offline.</summary>
 public interface IStripeGateway
 {
@@ -45,6 +56,15 @@ public interface IStripeGateway
 
     /// <summary>Changes the billed seats of a subscription, prorating the current period.</summary>
     Task UpdateSeatsAsync(string subscriptionId, int seats, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Opens Stripe's customer portal for one customer and returns where to send the person: there
+    /// they change the card, see every invoice and cancel (#54).
+    /// </summary>
+    Task<string> CreatePortalUrlAsync(string customerId, string returnUrl, CancellationToken cancellationToken = default);
+
+    /// <summary>The customer's most recent invoices, newest first.</summary>
+    Task<IReadOnlyList<StripeInvoice>> ListInvoicesAsync(string customerId, int limit, CancellationToken cancellationToken = default);
 }
 
 public sealed class StripeGateway(IOptions<StripeOptions> options) : IStripeGateway
@@ -85,5 +105,29 @@ public sealed class StripeGateway(IOptions<StripeOptions> options) : IStripeGate
             Quantity = seats,
             ProrationBehavior = "create_prorations",
         }, cancellationToken: cancellationToken);
+    }
+
+    public async Task<string> CreatePortalUrlAsync(string customerId, string returnUrl, CancellationToken cancellationToken = default)
+    {
+        // What the portal allows (cancel at the end of the period, change the card, invoices) is
+        // set once in the Stripe dashboard: see docs/cobranca-stripe.md.
+        var session = await Client().V1.BillingPortal.Sessions.CreateAsync(new Stripe.BillingPortal.SessionCreateOptions
+        {
+            Customer = customerId,
+            ReturnUrl = returnUrl,
+            Locale = "pt-BR",
+        }, cancellationToken: cancellationToken);
+
+        return session.Url;
+    }
+
+    public async Task<IReadOnlyList<StripeInvoice>> ListInvoicesAsync(string customerId, int limit, CancellationToken cancellationToken = default)
+    {
+        var invoices = await Client().V1.Invoices.ListAsync(new InvoiceListOptions { Customer = customerId, Limit = limit },
+            cancellationToken: cancellationToken);
+
+        return invoices.Data
+            .Select(i => new StripeInvoice(i.Number, i.Created, i.Total, i.Currency, i.Status, i.HostedInvoiceUrl))
+            .ToList();
     }
 }

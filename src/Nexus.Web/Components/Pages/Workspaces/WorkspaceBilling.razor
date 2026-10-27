@@ -1,0 +1,314 @@
+@page "/workspaces/{WorkspaceId:guid}/billing"
+@attribute [Authorize]
+@using System.Globalization
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Services
+@using Nexus.Web.Services.Billing
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject IAuthorizationService AuthorizationService
+@inject NavigationContextService NavContext
+@inject BillingService Billing
+
+@* Plano e cobrança (#54): só o dono vê o que o workspace paga e muda a assinatura. Trocar o
+   cartão, ver faturas antigas e cancelar acontecem no portal do cliente do Stripe; o plano
+   aqui só muda quando o webhook do Stripe confirma. *@
+
+<PageTitle>Plano e cobrança · @(workspaceName ?? "Workspace") · Nexus</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notOwner)
+    {
+        <EmptyState Icon="lock" Title="Só o dono vê o plano e a cobrança"
+                    Description="O plano e as faturas do workspace ficam com quem paga por ele: o dono.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
+    }
+    else if (overview is null)
+    {
+        <Skeleton Variant="text" Count="6" Label="Carregando plano e cobrança…" />
+    }
+    else
+    {
+        var plan = overview.Plan;
+        var sub = plan.Subscription;
+        var paidPlanRunning = plan.EffectivePlan != WorkspacePlan.Starter && !plan.OwnedByUnlimitedAccount;
+        var cancelScheduled = paidPlanRunning && sub is { Status: SubscriptionStatus.Canceled };
+
+        <PageHeader Title="Plano e cobrança">
+            <Breadcrumbs>
+                <a href="/workspaces">Workspaces</a>
+                <a href="@($"/workspaces/{WorkspaceId}/settings")">@workspaceName</a>
+            </Breadcrumbs>
+        </PageHeader>
+
+        <WorkspaceTabs WorkspaceId="WorkspaceId" Active="settings" CanManage="true" />
+
+        <div class="billing-layout">
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@error</span></div>
+            }
+
+            <section class="card" aria-labelledby="current-plan-title">
+                <h2 id="current-plan-title" class="form-section-title">Plano atual <span class="badge badge--accent">@PlanName(plan.EffectivePlan)</span></h2>
+
+                @if (plan.OwnedByUnlimitedAccount)
+                {
+                    <p class="form-section-description">O dono deste workspace é uma conta sem limites: todos os recursos estão liberados, sem depender de plano nem de cobrança.</p>
+                }
+                else if (Assinatura == "ok" && plan.EffectivePlan == WorkspacePlan.Starter)
+                {
+                    <div class="alert alert-info" role="status"><Icon Name="info" /> <span>Pagamento recebido. O plano Pro aparece aqui assim que o Stripe confirmar, em poucos segundos — recarregue a página se ainda não mudou.</span></div>
+                }
+
+                @if (cancelScheduled)
+                {
+                    <div class="alert alert-warning" role="status">
+                        <Icon Name="alert-circle" />
+                        <span>Assinatura cancelada. O Pro continua até <strong>@Date(sub!.CurrentPeriodEndUtc)</strong>; depois o workspace volta ao Starter. Mudou de ideia? Reative em "Gerenciar assinatura".</span>
+                    </div>
+                }
+                else if (paidPlanRunning && sub is { Status: SubscriptionStatus.PastDue })
+                {
+                    <div class="alert alert-warning" role="status">
+                        <Icon Name="alert-circle" />
+                        <span>O último pagamento não passou. O Stripe vai tentar de novo nos próximos dias e o Pro continua enquanto isso — atualize o cartão em "Gerenciar assinatura".</span>
+                    </div>
+                }
+                else if (!paidPlanRunning && sub is { Status: SubscriptionStatus.Canceled, CurrentPeriodEndUtc: { } endedAt } && !plan.OwnedByUnlimitedAccount)
+                {
+                    <p class="form-section-description">A assinatura do Pro terminou em @Date(endedAt). O workspace está no Starter.</p>
+                }
+
+                <ul class="plan-summary">
+                    <li><Icon Name="team" Class="icon--sm" /> @overview.Members @(overview.Members == 1 ? "membro" : "membros")@(plan.Capabilities.MaxMembers is { } max ? $" de {max} no plano" : "")</li>
+                    <li><Icon Name="@(plan.Capabilities.IncludesSprintsGanttAndBurndown ? "check" : "lock")" Class="icon--sm" /> Sprints, Gantt e burndown @(plan.Capabilities.IncludesSprintsGanttAndBurndown ? "incluídos" : "no plano Pro")</li>
+                    @if (paidPlanRunning && !cancelScheduled && sub?.CurrentPeriodEndUtc is { } nextCharge)
+                    {
+                        <li><Icon Name="calendar" Class="icon--sm" /> Próxima cobrança em @Date(nextCharge): cerca de @Money(BillingService.ProMonthlyAmount(sub.Seats)) para @sub.Seats @(sub.Seats == 1 ? "pessoa" : "pessoas")</li>
+                    }
+                </ul>
+
+                @if (!plan.OwnedByUnlimitedAccount)
+                {
+                    <p class="form-section-description billing-price">
+                        Pro: @BillingService.ProBasePrice por mês com até @BillingService.ProIncludedSeats pessoas, e @BillingService.ProExtraSeatPrice por pessoa a mais. Quem entra ou sai do workspace muda o valor, proporcional ao mês.
+                    </p>
+                }
+
+                <div class="form-actions">
+                    @if (CanSubscribe(plan))
+                    {
+                        <button type="button" class="btn @(isRedirecting ? "is-loading" : "")" disabled="@isRedirecting" @onclick="StartCheckoutAsync">Assinar o Pro</button>
+                    }
+                    @if (overview.CanManageInStripe && !plan.OwnedByUnlimitedAccount)
+                    {
+                        <button type="button" class="btn @(CanSubscribe(plan) ? "btn-secondary" : "") @(isRedirecting ? "is-loading" : "")" disabled="@isRedirecting" @onclick="OpenPortalAsync">
+                            <Icon Name="external" /> Gerenciar assinatura
+                        </button>
+                    }
+                </div>
+                @if (overview.CanManageInStripe && !plan.OwnedByUnlimitedAccount)
+                {
+                    <p class="cell-muted billing-hint">Abre o portal seguro do Stripe: trocar o cartão, baixar faturas e cancelar.</p>
+                }
+                else if (!Billing.IsEnabled && !plan.OwnedByUnlimitedAccount)
+                {
+                    <p class="cell-muted billing-hint">Durante o lançamento, todos os recursos estão liberados. A assinatura do Pro estará disponível em breve.</p>
+                }
+            </section>
+
+            @if (paidPlanRunning)
+            {
+                <section class="card" aria-labelledby="downgrade-title">
+                    <h2 id="downgrade-title" class="form-section-title">@(cancelScheduled ? "O que muda quando o Pro acabar" : "Antes de cancelar")</h2>
+                    <p class="form-section-description">
+                        @(cancelScheduled
+                            ? $"A partir de {Date(sub!.CurrentPeriodEndUtc)}, o workspace segue as regras do Starter. Nada é apagado."
+                            : "Cancelar não tem multa e o Pro continua até o fim do período já pago. Depois disso, o workspace volta ao Starter — nada é apagado, mas:")
+                    </p>
+                    <ul class="billing-downgrade">
+                        <li>
+                            <strong>Até @PlanCapabilities.StarterMaxMembers membros.</strong>
+                            @if (overview.Members > PlanCapabilities.StarterMaxMembers)
+                            {
+                                @($" Hoje são {overview.Members}: ninguém é removido, mas novos convites ficam bloqueados até o time caber no plano.")
+                            }
+                            else
+                            {
+                                @(" Novos convites param quando o time chegar a esse número.")
+                            }
+                        </li>
+                        <li><strong>Um workspace por dono.</strong> Os que você já tem continuam, mas não dá para criar outro.</li>
+                        <li><strong>Sprints, Gantt e burndown ficam bloqueados.</strong> Os sprints e as datas continuam guardados e voltam se o Pro for assinado de novo.</li>
+                    </ul>
+                </section>
+            }
+
+            @if (overview.CanManageInStripe)
+            {
+                <section class="card" aria-labelledby="invoices-title">
+                    <h2 id="invoices-title" class="form-section-title">Faturas</h2>
+                    @if (overview.Invoices is null)
+                    {
+                        <p class="form-section-description">Não foi possível buscar as faturas agora. Elas também estão em "Gerenciar assinatura".</p>
+                    }
+                    else if (overview.Invoices.Count == 0)
+                    {
+                        <p class="form-section-description">Nenhuma fatura ainda.</p>
+                    }
+                    else
+                    {
+                        <div class="table-scroll">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Data</th>
+                                        <th>Número</th>
+                                        <th>Valor</th>
+                                        <th>Situação</th>
+                                        <th><span class="sr-only">Abrir</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var invoice in overview.Invoices)
+                                    {
+                                        <tr class="data-table-row">
+                                            <td>@Date(invoice.CreatedUtc)</td>
+                                            <td>@(invoice.Number ?? "—")</td>
+                                            <td>@InvoiceAmount(invoice)</td>
+                                            <td>@InvoiceStatus(invoice.Status)</td>
+                                            <td>
+                                                @if (invoice.Url is not null)
+                                                {
+                                                    <a href="@invoice.Url" target="_blank" rel="noopener noreferrer">Ver fatura <Icon Name="external" Class="icon--sm" /></a>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid WorkspaceId { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    // Back from Stripe Checkout (?assinatura=ok). Says nothing about the payment: the plan only
+    // changes when Stripe's webhook confirms it.
+    [SupplyParameterFromQuery]
+    public string? Assinatura { get; set; }
+
+    private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
+
+    private BillingOverview? overview;
+    private string? workspaceName;
+    private bool notOwner;
+    private bool isRedirecting;
+    private string? error;
+    private Guid? loadedWorkspaceId;
+
+    private bool CanSubscribe(WorkspacePlanInfo plan) =>
+        Billing.IsEnabled && plan is { EffectivePlan: WorkspacePlan.Starter, OwnedByUnlimitedAccount: false };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedWorkspaceId == WorkspaceId) return;
+        loadedWorkspaceId = WorkspaceId;
+
+        notOwner = false;
+        overview = null;
+
+        var userId = await UserIdAsync();
+        var authState = await AuthStateTask!;
+        var isOwner = userId is not null && (await AuthorizationService.AuthorizeAsync(
+            authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Owner))).Succeeded;
+
+        overview = isOwner ? await Billing.GetOverviewAsync(WorkspaceId, userId!) : null;
+        if (overview is null)
+        {
+            notOwner = true;
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        workspaceName = await db.Workspaces.Where(w => w.Id == WorkspaceId).Select(w => w.Name).FirstOrDefaultAsync();
+        if (workspaceName is not null)
+        {
+            NavContext.SetWorkspace(WorkspaceId, workspaceName);
+        }
+    }
+
+    private async Task<string?> UserIdAsync()
+    {
+        var authState = await AuthStateTask!;
+        return authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    }
+
+    private Task StartCheckoutAsync() =>
+        RedirectAsync(userId => Billing.StartCheckoutAsync(WorkspaceId, userId));
+
+    private Task OpenPortalAsync() =>
+        RedirectAsync(userId => Billing.OpenPortalAsync(WorkspaceId, userId));
+
+    // Both buttons go to a page hosted by Stripe; the service re-checks that this user is still
+    // the Owner, since the circuit may have outlived a change of ownership.
+    private async Task RedirectAsync(Func<string, Task<CheckoutStart>> start)
+    {
+        isRedirecting = true;
+        error = null;
+
+        var userId = await UserIdAsync();
+        var result = userId is null ? new CheckoutStart(null, "Entre de novo para continuar.") : await start(userId);
+
+        if (result.Url is not null)
+        {
+            NavigationManager.NavigateTo(result.Url, forceLoad: true);
+            return;
+        }
+
+        error = result.Error;
+        isRedirecting = false;
+    }
+
+    private static string PlanName(WorkspacePlan p) => p switch
+    {
+        WorkspacePlan.Pro => "Pro",
+        WorkspacePlan.Business => "Business",
+        _ => "Starter"
+    };
+
+    private static string Date(DateTime? utc) =>
+        utc is { } d ? d.ToLocalTime().ToString("dd/MM/yyyy", PtBr) : "—";
+
+    private static string Money(decimal amount) => amount.ToString("C", PtBr);
+
+    private static string InvoiceAmount(StripeInvoice invoice) =>
+        string.Equals(invoice.Currency, "brl", StringComparison.OrdinalIgnoreCase)
+            ? Money(invoice.Total / 100m)
+            : $"{invoice.Total / 100m:0.00} {invoice.Currency.ToUpperInvariant()}";
+
+    private static string InvoiceStatus(string? status) => status switch
+    {
+        "paid" => "Paga",
+        "open" => "Em aberto",
+        "void" => "Anulada",
+        "uncollectible" => "Não paga",
+        "draft" => "Em preparação",
+        _ => status ?? "—"
+    };
+}
