@@ -941,6 +941,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("DueDateUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("Number")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("ParentEpicId")
                         .HasColumnType("uuid");
 
@@ -1106,6 +1109,9 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("LastWorkItemNumber")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()

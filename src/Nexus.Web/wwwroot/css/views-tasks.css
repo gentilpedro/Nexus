@@ -81,6 +81,11 @@
     font-size: var(--text-caption);
 }
 
+.task-row-code {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
 .task-row-path a {
     position: relative;
     z-index: 1;
