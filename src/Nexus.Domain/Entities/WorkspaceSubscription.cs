@@ -21,6 +21,14 @@ public class WorkspaceSubscription
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 
+    // Billing (#50): set once the workspace goes through Stripe Checkout. Null on Starter.
+    public string? StripeCustomerId { get; set; }
+    public string? StripeSubscriptionId { get; set; }
+
+    // When the newest Stripe event applied here was created. Stripe does not guarantee delivery
+    // order, so an older "updated" arriving late must not undo a newer one.
+    public DateTime? StripeEventAtUtc { get; set; }
+
     public static WorkspaceSubscription StartStarter(Guid workspaceId, DateTime nowUtc) => new()
     {
         WorkspaceId = workspaceId,

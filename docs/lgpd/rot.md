@@ -120,6 +120,18 @@ Controlador: Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física
 | **Retenção** | 12 meses no banco (`COMMERCIAL_CONTACT_RETENTION_DAYS`, apagado por `DataRetentionHostedService`). A cópia na caixa de e-mail segue a política dessa caixa |
 | **Titular pode** | Pedir acesso ou exclusão pelo e-mail comercial ou de suporte |
 
+## 10. Cobrança do plano Pro (Stripe)
+
+| | |
+|---|---|
+| **Dados tratados** | E-mail de quem assina, identificadores do cliente e da assinatura no Stripe, quantidade de assentos, período pago e status. Os dados do cartão são digitados na página do Stripe e **não passam pelo Nexus** |
+| **Onde vive** | `WorkspaceSubscription` (`StripeCustomerId`, `StripeSubscriptionId`); ids dos eventos já processados em `StripeWebhookEvents` (sem dado pessoal) |
+| **Finalidade** | Cobrar a assinatura do plano Pro e aplicar o plano ao workspace |
+| **Base legal** | Execução de contrato (art. 7º, V) |
+| **Compartilhamento** | Stripe, como operador (art. 5º, VII), com transferência internacional (art. 33) — servidores do Stripe fora do Brasil |
+| **Retenção** | Enquanto o workspace existir; os ids de eventos são apagados em 90 dias (`DataRetentionHostedService`). Os registros fiscais e de pagamento ficam no Stripe, pela política dele |
+| **Titular pode** | Pedir acesso ou exclusão pelo e-mail de suporte; os dados de pagamento são geridos no Stripe |
+
 ---
 
 ## Pendências conhecidas (ver auditoria LGPD de 22/07/2026)

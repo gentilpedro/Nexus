@@ -60,6 +60,13 @@ public class DataRetentionHostedService(
                 .Where(c => c.CreatedAtUtc < commercialContactCutoff)
                 .ExecuteDeleteAsync(ct);
 
+            // Processed Stripe event ids only guard against redelivery, which Stripe stops after
+            // three days of retries; 90 days is ample and keeps the table small. No personal data.
+            var stripeEventCutoff = DateTime.UtcNow.AddDays(-90);
+            await db.StripeWebhookEvents
+                .Where(e => e.ProcessedAtUtc < stripeEventCutoff)
+                .ExecuteDeleteAsync(ct);
+
             if (deletedAuditLogs > 0 || deletedNotifications > 0 || deletedContacts > 0)
             {
                 logger.LogInformation(

@@ -16,5 +16,14 @@ public class WorkspaceSubscriptionConfiguration : IEntityTypeConfiguration<Works
             .WithOne(w => w.Subscription)
             .HasForeignKey<WorkspaceSubscription>(s => s.WorkspaceId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Property(s => s.StripeCustomerId).HasMaxLength(100);
+        builder.Property(s => s.StripeSubscriptionId).HasMaxLength(100);
+
+        // Webhooks find the workspace by the Stripe subscription; one subscription pays for one
+        // workspace.
+        builder.HasIndex(s => s.StripeSubscriptionId)
+            .IsUnique()
+            .HasFilter("\"StripeSubscriptionId\" IS NOT NULL");
     }
 }
