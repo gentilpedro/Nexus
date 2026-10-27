@@ -42,6 +42,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        // unaccent() backs the case- and accent-insensitive search (Nexus.Web SearchText).
+        builder.HasPostgresExtension("unaccent");
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

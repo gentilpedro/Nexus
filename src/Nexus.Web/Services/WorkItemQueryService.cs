@@ -504,9 +504,9 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory, Wor
         {
             // "TASK-42", "task-42", "#42" or "42" also find the task by its code.
             var number = WorkItemCodeSearch.ParseNumber(filters.Text);
-            query = number is int n
-                ? query.Where(w => w.Title.Contains(filters.Text) || w.Number == n)
-                : query.Where(w => w.Title.Contains(filters.Text));
+            query = query.Where(SearchText.Matches<WorkItem>(db, filters.Text,
+                number is int n ? w => w.Number == n : null,
+                w => w.Title));
         }
 
         if (filters.StatusCategory is not null)
