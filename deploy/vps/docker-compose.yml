@@ -25,7 +25,7 @@ services:
     mem_limit: 768m
     # Só o Nginx do host fala com o app.
     ports: ["127.0.0.1:5100:8080"]
-    env_file: [.env, brevo.env]
+    env_file: .env
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
@@ -40,7 +40,12 @@ services:
     volumes:
       - uploads:/app/App_Data/uploads
       - ./dataprotection.pfx:/app/dp/dataprotection.pfx:ro,z
-    networks: [nexus]
+    networks:
+      # gw_priority: o gateway padrão continua sendo o da rede nexus, então o Nginx do host
+      # segue chegando por 172.30.0.1 (KNOWN_PROXIES) e a saída para a internet também.
+      nexus: { gw_priority: 1 }
+      # Rede do relay SMTP (/opt/smtp): o app envia para smtp:25 (appsettings.Production.json).
+      mail: {}
     depends_on:
       db: { condition: service_healthy }
 
@@ -54,3 +59,5 @@ networks:
       config:
         - subnet: 172.30.0.0/24
           gateway: 172.30.0.1
+  mail:
+    external: true

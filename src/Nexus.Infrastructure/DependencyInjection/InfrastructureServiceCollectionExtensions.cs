@@ -105,8 +105,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddIdentityCore<ApplicationUser>(options =>
             {
                 // Requires a confirmed e-mail before sign-in. This was previously false with the
-                // note "no SMTP provider configured yet" — that stopped being true once Brevo was
-                // wired up (BrevoEmailSender/BrevoMailer, used by four flows). Leaving it off let
+                // note "no SMTP provider configured yet" — that stopped being true once e-mail was
+                // wired up (IdentityEmailSender/Mailer, used by four flows). Leaving it off let
                 // anyone register using someone else's address and use the account immediately:
                 // account pre-hijacking, plus Nexus becoming a spam relay against its own domain
                 // reputation.

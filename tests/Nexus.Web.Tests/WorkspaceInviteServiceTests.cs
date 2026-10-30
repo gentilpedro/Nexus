@@ -24,16 +24,9 @@ public class WorkspaceInviteServiceTests
         public FakeNavigationManager() => Initialize("https://usenexus.runasp.net/", "https://usenexus.runasp.net/");
     }
 
-    /// <summary>Never used: BrevoMailer's constructor needs one, but FakeMailer overrides the only
-    /// method that would call it.</summary>
-    private sealed class UnusedHttpClientFactory : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => throw new InvalidOperationException("A test must not make HTTP calls.");
-    }
-
-    /// <summary>Records what would have been e-mailed instead of calling Brevo.</summary>
+    /// <summary>Records what would have been e-mailed instead of sending it.</summary>
     private sealed class FakeMailer(bool succeeds = true)
-        : BrevoMailer(Options.Create(new BrevoOptions()), new UnusedHttpClientFactory(), NullLogger<BrevoMailer>.Instance)
+        : Mailer(Options.Create(new SmtpOptions()), NullLogger<Mailer>.Instance)
     {
         public List<(string To, string Subject, string Body, string? Text)> Sent { get; } = [];
 
@@ -47,7 +40,7 @@ public class WorkspaceInviteServiceTests
     private static WorkspaceInviteService CreateService(IDbContextFactory<AppDbContext> factory)
         => CreateService(factory, new FakeMailer());
 
-    private static WorkspaceInviteService CreateService(IDbContextFactory<AppDbContext> factory, BrevoMailer mailer, WorkspacePlanService? plans = null)
+    private static WorkspaceInviteService CreateService(IDbContextFactory<AppDbContext> factory, Mailer mailer, WorkspacePlanService? plans = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["PUBLIC_BASE_URL"] = "https://usenexus.runasp.net" })

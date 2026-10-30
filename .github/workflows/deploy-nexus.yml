@@ -207,7 +207,7 @@ jobs:
           ls -lh image.tar.gz
 
       # VPS_KNOWN_HOSTS fixa a chave do servidor: sem ela o ssh aceitaria qualquer host que
-      # respondesse no IP, e o deploy (com os segredos da Brevo) iria para quem estivesse lá.
+      # respondesse no IP, e o deploy iria para quem estivesse lá.
       - name: Configurar o SSH
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -217,18 +217,6 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
-
-      - name: Enviar os segredos da Brevo
-        env:
-          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
-          BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
-        run: |
-          if [ -z "$BREVO_API_KEY" ] || [ -z "$BREVO_SENDER_EMAIL" ]; then
-            echo "::error::BREVO_API_KEY or BREVO_SENDER_EMAIL is not set. Account confirmation and workspace invites cannot work without them."
-            exit 1
-          fi
-          printf 'BREVO_API_KEY=%s\nBREVO_SENDER_EMAIL=%s\n' "$BREVO_API_KEY" "$BREVO_SENDER_EMAIL" \
-            | ssh -o BatchMode=yes "deploy@${{ secrets.VPS_HOST }}" set-secrets
 
       - name: Enviar a imagem
         run: ssh -o BatchMode=yes "deploy@${{ secrets.VPS_HOST }}" load-image "$VERSION" < image.tar.gz

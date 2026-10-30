@@ -15,7 +15,7 @@ Controlador: Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física
 | **Onde vive** | `ApplicationUser` (`AspNetUsers`) |
 | **Finalidade** | Criar/autenticar a conta, viabilizar identificação dentro dos workspaces |
 | **Base legal** | Execução de contrato (art. 7º, V) |
-| **Compartilhamento** | Provedor de hospedagem (operador, art. 5º, VII); Brevo recebe nome e e-mail apenas para entregar e-mail de confirmação de cadastro/redefinição de senha (`BrevoEmailSender.cs`) |
+| **Compartilhamento** | Provedor de hospedagem (operador, art. 5º, VII); Resend recebe nome e e-mail apenas para entregar e-mail de confirmação de cadastro/redefinição de senha (`IdentityEmailSender.cs`, via relay SMTP próprio na VPS) |
 | **Retenção** | Enquanto a conta estiver ativa; anonimizado imediatamente ao pedido de exclusão (`DeletePersonalData.razor`) |
 | **Titular pode** | Baixar (`PersonalData.razor`), corrigir (`Account/Manage`), excluir/anonimizar |
 
@@ -83,7 +83,7 @@ Controlador: Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física
 | **Onde vive** | `WorkspaceInvite` |
 | **Finalidade** | Permitir que a pessoa convidada crie conta (ou entre, se já tiver) e seja automaticamente adicionada ao workspace |
 | **Base legal** | Execução de contrato — a pedido do Contratante/membro que fez o convite; o e-mail foi fornecido por um terceiro (quem convidou), não pela própria pessoa |
-| **Compartilhamento** | Enviado ao Brevo apenas para entrega do e-mail de convite (mesmo operador da seção 1) |
+| **Compartilhamento** | Enviado ao Resend apenas para entrega do e-mail de convite (mesmo operador da seção 1) |
 | **Retenção** | Expira em 7 dias se não aceito; não há hoje expurgo automático de convites expirados/aceitos — considerar incluir no `DataRetentionHostedService` |
 | **Titular pode** | Se decidir não criar conta, o único dado retido é o e-mail em si — pode solicitar remoção via contato do controlador |
 
@@ -116,7 +116,7 @@ Controlador: Pedro Gentil Roodes Rodrigues, CPF 054.***.***-36, pessoa física
 | **Onde vive** | `CommercialContact` (`CommercialContacts`); cópia no e-mail enviado à caixa comercial, `Commercial:Email` (`CommercialContactService.cs`) |
 | **Finalidade** | Responder ao pedido de contato sobre o plano Business |
 | **Base legal** | Procedimentos preliminares a contrato, a pedido do titular (art. 7º, V) |
-| **Compartilhamento** | Brevo, como operador, entrega o e-mail com os dados à caixa comercial |
+| **Compartilhamento** | Resend, como operador, entrega o e-mail com os dados à caixa comercial |
 | **Retenção** | 12 meses no banco (`COMMERCIAL_CONTACT_RETENTION_DAYS`, apagado por `DataRetentionHostedService`). A cópia na caixa de e-mail segue a política dessa caixa |
 | **Titular pode** | Pedir acesso ou exclusão pelo e-mail comercial ou de suporte |
 
