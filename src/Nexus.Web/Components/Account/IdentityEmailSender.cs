@@ -4,10 +4,10 @@ using Nexus.Web.Services;
 
 namespace Nexus.Web.Components.Account;
 
-// Sends transactional Identity emails (confirmation, password reset) through Brevo — free tier
-// covers 300 emails/day, well above what account confirmation and password resets need at this
+// Sends transactional Identity emails (confirmation, password reset) through Mailer. Volume is
+// tiny — account confirmation and password resets — well inside the relay provider's free tier at this
 // stage. Layout comes from EmailTemplate so these match the invite e-mail.
-public sealed class BrevoEmailSender(BrevoMailer mailer) : IEmailSender<ApplicationUser>
+public sealed class IdentityEmailSender(Mailer mailer) : IEmailSender<ApplicationUser>
 {
     public Task SendConfirmationLinkAsync(ApplicationUser user, string email, string confirmationLink)
     {

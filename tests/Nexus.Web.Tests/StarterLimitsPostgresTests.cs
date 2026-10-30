@@ -28,13 +28,8 @@ public class StarterLimitsPostgresTests
         public FakeNavigationManager() => Initialize("https://nexus.test/", "https://nexus.test/");
     }
 
-    private sealed class UnusedHttpClientFactory : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => throw new InvalidOperationException("A test must not make HTTP calls.");
-    }
-
     private sealed class SilentMailer()
-        : BrevoMailer(Options.Create(new BrevoOptions()), new UnusedHttpClientFactory(), NullLogger<BrevoMailer>.Instance)
+        : Mailer(Options.Create(new SmtpOptions()), NullLogger<Mailer>.Instance)
     {
         public override Task<bool> SendAsync(string toEmail, string subject, string htmlBody, string? textBody = null) => Task.FromResult(true);
     }

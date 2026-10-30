@@ -41,7 +41,7 @@ public enum CommercialContactResult
 /// </summary>
 public class CommercialContactService(
     IDbContextFactory<AppDbContext> dbFactory,
-    BrevoMailer mailer,
+    Mailer mailer,
     IOptions<CommercialOptions> commercial,
     IOptions<SupportOptions> support,
     TimeProvider? timeProvider = null)

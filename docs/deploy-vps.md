@@ -8,7 +8,8 @@ está na seção 4.
 
 ```
 navegador → Cloudflare (proxy, WAF) → Nginx do host :443 → 127.0.0.1:5100 → container web :8080
-                                                                              └→ container db (Postgres 18)
+                                                                              ├→ container db (Postgres 18)
+                                                                              └→ relay SMTP (smtp:25, rede mail) → Resend :587
 ```
 
 - O firewall (firewalld) só aceita 80/443 vindos dos IPs do Cloudflare; o resto bate em `return 444`.
@@ -23,7 +24,6 @@ navegador → Cloudflare (proxy, WAF) → Nginx do host :443 → 127.0.0.1:5100 
 | `/opt/nexus/docker-compose.yml` | Cópia de `deploy/vps/docker-compose.yml` |
 | `/opt/nexus/.env` | Senha do Postgres e do certificado de Data Protection. Gerado no servidor, **não está em lugar nenhum além dele** |
 | `/opt/nexus/dataprotection.pfx` | Cifra as chaves de Data Protection em repouso. Perder = todo mundo deslogado |
-| `/opt/nexus/brevo.env` | Escrito a cada deploy a partir dos secrets do GitHub |
 | `/opt/nexus/backups/` | `nexus-backup` diário (03:45): dump do banco + anexos, 7 dias |
 | `/etc/nginx/conf.d/nexus.conf` | Cópia de `deploy/vps/nexus.conf` |
 | `/usr/local/bin/nexus-deploy` | Único comando que o usuário `deploy` (chave do Actions) pode rodar |
@@ -40,7 +40,12 @@ Job `deploy-vps` em `.github/workflows/deploy-nexus.yml`:
    anterior e falha o job com os logs.
 4. Confere `https://nexus.aamora.com.br/health/live` de fora.
 
-Secrets do repositório: `VPS_HOST`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS` (+ os da Brevo, já existentes).
+Secrets do repositório: `VPS_HOST`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
+
+E-mail: o app envia para o relay SMTP da Aamora (`/opt/smtp`, container na rede Docker externa
+`mail`), que repassa pelo Resend na 587 — a VPS não sai pela porta 25. O remetente é
+`nao-responda@aamora.com.br` (`appsettings.Production.json`); nenhum segredo de e-mail passa pelo
+deploy. A chave do Resend fica só em `/opt/smtp/.env`.
 Os de FTP e `PROD_SQL_CONNECTION_STRING` só servem à migração e podem ser apagados depois dela.
 
 Rollback manual (o servidor guarda as 3 últimas imagens):

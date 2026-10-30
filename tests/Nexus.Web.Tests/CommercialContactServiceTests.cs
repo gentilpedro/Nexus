@@ -11,13 +11,8 @@ namespace Nexus.Web.Tests;
 /// </summary>
 public class CommercialContactServiceTests
 {
-    private sealed class UnusedHttpClientFactory : IHttpClientFactory
-    {
-        public HttpClient CreateClient(string name) => throw new InvalidOperationException("A test must not make HTTP calls.");
-    }
-
     private sealed class FakeMailer(bool succeeds = true)
-        : BrevoMailer(Options.Create(new BrevoOptions()), new UnusedHttpClientFactory(), NullLogger<BrevoMailer>.Instance)
+        : Mailer(Options.Create(new SmtpOptions()), NullLogger<Mailer>.Instance)
     {
         public List<(string To, string Subject, string Html, string? Text)> Sent { get; } = [];
 

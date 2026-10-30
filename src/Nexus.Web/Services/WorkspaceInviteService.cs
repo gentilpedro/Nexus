@@ -48,7 +48,7 @@ public readonly record struct InviteSendOutcome(InviteSendStatus Status, bool No
 // accept page.
 public class WorkspaceInviteService(
     IDbContextFactory<AppDbContext> dbFactory,
-    BrevoMailer mailer,
+    Mailer mailer,
     PublicUrlBuilder publicUrl,
     WorkspacePlanService? plans = null,
     Billing.BillingService? billing = null)

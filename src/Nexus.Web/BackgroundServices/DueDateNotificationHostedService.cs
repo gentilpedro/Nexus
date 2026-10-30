@@ -23,7 +23,7 @@ namespace Nexus.Web.BackgroundServices;
 /// </remarks>
 public class DueDateNotificationHostedService(
     IDbContextFactory<AppDbContext> dbFactory,
-    BrevoMailer mailer,
+    Mailer mailer,
     IConfiguration configuration,
     ILogger<DueDateNotificationHostedService> logger) : BackgroundService
 {

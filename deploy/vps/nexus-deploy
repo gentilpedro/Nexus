@@ -1,7 +1,6 @@
 #!/bin/bash
 # Único comando que a chave de deploy do GitHub Actions pode executar (forced command em
 # ~deploy/.ssh/authorized_keys, via sudo). Subcomandos:
-#   set-secrets          stdin: BREVO_API_KEY=... / BREVO_SENDER_EMAIL=...
 #   load-image <versão>  stdin: docker save | gzip
 #   up <versão>          sobe a versão; volta para a anterior se não ficar saudável
 #   import-db            stdin: pg_dump --format=custom. SUBSTITUI o banco inteiro.
@@ -22,12 +21,6 @@ export NEXUS_VERSION=$(cat .version 2>/dev/null || echo none)
 require_import() { [ -f "$DIR/.allow-import" ] || { echo "importação desabilitada (crie $DIR/.allow-import)" >&2; exit 3; }; }
 
 case "$CMD" in
-  set-secrets)
-    TMP=$(mktemp "$DIR/.brevo.XXXX")
-    grep -E '^(BREVO_API_KEY|BREVO_SENDER_EMAIL)=' | head -n 2 | sed -E 's/^BREVO_API_KEY=/Brevo__ApiKey=/; s/^BREVO_SENDER_EMAIL=/Brevo__SenderEmail=/' > "$TMP"
-    [ "$(grep -c . "$TMP")" = 2 ] || { rm -f "$TMP"; echo "esperava BREVO_API_KEY e BREVO_SENDER_EMAIL" >&2; exit 2; }
-    mv "$TMP" brevo.env
-    echo "ok: segredos atualizados" ;;
   load-image)
     valid_ver
     gunzip | docker load
