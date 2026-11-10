@@ -88,7 +88,7 @@
                                                 <span class="chats-sidebar-item-preview">
                                                     @if (item.LastMessageContent is not null)
                                                     {
-                                                        <span class="chats-sidebar-item-author">@item.LastMessageAuthor:</span> @item.LastMessageContent
+                                                        <span class="chats-sidebar-item-author">@item.LastMessageAuthor:</span>@(" ")@item.LastMessageContent
                                                     }
                                                     else
                                                     {
@@ -112,7 +112,7 @@
                 @if (ConversationId is Guid selectedId)
                 {
                     <div class="chat-embedded">
-                        <ConversationChat ConversationId="selectedId" Embedded="true" @key="selectedId" />
+                        <ConversationChat ConversationId="selectedId" Embedded="true" OnLeft="HandleLeftAsync" @key="selectedId" />
                     </div>
                 }
                 else
@@ -303,6 +303,12 @@
     {
         await LoadAsync();
         NavigationManager.NavigateTo($"/chats/{conversationId}");
+    }
+
+    private async Task HandleLeftAsync()
+    {
+        await LoadAsync();
+        NavigationManager.NavigateTo("/chats");
     }
 
     private static string EmptyPreview(ConversationItem item) => item.Type switch

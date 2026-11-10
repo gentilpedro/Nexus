@@ -192,6 +192,14 @@ else
     [Parameter]
     public bool Embedded { get; set; }
 
+    /// <summary>
+    /// Raised after the user leaves a group. The list page hosting this component reuses the
+    /// same instance across /chats routes, so it has to be told to reload; without a handler
+    /// the component just navigates back to the list.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnLeft { get; set; }
+
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
@@ -487,7 +495,14 @@ else
         if (await Conversations.LeaveGroupAsync(ConversationId, currentUserId))
         {
             Toasts.Show("Você saiu do grupo");
-            NavigationManager.NavigateTo("/chats");
+            if (OnLeft.HasDelegate)
+            {
+                await OnLeft.InvokeAsync();
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/chats");
+            }
         }
     }
 
