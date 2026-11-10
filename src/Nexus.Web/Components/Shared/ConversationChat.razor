@@ -1,0 +1,601 @@
+@* Uma conversa aberta — a geral do workspace, uma direta ou um grupo. Só o cabeçalho muda com o
+   tipo; mensagens, paginação e envio são os mesmos. *@
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAuthorizationService AuthorizationService
+@inject ChatConversationService Conversations
+@inject NavigationContextService NavContext
+@inject NavigationManager NavigationManager
+@inject WorkspaceChatBroadcaster Broadcaster
+@inject ToastService Toasts
+@inject IJSRuntime JS
+@inject ILogger<ConversationChat> Logger
+
+@if (notFound)
+{
+    <EmptyState Icon="lock" Title="Conversa não encontrada"
+                Description="Ela pode ter sido encerrada, ou você não faz mais parte dela.">
+        <a class="btn btn-secondary" href="/chats">Ver minhas conversas</a>
+    </EmptyState>
+}
+else if (conversation is null)
+{
+    <Skeleton Count="6" Label="Carregando conversa…" />
+}
+else
+{
+    <section class="chat-panel" aria-label="@($"Conversa {Title}")">
+        <header class="chat-panel-header">
+            @if (Embedded)
+            {
+                <a href="/chats" class="icon-btn icon-btn--sm chat-embedded-back">
+                    <Icon Name="arrow-left" Label="Voltar para as conversas" />
+                </a>
+            }
+            @switch (conversation.Type)
+            {
+                case ChatConversationType.Workspace:
+                    <Avatar Name="@conversation.Workspace.Name" Color="@conversation.Workspace.Color" Size="md" Square="true" />
+                    break;
+                case ChatConversationType.Direct:
+                    <Avatar Name="@Title" ImageUrl="@(otherPerson is { AvatarPath: not null } p ? AvatarUrl(p.UserId, p.AvatarPath) : null)" Size="md" />
+                    break;
+                default:
+                    <span class="avatar avatar--md chat-group-avatar" aria-hidden="true"><Icon Name="team" Class="icon--sm" /></span>
+                    break;
+            }
+            <div class="chat-panel-title">
+                <strong>@Title</strong>
+                <span>@Subtitle</span>
+            </div>
+            @if (conversation.Type == ChatConversationType.Group)
+            {
+                <div class="chat-panel-actions">
+                    <button type="button" class="icon-btn icon-btn--sm" data-tooltip="Adicionar pessoas" @onclick="OpenAddMembersAsync">
+                        <Icon Name="user-plus" Label="Adicionar pessoas ao grupo" />
+                    </button>
+                    <button type="button" class="icon-btn icon-btn--sm" data-tooltip="Sair do grupo" @onclick="LeaveGroupAsync">
+                        <Icon Name="log-out" Label="Sair do grupo" />
+                    </button>
+                </div>
+            }
+        </header>
+
+        <div class="chat-messages" @ref="messagesEl" role="log" aria-live="polite" aria-relevant="additions" aria-label="Mensagens">
+            @if (messages is null)
+            {
+                <Skeleton Count="5" Label="Carregando mensagens…" />
+            }
+            else if (messages.Count == 0)
+            {
+                <EmptyState Icon="chat" Title="Nenhuma mensagem ainda" Description="@EmptyHint" />
+            }
+            else
+            {
+                @if (hasMoreOlderMessages)
+                {
+                    <div class="chat-load-older-row">
+                        <button type="button" class="btn btn-ghost btn-sm @(isLoadingOlder ? "is-loading" : "")" @onclick="LoadOlderMessagesAsync" disabled="@isLoadingOlder">
+                            Carregar mensagens anteriores
+                        </button>
+                    </div>
+                }
+                @for (var i = 0; i < messages.Count; i++)
+                {
+                    var message = messages[i];
+                    var previous = i > 0 ? messages[i - 1] : null;
+                    var local = message.CreatedAtUtc.ToLocalTime();
+                    var newDay = previous is null || previous.CreatedAtUtc.ToLocalTime().Date != local.Date;
+                    var isGrouped = !newDay && previous is not null
+                        && previous.UserId == message.UserId
+                        && (message.CreatedAtUtc - previous.CreatedAtUtc) < TimeSpan.FromMinutes(5);
+                    var mine = message.UserId == currentUserId;
+
+                    @if (newDay)
+                    {
+                        <div class="chat-day-separator" role="separator"><span>@DayLabel(local)</span></div>
+                    }
+
+                    <article class="chat-message @(isGrouped ? "chat-message-grouped" : "") @(mine ? "is-mine" : "")" @key="message.Id">
+                        @if (isGrouped)
+                        {
+                            <span class="chat-message-avatar-spacer" aria-hidden="true">
+                                <time class="chat-message-hover-time" datetime="@message.CreatedAtUtc.ToString("o")">@local.ToString("HH:mm")</time>
+                            </span>
+                        }
+                        else
+                        {
+                            <Avatar Name="@AuthorLabel(message)" Size="md" />
+                        }
+                        <div class="chat-message-body">
+                            @if (!isGrouped)
+                            {
+                                <div class="chat-message-meta">
+                                    <span class="chat-message-author">@AuthorLabel(message)</span>
+                                    <time class="chat-message-time" datetime="@message.CreatedAtUtc.ToString("o")" title="@local.ToString("dd/MM/yyyy HH:mm")">@local.ToString("HH:mm")</time>
+                                </div>
+                            }
+                            @if (!string.IsNullOrEmpty(message.Content))
+                            {
+                                <div class="chat-message-content">
+                                    @foreach (var (text, isMention) in SplitContentForMentions(message))
+                                    {
+                                        @if (isMention)
+                                        {
+                                            <span class="chat-mention">@text</span>
+                                        }
+                                        else
+                                        {
+                                            @text
+                                        }
+                                    }
+                                </div>
+                            }
+                            @if (message.ReferencedDocPage is not null)
+                            {
+                                <a class="chat-docref-card" href="@($"/workspaces/{conversation.WorkspaceId}/docs/{message.ReferencedDocPage.Id}")">
+                                    <span class="doc-type-icon" aria-hidden="true"><Icon Name="doc" /></span>
+                                    <span class="chat-docref-title">@message.ReferencedDocPage.Title</span>
+                                </a>
+                            }
+                            @if (message.Attachments.Count > 0)
+                            {
+                                <div class="chat-attachment-list">
+                                    @foreach (var attachment in message.Attachments)
+                                    {
+                                        <a class="chat-attachment-item" href="@($"/chat-attachments/{attachment.Id}/download")" target="_blank" rel="noopener">
+                                            <span class="doc-type-icon doc-type-icon--file" aria-hidden="true"><Icon Name="paperclip" /></span>
+                                            <span class="chat-attachment-info">
+                                                <span class="chat-attachment-name">@attachment.FileName</span>
+                                                <span class="chat-attachment-size">@FormatSize(attachment.SizeBytes)</span>
+                                            </span>
+                                        </a>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </article>
+                }
+            }
+        </div>
+
+        <ChatComposeBox Conversation="conversation"
+                        Title="@Title"
+                        DocPages="docPages"
+                        Participants="participants"
+                        CurrentUserId="@currentUserId"
+                        OnAccessRevoked="HandleComposeAccessRevoked" />
+    </section>
+
+    @if (conversation.Type == ChatConversationType.Group)
+    {
+        <NewConversationDialog @ref="addMembersDialog"
+                               WorkspaceId="conversation.WorkspaceId"
+                               CurrentUserId="@currentUserId"
+                               AddToConversationId="conversation.Id"
+                               ExcludeUserIds="participants.Select(p => p.UserId).ToList()"
+                               OnCompleted="HandleMembersAddedAsync" />
+        <ConfirmDialog @ref="confirm" />
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ConversationId { get; set; }
+
+    [Parameter]
+    public bool Embedded { get; set; }
+
+    /// <summary>
+    /// Raised after the user leaves a group. The list page hosting this component reuses the
+    /// same instance across /chats routes, so it has to be told to reload; without a handler
+    /// the component just navigates back to the list.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnLeft { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private const int MessagePageSize = 100;
+
+    private ChatConversation? conversation;
+    private int memberCount;
+    private List<ChatMessage>? messages;
+    private bool hasMoreOlderMessages;
+    private bool isLoadingOlder;
+    private List<DocPage> docPages = [];
+    private bool notFound;
+    private string? currentUserId;
+    private Guid? loadedConversationId;
+    private ElementReference messagesEl;
+    private IJSObjectReference? module;
+    private List<(string UserId, string DisplayName, string? AvatarPath)> participants = [];
+    private (string UserId, string DisplayName, string? AvatarPath)? otherPerson;
+    private NewConversationDialog? addMembersDialog;
+    private ConfirmDialog? confirm;
+
+    private static readonly System.Globalization.CultureInfo PtBr = new("pt-BR");
+
+    private string Title => conversation?.Type switch
+    {
+        ChatConversationType.Direct => otherPerson?.DisplayName ?? "Conversa direta",
+        ChatConversationType.Group => conversation.Name ?? "Grupo",
+        _ => conversation?.Workspace.Name ?? ""
+    };
+
+    private string Subtitle
+    {
+        get
+        {
+            var plural = memberCount == 1 ? "" : "s";
+            return conversation?.Type switch
+            {
+                ChatConversationType.Direct => "Conversa direta · só vocês dois veem",
+                ChatConversationType.Group => $"{memberCount} membro{plural} · {string.Join(", ", participants.Select(p => p.DisplayName))}",
+                _ => $"{memberCount} membro{plural} · todos veem esta conversa"
+            };
+        }
+    }
+
+    private string EmptyHint => conversation?.Type switch
+    {
+        ChatConversationType.Direct => $"Diga oi para {Title}. Só vocês dois veem esta conversa.",
+        ChatConversationType.Group => "Comece a conversa. Digite @ para mencionar alguém do grupo — a pessoa recebe uma notificação.",
+        _ => "Comece a conversa. Digite @ para mencionar alguém — a pessoa recebe uma notificação."
+    };
+
+    private static string DayLabel(DateTime local)
+    {
+        var today = DateTime.Now.Date;
+        if (local.Date == today) return "Hoje";
+        if (local.Date == today.AddDays(-1)) return "Ontem";
+        var label = local.ToString(local.Year == today.Year ? "dddd, d 'de' MMMM" : "d 'de' MMMM 'de' yyyy", PtBr);
+        return char.ToUpper(label[0], PtBr) + label[1..];
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedConversationId == ConversationId)
+        {
+            return;
+        }
+
+        loadedConversationId = ConversationId;
+        notFound = false;
+        conversation = null;
+        messages = null;
+
+        var authState = await AuthStateTask!;
+        currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var authResult = await AuthorizationService.AuthorizeAsync(
+            authState.User, ConversationId, ConversationAccessRequirement.Instance);
+
+        if (!authResult.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            conversation = await db.ChatConversations
+                .Include(c => c.Workspace)
+                .FirstOrDefaultAsync(c => c.Id == ConversationId);
+        }
+
+        if (conversation is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        NavContext.SetWorkspace(conversation.WorkspaceId, conversation.Workspace.Name);
+
+        await LoadParticipantsAsync();
+        await LoadMessagesAsync();
+        await LoadDocPagesAsync();
+
+        if (currentUserId is not null)
+        {
+            await Conversations.MarkReadAsync(ConversationId, currentUserId, DateTime.UtcNow);
+        }
+
+        // Unsubscribe first: if this same component instance switches to a different
+        // conversation (OnParametersSetAsync reruns without a full page reload), re-subscribing
+        // without this would register OnMessagePosted twice and duplicate every future message.
+        Broadcaster.MessagePosted -= OnMessagePosted;
+        Broadcaster.MessagePosted += OnMessagePosted;
+    }
+
+    private async Task LoadParticipantsAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Who can be mentioned and who gets notified. The workspace conversation has no member
+        // rows of its own — everyone in the workspace is in it.
+        participants = conversation!.Type == ChatConversationType.Workspace
+            ? await db.WorkspaceMembers
+                .Where(m => m.WorkspaceId == conversation.WorkspaceId)
+                .Select(m => new ValueTuple<string, string, string?>(m.UserId, m.User.DisplayName != "" ? m.User.DisplayName : (m.User.Email ?? ""), m.User.AvatarStoragePath))
+                .ToListAsync()
+            : await db.ChatConversationMembers
+                .Where(m => m.ConversationId == ConversationId)
+                .Select(m => new ValueTuple<string, string, string?>(m.UserId, m.User.DisplayName != "" ? m.User.DisplayName : (m.User.Email ?? ""), m.User.AvatarStoragePath))
+                .ToListAsync();
+
+        // Sorted here rather than in SQL: Postgres orders by the database collation, which
+        // puts accented names (Mônica, Ântonio) after plain-ASCII ones instead of alongside
+        // them. Also makes the Take(6) cut of the suggestion list predictable.
+        participants = participants
+            .OrderBy(m => m.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        memberCount = participants.Count;
+        otherPerson = conversation.Type == ChatConversationType.Direct
+            ? participants.FirstOrDefault(p => p.UserId != currentUserId)
+            : null;
+    }
+
+    private async Task LoadMessagesAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var recent = await db.ChatMessages
+            .Where(m => m.ConversationId == ConversationId)
+            .Include(m => m.User)
+            .Include(m => m.ReferencedDocPage)
+            .Include(m => m.Attachments)
+            .Include(m => m.Mentions).ThenInclude(x => x.User)
+            .OrderByDescending(m => m.CreatedAtUtc)
+            .Take(MessagePageSize)
+            .ToListAsync();
+        hasMoreOlderMessages = recent.Count == MessagePageSize;
+        recent.Reverse();
+        messages = recent;
+    }
+
+    private async Task LoadOlderMessagesAsync()
+    {
+        if (isLoadingOlder || !hasMoreOlderMessages || messages is null || messages.Count == 0 || module is null)
+        {
+            return;
+        }
+
+        isLoadingOlder = true;
+        var metrics = await module.InvokeAsync<ScrollMetrics?>("getScrollMetrics", messagesEl);
+
+        var oldestLoaded = messages[0].CreatedAtUtc;
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var older = await db.ChatMessages
+                .Where(m => m.ConversationId == ConversationId && m.CreatedAtUtc < oldestLoaded)
+                .Include(m => m.User)
+                .Include(m => m.ReferencedDocPage)
+                .Include(m => m.Attachments)
+                .Include(m => m.Mentions).ThenInclude(x => x.User)
+                .OrderByDescending(m => m.CreatedAtUtc)
+                .Take(MessagePageSize)
+                .ToListAsync();
+
+            hasMoreOlderMessages = older.Count == MessagePageSize;
+            older.Reverse();
+            messages.InsertRange(0, older);
+        }
+
+        isLoadingOlder = false;
+        StateHasChanged();
+
+        if (metrics is not null)
+        {
+            await module.InvokeVoidAsync("restoreScrollAfterPrepend", messagesEl, metrics.ScrollHeight, metrics.ScrollTop);
+        }
+    }
+
+    private async Task LoadDocPagesAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        docPages = await db.DocPages
+            .Where(d => d.WorkspaceId == conversation!.WorkspaceId)
+            .OrderBy(d => d.Title)
+            .ToListAsync();
+    }
+
+    private void OnMessagePosted(ChatMessage message)
+    {
+        if (message.ConversationId != ConversationId)
+        {
+            return;
+        }
+
+        // WorkspaceChatBroadcaster.Broadcast invokes subscribers synchronously on the sender's
+        // own thread — everything that touches this circuit's state (including the list
+        // mutation, not just the render) must be marshaled via InvokeAsync, or it races with
+        // this circuit's own renderer.
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                messages ??= [];
+                messages.Add(message);
+                StateHasChanged();
+                await ScrollToBottomAsync();
+
+                // The conversation is on screen, so whatever just arrived has been seen.
+                if (currentUserId is not null)
+                {
+                    await Conversations.MarkReadAsync(ConversationId, currentUserId, message.CreatedAtUtc);
+                }
+            }
+            catch (JSDisconnectedException)
+            {
+                // Circuit already gone — nothing to update.
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to apply a live chat message in conversation {ConversationId}", ConversationId);
+            }
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/chat-interop.js");
+            await ScrollToBottomAsync();
+        }
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        if (module is not null)
+        {
+            await module.InvokeVoidAsync("scrollToBottom", messagesEl);
+        }
+    }
+
+    private void HandleComposeAccessRevoked()
+    {
+        notFound = true;
+        StateHasChanged();
+    }
+
+    private Task OpenAddMembersAsync() => addMembersDialog?.OpenAsync() ?? Task.CompletedTask;
+
+    private async Task HandleMembersAddedAsync(Guid _)
+    {
+        await LoadParticipantsAsync();
+        Toasts.Show("Pessoas adicionadas ao grupo");
+    }
+
+    private async Task LeaveGroupAsync()
+    {
+        if (confirm is null || currentUserId is null || conversation is null)
+        {
+            return;
+        }
+
+        var request = new ConfirmRequest(
+            Title: $"Sair de \"{Title}\"?",
+            Message: "Você deixa de ver as mensagens deste grupo. Alguém que ficou pode te adicionar de volta.",
+            ConfirmLabel: "Sair do grupo");
+
+        if (!await confirm.AskAsync(request))
+        {
+            return;
+        }
+
+        if (await Conversations.LeaveGroupAsync(ConversationId, currentUserId))
+        {
+            Toasts.Show("Você saiu do grupo");
+            if (OnLeft.HasDelegate)
+            {
+                await OnLeft.InvokeAsync();
+            }
+            else
+            {
+                NavigationManager.NavigateTo("/chats");
+            }
+        }
+    }
+
+    // Splits message.Content into plain-text / mention segments for rendering — never builds
+    // raw HTML/MarkupString from user content (XSS risk), each segment still goes through
+    // Blazor's normal @text interpolation, which escapes it automatically.
+    private static List<(string Text, bool IsMention)> SplitContentForMentions(ChatMessage message)
+    {
+        var segments = new List<(string, bool)>();
+        if (message.Mentions.Count == 0 && !message.Content.Contains("@everyone", StringComparison.Ordinal))
+        {
+            segments.Add((message.Content, false));
+            return segments;
+        }
+
+        var mentionTokens = message.Mentions
+            .Select(m => $"@{(string.IsNullOrEmpty(m.User.DisplayName) ? m.User.Email : m.User.DisplayName)}")
+            .Where(t => t.Length > 1)
+            .Distinct()
+            .ToList();
+
+        // "@everyone" doesn't map to any single ChatMessageMention.User, so it never shows up
+        // in the list above — recognize it directly whenever it's literally in the text.
+        if (message.Content.Contains("@everyone", StringComparison.Ordinal))
+        {
+            mentionTokens.Add("@everyone");
+        }
+
+        mentionTokens = mentionTokens.OrderByDescending(t => t.Length).ToList();
+
+        var remaining = message.Content;
+        while (remaining.Length > 0)
+        {
+            var earliestIndex = -1;
+            string? matchedToken = null;
+            foreach (var token in mentionTokens)
+            {
+                var idx = remaining.IndexOf(token, StringComparison.Ordinal);
+                if (idx != -1 && (earliestIndex == -1 || idx < earliestIndex))
+                {
+                    earliestIndex = idx;
+                    matchedToken = token;
+                }
+            }
+
+            if (earliestIndex == -1)
+            {
+                segments.Add((remaining, false));
+                break;
+            }
+
+            if (earliestIndex > 0)
+            {
+                segments.Add((remaining[..earliestIndex], false));
+            }
+            segments.Add((matchedToken!, true));
+            remaining = remaining[(earliestIndex + matchedToken!.Length)..];
+        }
+
+        return segments;
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024.0:0.#} KB";
+        }
+
+        return $"{bytes / (1024.0 * 1024.0):0.#} MB";
+    }
+
+    private static string AuthorLabel(ChatMessage message) =>
+        message.User is null
+            ? "Usuário removido"
+            : (string.IsNullOrEmpty(message.User.DisplayName) ? message.User.Email ?? "" : message.User.DisplayName);
+
+    private static string AvatarUrl(string userId, string avatarPath) =>
+        $"/avatars/{userId}/download?v={Uri.EscapeDataString(System.IO.Path.GetFileNameWithoutExtension(avatarPath))}";
+
+    public void Dispose()
+    {
+        Broadcaster.MessagePosted -= OnMessagePosted;
+    }
+
+    private class ScrollMetrics
+    {
+        public double ScrollHeight { get; set; }
+        public double ScrollTop { get; set; }
+    }
+}

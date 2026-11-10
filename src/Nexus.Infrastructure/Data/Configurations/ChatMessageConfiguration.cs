@@ -22,7 +22,14 @@ public class ChatMessageConfiguration : IEntityTypeConfiguration<ChatMessage>
             .HasForeignKey(m => m.UserId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        builder.HasIndex(m => new { m.WorkspaceId, m.CreatedAtUtc });
+        builder.HasOne(m => m.Conversation)
+            .WithMany()
+            .HasForeignKey(m => m.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // The chat page reads "latest N messages of this conversation"; nothing reads by
+        // workspace + time anymore.
+        builder.HasIndex(m => new { m.ConversationId, m.CreatedAtUtc });
 
         // Restrict, not SetNull: ChatMessages already has one cascading path from Workspace
         // (Cascade). SQL Server treats SetNull as a cascading action too, so a second path

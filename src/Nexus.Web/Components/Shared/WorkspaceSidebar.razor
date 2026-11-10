@@ -200,8 +200,7 @@
 
     private bool IsSection(Guid workspaceId, string section) =>
         CurrentPath.StartsWith($"/workspaces/{workspaceId}/{section}", StringComparison.OrdinalIgnoreCase)
-        || (section == "docs" && (CurrentPath.StartsWith($"/workspaces/{workspaceId}/spreadsheets", StringComparison.OrdinalIgnoreCase)))
-        || (section == "chat" && CurrentPath.StartsWith($"/chats/{workspaceId}", StringComparison.OrdinalIgnoreCase));
+        || (section == "docs" && (CurrentPath.StartsWith($"/workspaces/{workspaceId}/spreadsheets", StringComparison.OrdinalIgnoreCase)));
 
     private async void OnContextChanged()
     {

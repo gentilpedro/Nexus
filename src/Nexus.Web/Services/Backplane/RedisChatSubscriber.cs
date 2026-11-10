@@ -81,7 +81,7 @@ public sealed class RedisChatSubscriber(
             return;
         }
 
-        // Reloaded with exactly the includes WorkspaceChat.razor renders — see the remarks on
+        // Reloaded with exactly the includes ConversationChat.razor renders — see the remarks on
         // ChatBackplaneEnvelope for why the entity is not sent over the wire.
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
 

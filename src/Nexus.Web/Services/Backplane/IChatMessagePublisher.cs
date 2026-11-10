@@ -18,7 +18,7 @@ public interface IChatMessagePublisher
     /// called, and losing the cross-instance fan-out is strictly less bad than failing the send
     /// the user just made. Implementations log and swallow.
     /// </remarks>
-    Task PublishAsync(Guid workspaceId, Guid messageId, CancellationToken cancellationToken = default);
+    Task PublishAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -31,6 +31,6 @@ public interface IChatMessagePublisher
 /// </remarks>
 public sealed class NullChatMessagePublisher : IChatMessagePublisher
 {
-    public Task PublishAsync(Guid workspaceId, Guid messageId, CancellationToken cancellationToken = default) =>
+    public Task PublishAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default) =>
         Task.CompletedTask;
 }

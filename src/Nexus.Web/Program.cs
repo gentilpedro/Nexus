@@ -63,7 +63,10 @@ builder.Services.AddAuthorizationCore(options =>
         .Build();
 });
 builder.Services.AddScoped<IAuthorizationHandler, WorkspaceAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, ConversationAuthorizationHandler>();
 builder.Services.AddScoped<WorkspaceAccessGuard>();
+builder.Services.AddScoped<ConversationAccessGuard>();
+builder.Services.AddScoped<ChatConversationService>();
 builder.Services.AddScoped<WorkItemQueryService>();
 builder.Services.AddScoped<ListViewLoader>();
 builder.Services.AddScoped<NavigationContextService>();
@@ -434,8 +437,10 @@ app.MapGet("/chat-attachments/{id:guid}/download", async (
         return Results.NotFound();
     }
 
+    // By conversation, not workspace: a file sent in a direct or group conversation must not be
+    // downloadable by every other member of the workspace who happens to know the attachment id.
     var authResult = await authorizationService.AuthorizeAsync(
-        http.User, attachment.ChatMessage.WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+        http.User, attachment.ChatMessage.ConversationId, ConversationAccessRequirement.Instance);
 
     if (!authResult.Succeeded)
     {

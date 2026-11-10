@@ -170,8 +170,13 @@
             // Abre a lista já com o painel da tarefa (ListView lê ?tarefa=).
             NavigationManager.NavigateTo($"/lists/{notification.WorkItem.TaskListId}/list?tarefa={notification.WorkItem.Id}");
         }
+        else if (notification.ConversationId is not null)
+        {
+            NavigationManager.NavigateTo($"/chats/{notification.ConversationId}");
+        }
         else if (notification.WorkspaceId is not null)
         {
+            // Chat notifications from before private conversations existed only know the workspace.
             NavigationManager.NavigateTo($"/workspaces/{notification.WorkspaceId}/chat");
         }
     }

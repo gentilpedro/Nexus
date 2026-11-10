@@ -307,6 +307,76 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.ToTable("AuditLogEntries");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.ChatConversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DirectKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ChatConversations_WorkspaceId_WorkspaceType")
+                        .HasFilter("\"Type\" = 0");
+
+                    b.HasIndex("WorkspaceId", "DirectKey")
+                        .IsUnique();
+
+                    b.ToTable("ChatConversations");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.ChatConversationMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("JoinedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastReadAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ConversationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ChatConversationMembers");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.ChatMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -317,6 +387,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -336,7 +409,9 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("WorkspaceId", "CreatedAtUtc");
+                    b.HasIndex("WorkspaceId");
+
+                    b.HasIndex("ConversationId", "CreatedAtUtc");
 
                     b.ToTable("ChatMessages");
                 });
@@ -674,6 +749,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -703,6 +781,8 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
 
                     b.HasIndex("CreatedAtUtc");
 
@@ -1365,8 +1445,51 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("ActorUser");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.ChatConversation", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.ChatConversationMember", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ChatConversation", "Conversation")
+                        .WithMany("Members")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.ChatMessage", b =>
                 {
+                    b.HasOne("Nexus.Domain.Entities.ChatConversation", "Conversation")
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Nexus.Domain.Entities.DocPage", "ReferencedDocPage")
                         .WithMany()
                         .HasForeignKey("ReferencedDocPageId")
@@ -1382,6 +1505,8 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Conversation");
 
                     b.Navigation("ReferencedDocPage");
 
@@ -1517,6 +1642,11 @@ namespace Nexus.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Nexus.Domain.Entities.Notification", b =>
                 {
+                    b.HasOne("Nexus.Domain.Entities.ChatConversation", "Conversation")
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Nexus.Domain.Entities.ApplicationUser", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -1532,6 +1662,8 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .WithMany()
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Conversation");
 
                     b.Navigation("User");
 
@@ -1762,6 +1894,11 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.ChatConversation", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.ChatMessage", b =>

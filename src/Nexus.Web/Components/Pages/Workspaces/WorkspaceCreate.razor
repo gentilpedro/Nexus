@@ -277,6 +277,7 @@
         workspace.Subscription = WorkspaceSubscription.StartStarter(workspace.Id, DateTime.UtcNow);
 
         db.Workspaces.Add(workspace);
+        db.ChatConversations.Add(ChatConversationService.NewWorkspaceConversation(workspace.Id, DateTime.UtcNow));
 
         // Everyone listed here gets a pending invite, whether or not the address already has an
         // account — the only member created up front is the owner above. WorkspaceInviteService

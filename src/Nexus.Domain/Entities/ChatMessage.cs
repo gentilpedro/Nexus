@@ -4,8 +4,13 @@ public class ChatMessage
 {
     public Guid Id { get; set; }
 
+    // Denormalized from the conversation: the attachment download endpoint and the doc-page
+    // cleanup only need the workspace, and both predate conversations.
     public Guid WorkspaceId { get; set; }
     public Workspace Workspace { get; set; } = null!;
+
+    public Guid ConversationId { get; set; }
+    public ChatConversation Conversation { get; set; } = null!;
 
     public string? UserId { get; set; }
     public ApplicationUser? User { get; set; }
