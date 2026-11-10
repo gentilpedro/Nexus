@@ -8,7 +8,8 @@ namespace Nexus.Web.Services;
 /// subscribes to the same event, so a message posted by one circuit reaches every other
 /// connected circuit without a page reload. No separate SignalR hub needed since Blazor
 /// Server already keeps a persistent circuit per user; this just fans a C# event out to
-/// whichever WorkspaceChat.razor instances are currently alive.
+/// whichever ConversationChat.razor instances are currently alive; each one keeps only the
+/// messages of the conversation it is showing.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -41,7 +42,7 @@ public class WorkspaceChatBroadcaster(IChatMessagePublisher publisher)
     public async Task BroadcastAsync(ChatMessage message, CancellationToken cancellationToken = default)
     {
         MessagePosted?.Invoke(message);
-        await publisher.PublishAsync(message.WorkspaceId, message.Id, cancellationToken);
+        await publisher.PublishAsync(message.ConversationId, message.Id, cancellationToken);
     }
 
     /// <summary>

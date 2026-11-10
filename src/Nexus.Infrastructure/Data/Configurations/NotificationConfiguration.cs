@@ -32,6 +32,13 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
             .HasForeignKey(n => n.WorkspaceId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // A conversation only disappears with its workspace, which is never deleted today; if it
+        // ever is, the notification just loses its deep link and falls back to the workspace chat.
+        builder.HasOne(n => n.Conversation)
+            .WithMany()
+            .HasForeignKey(n => n.ConversationId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(n => new { n.UserId, n.IsRead });
 
         // Supports DataRetentionHostedService's daily sweep, which deletes by CreatedAtUtc alone.

@@ -9,7 +9,7 @@
 @using Nexus.Web.Services.Backplane
 @implements IDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
-@inject Nexus.Web.Authorization.WorkspaceAccessGuard AccessGuard
+@inject ConversationAccessGuard AccessGuard
 @inject ICircuitActionRateLimiter ChatRateLimiter
 @inject WorkspaceChatBroadcaster Broadcaster
 @inject AttachmentStorageService Storage
@@ -23,9 +23,9 @@
     }
     <div class="chat-compose-box">
         <div class="chat-compose-textarea-wrap">
-            <label for="chat-compose-input" class="sr-only">Mensagem para @Workspace.Name</label>
+            <label for="chat-compose-input" class="sr-only">Mensagem para @Title</label>
             <textarea id="chat-compose-input" @ref="composeTextareaEl" value="@renderedContent" rows="2"
-                      placeholder="Mensagem para @Workspace.Name — use @@ para mencionar alguém"
+                      placeholder="Mensagem para @Title — use @@ para mencionar alguém"
                       aria-describedby="chat-compose-hint"></textarea>
             @if (showMentionDropdown)
             {
@@ -89,17 +89,20 @@
 </EditForm>
 
 @code {
+    /// <summary>Loaded with its Workspace — the notification text names it.</summary>
     [Parameter, EditorRequired]
-    public Guid WorkspaceId { get; set; }
+    public ChatConversation Conversation { get; set; } = null!;
 
+    /// <summary>How the conversation is shown to the person typing (workspace, group or other person's name).</summary>
     [Parameter, EditorRequired]
-    public Workspace Workspace { get; set; } = null!;
+    public string Title { get; set; } = "";
 
     [Parameter, EditorRequired]
     public List<DocPage> DocPages { get; set; } = [];
 
+    /// <summary>Who can be mentioned: everyone in the conversation, sender included.</summary>
     [Parameter, EditorRequired]
-    public List<(string UserId, string DisplayName, string? AvatarPath)> WorkspaceMembers { get; set; } = [];
+    public List<(string UserId, string DisplayName, string? AvatarPath)> Participants { get; set; } = [];
 
     [Parameter]
     public string? CurrentUserId { get; set; }
@@ -197,7 +200,7 @@
 
         mentionStartIndex = atIndex;
         showEveryoneOption = "everyone".Contains(query, StringComparison.OrdinalIgnoreCase);
-        mentionSuggestions = WorkspaceMembers
+        mentionSuggestions = Participants
             .Where(m => m.UserId != CurrentUserId && m.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase))
             .Take(6)
             .ToList();
@@ -296,11 +299,11 @@
         }
 
         // Membership is re-checked here, not just when the parent first loaded the page. This
-        // circuit can stay open for hours; without this, someone removed from the workspace
-        // keeps posting to its chat until they happen to navigate. See WorkspaceAccessGuard.
-        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member))
+        // circuit can stay open for hours; without this, someone removed from the workspace or
+        // who left the group keeps posting until they happen to navigate. See ConversationAccessGuard.
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, Conversation.Id))
         {
-            sendError = "Você não tem mais acesso a este workspace.";
+            sendError = "Você não tem mais acesso a esta conversa.";
             if (OnAccessRevoked.HasDelegate)
             {
                 await OnAccessRevoked.InvokeAsync();
@@ -333,13 +336,14 @@
                 // leak the title of) a doc from a workspace it isn't even a member of.
                 if (hasDocRef)
                 {
-                    hasDocRef = await db.DocPages.AnyAsync(d => d.Id == referencedDocPageId && d.WorkspaceId == WorkspaceId);
+                    hasDocRef = await db.DocPages.AnyAsync(d => d.Id == referencedDocPageId && d.WorkspaceId == Conversation.WorkspaceId);
                 }
 
                 message = new ChatMessage
                 {
                     Id = Guid.NewGuid(),
-                    WorkspaceId = WorkspaceId,
+                    WorkspaceId = Conversation.WorkspaceId,
+                    ConversationId = Conversation.Id,
                     UserId = CurrentUserId,
                     Content = sendModel.Content?.Trim() ?? "",
                     ReferencedDocPageId = hasDocRef ? referencedDocPageId : null,
@@ -347,12 +351,18 @@
                 };
                 db.ChatMessages.Add(message);
 
-                // Every other workspace member — needed both to resolve "@everyone" and, later,
-                // as the recipient list for the generic "new message" notification.
-                var recipientIds = await db.WorkspaceMembers
-                    .Where(m => m.WorkspaceId == WorkspaceId && m.UserId != CurrentUserId)
-                    .Select(m => m.UserId)
-                    .ToListAsync();
+                // Everyone else in the conversation — needed both to resolve "@everyone" and,
+                // later, as the recipient list for the generic "new message" notification. Read
+                // from the database, not from Participants: that list is as old as the page.
+                var recipientIds = Conversation.Type == ChatConversationType.Workspace
+                    ? await db.WorkspaceMembers
+                        .Where(m => m.WorkspaceId == Conversation.WorkspaceId && m.UserId != CurrentUserId)
+                        .Select(m => m.UserId)
+                        .ToListAsync()
+                    : await db.ChatConversationMembers
+                        .Where(m => m.ConversationId == Conversation.Id && m.UserId != CurrentUserId)
+                        .Select(m => m.UserId)
+                        .ToListAsync();
 
                 // The dropdown always inserts a mention with a trailing space, but Content was
                 // trimmed above — so a mention that ends the message ("@everyone" on its own,
@@ -375,7 +385,7 @@
                 var validMentionedUserIds = mentionedEveryoneValid
                     ? recipientIds
                     : mentionedUserIds
-                        .Where(id => WorkspaceMembers.Any(m => m.UserId == id && StillMentioned($"@{m.DisplayName}")))
+                        .Where(id => Participants.Any(m => m.UserId == id && StillMentioned($"@{m.DisplayName}")))
                         .ToList();
                 foreach (var mentionedUserId in validMentionedUserIds)
                 {
@@ -440,6 +450,12 @@
                 // isn't looking at the chat right now that a message is waiting. Mentioned
                 // members get a more specific notification instead (below), not this one too.
                 var senderName = string.IsNullOrEmpty(message.User!.DisplayName) ? (message.User.Email ?? "Alguém") : message.User.DisplayName;
+                var where = Conversation.Type switch
+                {
+                    ChatConversationType.Direct => "em uma conversa direta",
+                    ChatConversationType.Group => $"no grupo \"{Conversation.Name}\"",
+                    _ => $"no chat de \"{Conversation.Workspace.Name}\""
+                };
 
                 foreach (var recipientId in recipientIds.Except(validMentionedUserIds))
                 {
@@ -448,8 +464,11 @@
                         Id = Guid.NewGuid(),
                         UserId = recipientId,
                         Type = NotificationType.ChatMessage,
-                        Message = Notification.TruncateMessage($"{senderName} enviou uma mensagem no chat de \"{Workspace.Name}\"."),
-                        WorkspaceId = WorkspaceId,
+                        Message = Notification.TruncateMessage(Conversation.Type == ChatConversationType.Direct
+                            ? $"{senderName} enviou uma mensagem para você."
+                            : $"{senderName} enviou uma mensagem {where}."),
+                        WorkspaceId = Conversation.WorkspaceId,
+                        ConversationId = Conversation.Id,
                         IsRead = false,
                         CreatedAtUtc = DateTime.UtcNow
                     });
@@ -462,8 +481,9 @@
                         Id = Guid.NewGuid(),
                         UserId = mentionedUserId,
                         Type = NotificationType.ChatMention,
-                        Message = Notification.TruncateMessage($"{senderName} mencionou você no chat de \"{Workspace.Name}\"."),
-                        WorkspaceId = WorkspaceId,
+                        Message = Notification.TruncateMessage($"{senderName} mencionou você {where}."),
+                        WorkspaceId = Conversation.WorkspaceId,
+                        ConversationId = Conversation.Id,
                         IsRead = false,
                         CreatedAtUtc = DateTime.UtcNow
                     });
@@ -492,7 +512,7 @@
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to send chat message in workspace {WorkspaceId}", WorkspaceId);
+            Logger.LogError(ex, "Failed to send chat message in conversation {ConversationId}", Conversation.Id);
             sendError = "Não foi possível enviar a mensagem. Tente novamente.";
 
             // Best-effort cleanup of files already written to disk this attempt — a failed

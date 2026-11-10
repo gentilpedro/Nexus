@@ -1,0 +1,259 @@
+@* Escolha de pessoas do workspace. Sem AddToConversationId: uma pessoa abre a conversa direta
+   com ela, duas ou mais viram um grupo com nome. Com AddToConversationId: as escolhidas entram
+   no grupo informado. *@
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Microsoft.EntityFrameworkCore
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject ChatConversationService Conversations
+@inject IJSRuntime JS
+@inject ILogger<NewConversationDialog> Logger
+
+<dialog @ref="dialog" class="dialog dialog--people" aria-labelledby="@titleId" @oncancel="CloseAsync" @onclose="HandleNativeClose">
+    @if (isOpen)
+    {
+        <form class="people-dialog" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+            <div class="people-dialog-header">
+                <h2 id="@titleId" class="dialog-title">@(IsAddMode ? "Adicionar pessoas" : "Nova conversa")</h2>
+                <button type="button" class="icon-btn icon-btn--sm" @onclick="CloseAsync"><Icon Name="x" Label="Fechar" /></button>
+            </div>
+
+            <div class="people-dialog-body">
+                <p class="dialog-message">
+                    @(IsAddMode
+                        ? "Quem entrar passa a ver todas as mensagens do grupo, inclusive as anteriores."
+                        : "Escolha uma pessoa para conversar em particular, ou várias para criar um grupo.")
+                </p>
+
+                @if (!string.IsNullOrEmpty(error))
+                {
+                    <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@error</span></div>
+                }
+
+                <div class="input-with-icon people-search">
+                    <Icon Name="search" />
+                    <label for="@searchId" class="sr-only">Buscar membro do workspace</label>
+                    <input id="@searchId" type="search" placeholder="Buscar membro do workspace" @bind="filter" @bind:event="oninput" autocomplete="off" />
+                </div>
+
+                <ul class="people-list" aria-label="Membros do workspace">
+                    @foreach (var person in FilteredCandidates)
+                    {
+                        var checkboxId = $"{searchId}-{person.UserId}";
+                        <li>
+                            <label class="people-option" for="@checkboxId">
+                                <input id="@checkboxId" type="checkbox" checked="@selected.Contains(person.UserId)" @onchange="e => Toggle(person.UserId, e)" />
+                                <Avatar Name="@person.DisplayName" ImageUrl="@(person.AvatarPath is null ? null : AvatarUrl(person.UserId, person.AvatarPath))" Size="sm" />
+                                <span class="people-option-text">
+                                    <span class="people-option-name">@person.DisplayName</span>
+                                    @if (!string.Equals(person.Email, person.DisplayName, StringComparison.Ordinal))
+                                    {
+                                        <span class="people-option-email">@person.Email</span>
+                                    }
+                                </span>
+                            </label>
+                        </li>
+                    }
+                    @if (!FilteredCandidates.Any())
+                    {
+                        <li><EmptyState Compact="true" Title="@(candidates.Count == 0 ? "Ninguém mais para adicionar" : "Ninguém com esse nome")" /></li>
+                    }
+                </ul>
+
+                @if (!IsAddMode && selected.Count >= 2)
+                {
+                    <div class="form-field people-group-name">
+                        <label for="@nameId" class="required">Nome do grupo</label>
+                        <input id="@nameId" type="text" maxlength="@ChatConversation.MaxNameLength" placeholder="Ex.: Squad mobile" @bind="groupName" @bind:event="oninput" />
+                    </div>
+                }
+            </div>
+
+            <div class="dialog-actions">
+                <span class="people-selected-count cell-muted">@SelectedLabel</span>
+                <button type="button" class="btn btn-secondary" @onclick="CloseAsync">Cancelar</button>
+                <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@(!CanSubmit || isSaving)">@SubmitLabel</button>
+            </div>
+        </form>
+    }
+</dialog>
+
+@code {
+    /// <summary>Default workspace; <see cref="OpenAsync(Guid)"/> can name another one per opening.</summary>
+    [Parameter]
+    public Guid WorkspaceId { get; set; }
+
+    [Parameter]
+    public string? CurrentUserId { get; set; }
+
+    /// <summary>Set to add people to an existing group instead of starting a conversation.</summary>
+    [Parameter]
+    public Guid? AddToConversationId { get; set; }
+
+    /// <summary>People not offered — in add mode, the group's current members.</summary>
+    [Parameter]
+    public IReadOnlyCollection<string> ExcludeUserIds { get; set; } = [];
+
+    /// <summary>Receives the id of the conversation opened, created or added to.</summary>
+    [Parameter]
+    public EventCallback<Guid> OnCompleted { get; set; }
+
+    private sealed record Candidate(string UserId, string DisplayName, string? Email, string? AvatarPath);
+
+    private ElementReference dialog;
+    private Guid activeWorkspaceId;
+    private bool isOpen;
+    private bool openRequested;
+    private bool isSaving;
+    private string? error;
+    private string filter = "";
+    private string groupName = "";
+    private List<Candidate> candidates = [];
+    private readonly HashSet<string> selected = [];
+
+    private readonly string titleId = $"people-title-{Guid.NewGuid():N}";
+    private readonly string searchId = $"people-search-{Guid.NewGuid():N}";
+    private readonly string nameId = $"people-name-{Guid.NewGuid():N}";
+
+    private bool IsAddMode => AddToConversationId is not null;
+
+    private IEnumerable<Candidate> FilteredCandidates => candidates
+        .Where(c => string.IsNullOrWhiteSpace(filter)
+            || c.DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase)
+            || (c.Email?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    private bool CanSubmit =>
+        selected.Count > 0 && (IsAddMode || selected.Count == 1 || !string.IsNullOrWhiteSpace(groupName));
+
+    private string SubmitLabel => IsAddMode
+        ? "Adicionar"
+        : selected.Count >= 2 ? "Criar grupo" : "Abrir conversa";
+
+    private string SelectedLabel => selected.Count switch
+    {
+        0 => "Ninguém selecionado",
+        1 => "1 pessoa selecionada",
+        var n => $"{n} pessoas selecionadas"
+    };
+
+    public Task OpenAsync() => OpenAsync(WorkspaceId);
+
+    // Takes the workspace as an argument rather than relying on the parameter alone: a page that
+    // lists several workspaces keeps one dialog and tells it which one each time, and a parameter
+    // set right before the call would only reach the component on the parent's next render.
+    public async Task OpenAsync(Guid workspaceId)
+    {
+        activeWorkspaceId = workspaceId;
+        error = null;
+        filter = "";
+        groupName = "";
+        selected.Clear();
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var excluded = ExcludeUserIds.Append(CurrentUserId ?? "").ToList();
+            candidates = await db.WorkspaceMembers
+                .Where(m => m.WorkspaceId == activeWorkspaceId && !excluded.Contains(m.UserId))
+                .Select(m => new Candidate(
+                    m.UserId,
+                    m.User.DisplayName != "" ? m.User.DisplayName : (m.User.Email ?? ""),
+                    m.User.Email,
+                    m.User.AvatarStoragePath))
+                .ToListAsync();
+        }
+
+        candidates = candidates.OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+        isOpen = true;
+        openRequested = true;
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (openRequested)
+        {
+            openRequested = false;
+            await JS.InvokeVoidAsync("nexusUi.showModal", dialog);
+        }
+    }
+
+    private void Toggle(string userId, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            selected.Add(userId);
+        }
+        else
+        {
+            selected.Remove(userId);
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!CanSubmit || isSaving || CurrentUserId is null)
+        {
+            return;
+        }
+
+        isSaving = true;
+        error = null;
+
+        try
+        {
+            Guid? result;
+            if (AddToConversationId is Guid groupId)
+            {
+                result = await Conversations.AddMembersAsync(groupId, CurrentUserId, selected.ToList()) ? groupId : null;
+            }
+            else if (selected.Count == 1)
+            {
+                result = await Conversations.GetOrCreateDirectAsync(activeWorkspaceId, CurrentUserId, selected.Single());
+            }
+            else
+            {
+                result = await Conversations.CreateGroupAsync(activeWorkspaceId, CurrentUserId, groupName, selected.ToList());
+            }
+
+            if (result is null)
+            {
+                error = "Alguém selecionado não faz mais parte do workspace. Feche e tente de novo.";
+                return;
+            }
+
+            await CloseAsync();
+            await OnCompleted.InvokeAsync(result.Value);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to create or extend a chat conversation in workspace {WorkspaceId}", activeWorkspaceId);
+            error = "Não foi possível concluir. Tente novamente.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        isOpen = false;
+        try
+        {
+            await JS.InvokeVoidAsync("nexusUi.close", dialog);
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit gone: nothing to close.
+        }
+    }
+
+    private void HandleNativeClose() => isOpen = false;
+
+    private static string AvatarUrl(string userId, string avatarPath) =>
+        $"/avatars/{userId}/download?v={Uri.EscapeDataString(System.IO.Path.GetFileNameWithoutExtension(avatarPath))}";
+
+    public void Dispose() => isOpen = false;
+}

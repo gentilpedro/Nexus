@@ -36,6 +36,11 @@ public class Notification
     public Guid? WorkspaceId { get; set; }
     public Workspace? Workspace { get; set; }
 
+    // Which conversation a ChatMessage/ChatMention notification points at. Null on rows created
+    // before private conversations existed; those fall back to the workspace's conversation.
+    public Guid? ConversationId { get; set; }
+    public ChatConversation? Conversation { get; set; }
+
     public bool IsRead { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }

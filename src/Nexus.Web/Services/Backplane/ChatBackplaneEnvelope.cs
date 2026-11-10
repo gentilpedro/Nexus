@@ -24,9 +24,9 @@ namespace Nexus.Web.Services.Backplane;
 /// </para>
 /// </remarks>
 /// <param name="InstanceId">Identifies the process that published this message.</param>
-/// <param name="WorkspaceId">Workspace the message belongs to, so subscribers can filter early.</param>
+/// <param name="ConversationId">Conversation the message belongs to, so subscribers can filter early.</param>
 /// <param name="MessageId">Primary key of the persisted chat message.</param>
-public readonly record struct ChatBackplaneEnvelope(Guid InstanceId, Guid WorkspaceId, Guid MessageId)
+public readonly record struct ChatBackplaneEnvelope(Guid InstanceId, Guid ConversationId, Guid MessageId)
 {
     private const char Separator = '|';
 
@@ -38,7 +38,7 @@ public readonly record struct ChatBackplaneEnvelope(Guid InstanceId, Guid Worksp
     /// whole envelope fits comfortably in a single Redis pub/sub frame.
     /// </remarks>
     public override string ToString() =>
-        $"{InstanceId:N}{Separator}{WorkspaceId:N}{Separator}{MessageId:N}";
+        $"{InstanceId:N}{Separator}{ConversationId:N}{Separator}{MessageId:N}";
 
     /// <summary>
     /// Parses the wire format, rejecting anything malformed.
@@ -65,13 +65,13 @@ public readonly record struct ChatBackplaneEnvelope(Guid InstanceId, Guid Worksp
         }
 
         if (!Guid.TryParse(parts[0], out var instanceId)
-            || !Guid.TryParse(parts[1], out var workspaceId)
+            || !Guid.TryParse(parts[1], out var conversationId)
             || !Guid.TryParse(parts[2], out var messageId))
         {
             return false;
         }
 
-        envelope = new ChatBackplaneEnvelope(instanceId, workspaceId, messageId);
+        envelope = new ChatBackplaneEnvelope(instanceId, conversationId, messageId);
         return true;
     }
 }

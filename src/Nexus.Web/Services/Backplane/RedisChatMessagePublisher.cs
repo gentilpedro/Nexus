@@ -13,21 +13,21 @@ public sealed class RedisChatMessagePublisher(
 {
     /// <summary>Channel every instance publishes to and subscribes on.</summary>
     /// <remarks>
-    /// One channel for all workspaces, with the filtering done by the receiver. Per-workspace
+    /// One channel for all conversations, with the filtering done by the receiver. Per-conversation
     /// channels would mean subscribing and unsubscribing as users navigate — churn on the Redis
     /// connection proportional to navigation, to save delivering a 108-byte frame that the
-    /// receiver discards. The envelope carries the workspace id precisely so that discard is a
+    /// receiver discards. The envelope carries the conversation id precisely so that discard is a
     /// comparison, not a database round trip.
     /// </remarks>
     public static readonly RedisChannel Channel =
         RedisChannel.Literal("nexus:chat:posted");
 
     public async Task PublishAsync(
-        Guid workspaceId,
+        Guid conversationId,
         Guid messageId,
         CancellationToken cancellationToken = default)
     {
-        var envelope = new ChatBackplaneEnvelope(instance.Id, workspaceId, messageId);
+        var envelope = new ChatBackplaneEnvelope(instance.Id, conversationId, messageId);
 
         try
         {

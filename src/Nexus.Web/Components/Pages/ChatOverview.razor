@@ -1,24 +1,26 @@
 @page "/chats"
-@page "/chats/{WorkspaceId:guid}"
+@page "/chats/{ConversationId:guid}"
 @attribute [Authorize]
 @using System.Security.Claims
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
-@using Nexus.Web.Components.Pages.Workspaces
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
+@implements IDisposable
 @inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject WorkspaceChatBroadcaster Broadcaster
 
 <PageTitle>Chats · Nexus</PageTitle>
 
 <div class="page-container page-container--wide chat-page">
-    <PageHeader Title="Chats" Description="Uma conversa por workspace, com todos os membros dele." />
+    <PageHeader Title="Chats" Description="A conversa geral de cada workspace, suas conversas diretas e seus grupos." />
 
-    @if (items is null)
+    @if (groups is null)
     {
         <Skeleton Count="5" Label="Carregando conversas…" />
     }
-    else if (items.Count == 0)
+    else if (groups.Count == 0)
     {
         <EmptyState Icon="chat" Title="Nenhuma conversa ainda"
                     Description="Cada workspace tem um chat próprio. Crie um workspace ou aceite um convite para começar a conversar.">
@@ -27,99 +29,180 @@
     }
     else
     {
-        <div class="chats-layout @(WorkspaceId is not null ? "chats-layout--chat-open" : "")">
+        <div class="chats-layout @(ConversationId is not null ? "chats-layout--chat-open" : "")">
             <nav class="chats-sidebar" aria-label="Conversas">
                 <div class="chats-sidebar-search input-with-icon">
                     <Icon Name="search" />
                     <label for="chats-filter" class="sr-only">Buscar conversas</label>
                     <input id="chats-filter" type="search" placeholder="Buscar conversas" @bind="filterText" @bind:event="oninput" />
                 </div>
-                <ul class="chats-sidebar-list">
-                    @foreach (var item in FilteredItems)
+                <div class="chats-sidebar-list">
+                    @foreach (var group in groups)
                     {
-                        var active = item.WorkspaceId == WorkspaceId;
-                        <li>
-                            <a class="chats-sidebar-item @(active ? "active" : "")" href="@($"/chats/{item.WorkspaceId}")" aria-current="@(active ? "page" : null)">
-                                <Avatar Name="@item.WorkspaceName" Color="@item.WorkspaceColor" Size="lg" Square="true" />
-                                <span class="chats-sidebar-item-body">
-                                    <span class="chats-sidebar-item-top">
-                                        <span class="chats-sidebar-item-name">@item.WorkspaceName</span>
-                                        @if (item.LastMessageAtUtc is not null)
-                                        {
-                                            <time class="chats-sidebar-item-time" datetime="@item.LastMessageAtUtc.Value.ToString("o")">@ShortWhen(item.LastMessageAtUtc.Value)</time>
-                                        }
-                                    </span>
-                                    <span class="chats-sidebar-item-preview">
-                                        @if (item.LastMessageContent is not null)
-                                        {
-                                            <span class="chats-sidebar-item-author">@item.LastMessageAuthor:</span> @item.LastMessageContent
-                                        }
-                                        else
-                                        {
-                                            <span class="cell-muted">Nenhuma mensagem ainda</span>
-                                        }
-                                    </span>
-                                </span>
-                            </a>
-                        </li>
+                        var visible = group.Items.Where(Matches).ToList();
+                        if (visible.Count == 0 && !string.IsNullOrWhiteSpace(filterText))
+                        {
+                            continue;
+                        }
+
+                        var headingId = $"chats-ws-{group.WorkspaceId:N}";
+                        <section class="chats-sidebar-group" aria-labelledby="@headingId">
+                            <header class="chats-sidebar-group-header">
+                                <Avatar Name="@group.WorkspaceName" Color="@group.WorkspaceColor" Size="sm" Square="true" />
+                                <h2 id="@headingId" class="chats-sidebar-group-name">@group.WorkspaceName</h2>
+                                <button type="button" class="icon-btn icon-btn--sm" data-tooltip="Nova conversa" @onclick="() => OpenNewConversationAsync(group.WorkspaceId)">
+                                    <Icon Name="plus" Label="@($"Nova conversa em {group.WorkspaceName}")" />
+                                </button>
+                            </header>
+                            <ul class="chats-sidebar-items">
+                                @foreach (var item in visible)
+                                {
+                                    var active = item.ConversationId == ConversationId;
+                                    <li>
+                                        <a class="chats-sidebar-item @(active ? "active" : "") @(item.Unread > 0 ? "is-unread" : "")"
+                                           href="@($"/chats/{item.ConversationId}")" aria-current="@(active ? "page" : null)">
+                                            @switch (item.Type)
+                                            {
+                                                case ChatConversationType.Workspace:
+                                                    <Avatar Name="@group.WorkspaceName" Color="@group.WorkspaceColor" Size="lg" Square="true" />
+                                                    break;
+                                                case ChatConversationType.Direct:
+                                                    <Avatar Name="@item.Name" ImageUrl="@item.AvatarUrl" Size="lg" />
+                                                    break;
+                                                default:
+                                                    <span class="avatar avatar--lg chat-group-avatar" aria-hidden="true"><Icon Name="team" /></span>
+                                                    break;
+                                            }
+                                            <span class="chats-sidebar-item-body">
+                                                <span class="chats-sidebar-item-top">
+                                                    <span class="chats-sidebar-item-name">@item.Name</span>
+                                                    @if (item.Unread > 0)
+                                                    {
+                                                        <span class="chats-unread" aria-label="@($"{item.Unread} não lidas")">@(item.Unread > 99 ? "99+" : item.Unread.ToString())</span>
+                                                    }
+                                                    else if (item.LastMessageAtUtc is not null)
+                                                    {
+                                                        <time class="chats-sidebar-item-time" datetime="@item.LastMessageAtUtc.Value.ToString("o")">@ShortWhen(item.LastMessageAtUtc.Value)</time>
+                                                    }
+                                                </span>
+                                                <span class="chats-sidebar-item-preview">
+                                                    @if (item.LastMessageContent is not null)
+                                                    {
+                                                        <span class="chats-sidebar-item-author">@item.LastMessageAuthor:</span> @item.LastMessageContent
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="cell-muted">@EmptyPreview(item)</span>
+                                                    }
+                                                </span>
+                                            </span>
+                                        </a>
+                                    </li>
+                                }
+                            </ul>
+                        </section>
                     }
-                    @if (!FilteredItems.Any())
+                    @if (!groups.Any(g => g.Items.Any(Matches)))
                     {
-                        <li><EmptyState Compact="true" Title="Nenhuma conversa encontrada" /></li>
+                        <EmptyState Compact="true" Title="Nenhuma conversa encontrada" />
                     }
-                </ul>
+                </div>
             </nav>
             <div class="chats-main">
-                @if (WorkspaceId is Guid selectedId)
+                @if (ConversationId is Guid selectedId)
                 {
-                    <WorkspaceChat WorkspaceId="selectedId" Embedded="true" @key="selectedId" />
+                    <div class="chat-embedded">
+                        <ConversationChat ConversationId="selectedId" Embedded="true" @key="selectedId" />
+                    </div>
                 }
                 else
                 {
                     <div class="chats-main-empty">
-                        <EmptyState Icon="chat" Title="Escolha uma conversa" Description="Selecione um workspace ao lado para ver as mensagens e conversar com o time." />
+                        <EmptyState Icon="chat" Title="Escolha uma conversa"
+                                    Description="Selecione uma conversa ao lado, ou use o + de um workspace para falar com alguém em particular ou criar um grupo." />
                     </div>
                 }
             </div>
         </div>
+
+        <NewConversationDialog @ref="newConversationDialog" CurrentUserId="@userId" OnCompleted="HandleConversationCreatedAsync" />
     }
 </div>
 
 @code {
     [Parameter]
-    public Guid? WorkspaceId { get; set; }
+    public Guid? ConversationId { get; set; }
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private List<ChatOverviewItem>? items;
+    private List<WorkspaceGroup>? groups;
     private string filterText = "";
+    private string? userId;
+    private NewConversationDialog? newConversationDialog;
 
-    private IEnumerable<ChatOverviewItem> FilteredItems => items is null
-        ? []
-        : items.Where(i => string.IsNullOrWhiteSpace(filterText) || i.WorkspaceName.Contains(filterText, StringComparison.OrdinalIgnoreCase));
+    private bool Matches(ConversationItem item) =>
+        string.IsNullOrWhiteSpace(filterText) || item.Name.Contains(filterText, StringComparison.CurrentCultureIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateTask!;
-        var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await LoadAsync();
+        Broadcaster.MessagePosted += OnMessagePosted;
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Opening a conversation reads it; ConversationChat records that server-side, this just
+        // keeps the badge in the list honest without another query.
+        if (ConversationId is Guid open && groups is not null)
+        {
+            var item = groups.SelectMany(g => g.Items).FirstOrDefault(i => i.ConversationId == open);
+            if (item is not null)
+            {
+                item.Unread = 0;
+            }
+        }
+    }
+
+    private async Task LoadAsync()
+    {
         if (userId is null)
         {
-            items = [];
+            groups = [];
             return;
         }
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
-        var raw = await db.WorkspaceMembers
+        var workspaces = await db.WorkspaceMembers
             .Where(m => m.UserId == userId)
-            .Select(m => new
+            .Select(m => new { m.WorkspaceId, m.Workspace.Name, m.Workspace.Color })
+            .ToListAsync();
+
+        var workspaceIds = workspaces.Select(w => w.WorkspaceId).ToList();
+
+        // Npgsql refuses an Unspecified-kind DateTime against timestamptz; this stands in for
+        // "never read" so the comparison below stays a single SQL expression.
+        var never = new DateTime(1, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        var raw = await db.ChatConversations
+            .Where(c => workspaceIds.Contains(c.WorkspaceId)
+                && (c.Type == ChatConversationType.Workspace || c.Members.Any(m => m.UserId == userId)))
+            .Select(c => new
             {
-                m.WorkspaceId,
-                WorkspaceName = m.Workspace.Name,
-                WorkspaceColor = m.Workspace.Color,
+                c.Id,
+                c.WorkspaceId,
+                c.Type,
+                c.Name,
+                MemberCount = c.Type == ChatConversationType.Workspace ? c.Workspace.Members.Count : c.Members.Count,
+                Other = c.Members
+                    .Where(m => m.UserId != userId)
+                    .Select(m => new { m.UserId, m.User.DisplayName, m.User.Email, m.User.AvatarStoragePath })
+                    .FirstOrDefault(),
                 Last = db.ChatMessages
-                    .Where(cm => cm.WorkspaceId == m.WorkspaceId)
+                    .Where(cm => cm.ConversationId == c.Id)
                     .OrderByDescending(cm => cm.CreatedAtUtc)
                     .Select(cm => new
                     {
@@ -127,24 +210,106 @@
                         cm.CreatedAtUtc,
                         AuthorName = cm.User == null ? "Usuário removido" : (cm.User.DisplayName != "" ? cm.User.DisplayName : cm.User.Email)
                     })
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                // The workspace conversation has no row for someone who never opened it since
+                // the feature shipped: nothing counts as unread for them until they do.
+                Unread = c.Type != ChatConversationType.Workspace || c.Members.Any(m => m.UserId == userId)
+                    ? db.ChatMessages.Count(cm => cm.ConversationId == c.Id
+                        && cm.UserId != userId
+                        && cm.CreatedAtUtc > (c.Members.Where(m => m.UserId == userId).Select(m => m.LastReadAtUtc).FirstOrDefault() ?? never))
+                    : 0
             })
             .ToListAsync();
 
-        items = raw
-            .Select(x => new ChatOverviewItem
+        groups = workspaces
+            .OrderBy(w => w.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(w => new WorkspaceGroup
             {
-                WorkspaceId = x.WorkspaceId,
-                WorkspaceName = x.WorkspaceName,
-                WorkspaceColor = x.WorkspaceColor,
-                LastMessageContent = x.Last?.Content,
-                LastMessageAuthor = x.Last?.AuthorName,
-                LastMessageAtUtc = x.Last?.CreatedAtUtc
+                WorkspaceId = w.WorkspaceId,
+                WorkspaceName = w.Name,
+                WorkspaceColor = w.Color,
+                Items = raw
+                    .Where(c => c.WorkspaceId == w.WorkspaceId)
+                    .Select(c => new ConversationItem
+                    {
+                        ConversationId = c.Id,
+                        Type = c.Type,
+                        Name = c.Type switch
+                        {
+                            ChatConversationType.Direct => c.Other is null ? "Conversa direta" : (c.Other.DisplayName != "" ? c.Other.DisplayName : c.Other.Email ?? ""),
+                            ChatConversationType.Group => c.Name ?? "Grupo",
+                            _ => "Geral"
+                        },
+                        AvatarUrl = c.Type == ChatConversationType.Direct && c.Other?.AvatarStoragePath is string path
+                            ? $"/avatars/{c.Other.UserId}/download?v={Uri.EscapeDataString(System.IO.Path.GetFileNameWithoutExtension(path))}"
+                            : null,
+                        MemberCount = c.MemberCount,
+                        LastMessageContent = c.Last?.Content,
+                        LastMessageAuthor = c.Last?.AuthorName,
+                        LastMessageAtUtc = c.Last?.CreatedAtUtc,
+                        Unread = c.Id == ConversationId ? 0 : c.Unread
+                    })
+                    .ToList()
             })
-            .OrderByDescending(x => x.LastMessageAtUtc ?? DateTime.MinValue)
-            .ThenBy(x => x.WorkspaceName)
+            .ToList();
+
+        foreach (var group in groups)
+        {
+            SortItems(group);
+        }
+    }
+
+    // The workspace conversation stays pinned at the top; everything else by recency.
+    private static void SortItems(WorkspaceGroup group)
+    {
+        group.Items = group.Items
+            .OrderBy(i => i.Type == ChatConversationType.Workspace ? 0 : 1)
+            .ThenByDescending(i => i.LastMessageAtUtc ?? DateTime.MinValue)
+            .ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }
+
+    private void OnMessagePosted(ChatMessage message)
+    {
+        _ = InvokeAsync(() =>
+        {
+            var group = groups?.FirstOrDefault(g => g.Items.Any(i => i.ConversationId == message.ConversationId));
+            var item = group?.Items.FirstOrDefault(i => i.ConversationId == message.ConversationId);
+            if (group is null || item is null)
+            {
+                return;
+            }
+
+            item.LastMessageContent = message.Content;
+            item.LastMessageAtUtc = message.CreatedAtUtc;
+            item.LastMessageAuthor = message.User is null
+                ? "Usuário removido"
+                : (string.IsNullOrEmpty(message.User.DisplayName) ? message.User.Email : message.User.DisplayName);
+
+            if (message.UserId != userId && message.ConversationId != ConversationId)
+            {
+                item.Unread++;
+            }
+
+            SortItems(group);
+            StateHasChanged();
+        });
+    }
+
+    private Task OpenNewConversationAsync(Guid workspaceId) =>
+        newConversationDialog?.OpenAsync(workspaceId) ?? Task.CompletedTask;
+
+    private async Task HandleConversationCreatedAsync(Guid conversationId)
+    {
+        await LoadAsync();
+        NavigationManager.NavigateTo($"/chats/{conversationId}");
+    }
+
+    private static string EmptyPreview(ConversationItem item) => item.Type switch
+    {
+        ChatConversationType.Group => $"Grupo com {item.MemberCount} pessoa{(item.MemberCount == 1 ? "" : "s")}",
+        _ => "Nenhuma mensagem ainda"
+    };
 
     // "14:32" hoje, "ontem", "12/09" no resto — o formato das listas de conversa.
     private static string ShortWhen(DateTime utc)
@@ -156,13 +321,29 @@
         return local.ToString(local.Year == today.Year ? "dd/MM" : "dd/MM/yy");
     }
 
-    private class ChatOverviewItem
+    public void Dispose()
+    {
+        Broadcaster.MessagePosted -= OnMessagePosted;
+    }
+
+    private sealed class WorkspaceGroup
     {
         public Guid WorkspaceId { get; set; }
         public string WorkspaceName { get; set; } = "";
         public string? WorkspaceColor { get; set; }
+        public List<ConversationItem> Items { get; set; } = [];
+    }
+
+    private sealed class ConversationItem
+    {
+        public Guid ConversationId { get; set; }
+        public ChatConversationType Type { get; set; }
+        public string Name { get; set; } = "";
+        public string? AvatarUrl { get; set; }
+        public int MemberCount { get; set; }
         public string? LastMessageContent { get; set; }
         public string? LastMessageAuthor { get; set; }
         public DateTime? LastMessageAtUtc { get; set; }
+        public int Unread { get; set; }
     }
 }

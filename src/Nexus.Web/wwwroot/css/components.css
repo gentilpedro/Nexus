@@ -1402,6 +1402,104 @@ table.data-table .cell-title {
     background: var(--color-surface);
 }
 
+/* Escolha de pessoas (nova conversa / adicionar ao grupo) */
+.dialog--people {
+    width: min(32rem, calc(100vw - 2rem));
+}
+
+.people-dialog {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 2rem);
+}
+
+.people-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-6) 0;
+}
+
+.people-dialog-header .dialog-title {
+    margin: 0;
+}
+
+.people-dialog-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-height: 0;
+    overflow: auto;
+    padding: var(--space-3) var(--space-6) var(--space-5);
+}
+
+.people-dialog-body .dialog-message {
+    margin: 0;
+}
+
+.people-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 18rem;
+    overflow-y: auto;
+    margin: 0;
+    padding: var(--space-1);
+    list-style: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.people-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2-5);
+    padding: var(--space-1-5) var(--space-2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.people-option:hover {
+    background: var(--color-hover);
+}
+
+.people-option input {
+    margin: 0;
+}
+
+.people-option-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.people-option-name,
+.people-option-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.people-option-name {
+    font-weight: var(--weight-medium);
+}
+
+.people-option-email {
+    color: var(--color-text-muted);
+    font-size: var(--text-caption);
+}
+
+.people-group-name {
+    margin-bottom: 0;
+}
+
+.people-selected-count {
+    align-self: center;
+    margin-right: auto;
+    font-size: var(--text-small);
+}
+
 @media (max-width: 640px) {
     .dialog--confirm {
         margin: auto auto 0;

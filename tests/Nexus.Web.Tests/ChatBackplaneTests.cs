@@ -19,11 +19,11 @@ public class ChatBackplaneTests
     /// <summary>Records what was published without touching a network.</summary>
     private sealed class RecordingPublisher : IChatMessagePublisher
     {
-        public List<(Guid WorkspaceId, Guid MessageId)> Published { get; } = [];
+        public List<(Guid ConversationId, Guid MessageId)> Published { get; } = [];
 
-        public Task PublishAsync(Guid workspaceId, Guid messageId, CancellationToken cancellationToken = default)
+        public Task PublishAsync(Guid conversationId, Guid messageId, CancellationToken cancellationToken = default)
         {
-            Published.Add((workspaceId, messageId));
+            Published.Add((conversationId, messageId));
             return Task.CompletedTask;
         }
     }
@@ -32,6 +32,7 @@ public class ChatBackplaneTests
     {
         Id = Guid.NewGuid(),
         WorkspaceId = Guid.NewGuid(),
+        ConversationId = Guid.NewGuid(),
         Content = "olá",
     };
 
@@ -78,7 +79,23 @@ public class ChatBackplaneTests
         await broadcaster.BroadcastAsync(message, TestContext.Current.CancellationToken);
 
         Assert.Same(message, received);
-        Assert.Equal([(message.WorkspaceId, message.Id)], publisher.Published);
+        Assert.Equal([(message.ConversationId, message.Id)], publisher.Published);
+    }
+
+    [Fact]
+    public async Task BroadcastAnnouncesTheConversationNotTheWorkspace()
+    {
+        // Receivers filter by conversation: a direct message must not reach the circuits showing
+        // the workspace's shared chat, even though both live in the same workspace.
+        var publisher = new RecordingPublisher();
+        var broadcaster = new WorkspaceChatBroadcaster(publisher);
+        var message = AMessage();
+
+        await broadcaster.BroadcastAsync(message, TestContext.Current.CancellationToken);
+
+        var published = Assert.Single(publisher.Published);
+        Assert.Equal(message.ConversationId, published.ConversationId);
+        Assert.NotEqual(message.WorkspaceId, published.ConversationId);
     }
 
     [Fact]
