@@ -1,4 +1,5 @@
 @page "/Account/Manage/EnableAuthenticator"
+@using Net.Codecrete.QrCodeGenerator
 
 @using System.ComponentModel.DataAnnotations
 @using System.Globalization
@@ -37,7 +38,13 @@ else
             </li>
             <li>
                 <p>Escaneie o QR Code ou digite esta chave <kbd>@sharedKey</kbd> no seu aplicativo autenticador. Espaços e maiúsculas/minúsculas não importam.</p>
-                <div data-url="@authenticatorUri"></div>
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" height="300" width="300" stroke="none"
+                            version="1.1" viewBox="0 0 @viewBoxSize @viewBoxSize">
+                        <rect width="300" height="300" fill="#ffffff" />
+                        <path d="@svgGraphicsPath" fill="#000000" />
+                    </svg>
+                </div>
             </li>
             <li>
                 <p>
@@ -67,7 +74,11 @@ else
     private string? message;
     private ApplicationUser? user;
     private string? sharedKey;
-    private string? authenticatorUri;
+    private string? svgGraphicsPath;
+    // The guide hardcodes viewBox="0 0 50 50", but the QR is 41 to 45 modules wide depending on the
+    // e-mail. That left no white quiet zone on the top and left, and the code did not scan on the dark
+    // theme. The size now comes from the QR itself plus a 4-module border on each side.
+    private int viewBoxSize;
     private IEnumerable<string>? recoveryCodes;
 
     [CascadingParameter]
@@ -139,7 +150,11 @@ else
         sharedKey = FormatKey(unformattedKey!);
 
         var email = await UserManager.GetEmailAsync(user);
-        authenticatorUri = GenerateQrCodeUri(email!, unformattedKey!);
+        var authenticatorUri = GenerateQrCodeUri(email!, unformattedKey!);
+
+        var qr = QrCode.EncodeText(authenticatorUri, QrCode.Ecc.Medium);
+        svgGraphicsPath = qr.ToGraphicsPath(4);
+        viewBoxSize = qr.Size + 8;
     }
 
     private string FormatKey(string unformattedKey)
@@ -164,7 +179,7 @@ else
         return string.Format(
             CultureInfo.InvariantCulture,
             AuthenticatorUriFormat,
-            UrlEncoder.Encode("Microsoft.AspNetCore.Identity.UI"),
+            UrlEncoder.Encode("Nexus"),
             UrlEncoder.Encode(email),
             unformattedKey);
     }
