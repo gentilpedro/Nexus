@@ -481,18 +481,6 @@ table.table {
     }
 }
 
-/* QR code da ativação do aplicativo autenticador. O fundo fica branco nos dois temas: leitor de
-   QR precisa de módulos escuros sobre fundo claro, e o SVG já traz a margem de silêncio. */
-.authenticator-qr {
-    width: 12rem;
-    margin: var(--space-3) 0;
-    padding: var(--space-2);
-    background: #fff;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-}
-.authenticator-qr svg { display: block; width: 100%; height: auto; }
-
 /* Utilidades pequenas das páginas de conta e legais */
 .narrow-form { max-width: 24rem; }
 .stack-top { margin-top: var(--space-6); }
