@@ -1,7 +1,6 @@
 @page "/Account/Manage/EnableAuthenticator"
 
 @using System.ComponentModel.DataAnnotations
-@using System.Globalization
 @using System.Text
 @using System.Text.Encodings.Web
 @using Microsoft.AspNetCore.Identity
@@ -37,7 +36,10 @@ else
             </li>
             <li>
                 <p>Escaneie o QR Code ou digite esta chave <kbd>@sharedKey</kbd> no seu aplicativo autenticador. Espaços e maiúsculas/minúsculas não importam.</p>
-                <div data-url="@authenticatorUri"></div>
+                @if (qrCodeSvg is not null)
+                {
+                    <div class="authenticator-qr">@qrCodeSvg</div>
+                }
             </li>
             <li>
                 <p>
@@ -62,12 +64,10 @@ else
 }
 
 @code {
-    private const string AuthenticatorUriFormat = "otpauth://totp/{0}:{1}?secret={2}&issuer={0}&digits=6";
-
     private string? message;
     private ApplicationUser? user;
     private string? sharedKey;
-    private string? authenticatorUri;
+    private MarkupString? qrCodeSvg;
     private IEnumerable<string>? recoveryCodes;
 
     [CascadingParameter]
@@ -139,7 +139,9 @@ else
         sharedKey = FormatKey(unformattedKey!);
 
         var email = await UserManager.GetEmailAsync(user);
-        authenticatorUri = GenerateQrCodeUri(email!, unformattedKey!);
+        var authenticatorUri = AuthenticatorQrCode.BuildUri(email!, unformattedKey!, UrlEncoder);
+        // Safe as raw markup: RenderSvg emits only numbers and fixed attributes, never the URI text.
+        qrCodeSvg = new MarkupString(AuthenticatorQrCode.RenderSvg(authenticatorUri));
     }
 
     private string FormatKey(string unformattedKey)
@@ -157,16 +159,6 @@ else
         }
 
         return result.ToString().ToLowerInvariant();
-    }
-
-    private string GenerateQrCodeUri(string email, string unformattedKey)
-    {
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            AuthenticatorUriFormat,
-            UrlEncoder.Encode("Microsoft.AspNetCore.Identity.UI"),
-            UrlEncoder.Encode(email),
-            unformattedKey);
     }
 
     private sealed class InputModel
