@@ -48,6 +48,12 @@ public class WorkItem
     public string? CreatedByUserId { get; set; }
     public ApplicationUser? CreatedByUser { get; set; }
 
+    // Id da tarefa no sistema de origem (um ERP, por exemplo), informado pela API de integração.
+    // O serviço garante que não se repete dentro do workspace, para a mesma chamada repetida não
+    // criar duas tarefas. Não é uma coluna do workspace: a unicidade fica no WorkItemService.
+    public const int MaxExternalReferenceLength = 100;
+    public string? ExternalReference { get; set; }
+
     public ICollection<CustomFieldValue> CustomFieldValues { get; set; } = new List<CustomFieldValue>();
     public ICollection<WorkItemAttachment> Attachments { get; set; } = new List<WorkItemAttachment>();
     public ICollection<WorkItemLabel> WorkItemLabels { get; set; } = new List<WorkItemLabel>();

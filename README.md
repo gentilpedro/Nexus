@@ -23,7 +23,7 @@ src/
   Nexus.Infrastructure/  EF Core, migrations e configuração de dados
   Nexus.Web/             app Blazor: páginas, serviços, autenticação, wwwroot
 tests/                   um projeto de teste por camada, mais testes JS do editor colaborativo
-docs/                    backup, LGPD, sincronização GitHub/GitLab, versionamento, dados de demo
+docs/                    backup, LGPD, API de integração, sincronização GitHub/GitLab, versionamento, dados de demo
 ```
 
 ## Rodando localmente

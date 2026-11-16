@@ -15,6 +15,10 @@
 @inject ToastService Toasts
 @inject WorkspacePlanService PlanService
 @inject Nexus.Web.Services.Billing.BillingService Billing
+@inject WorkspaceApiKeyService ApiKeys
+@inject IJSRuntime JS
+@using System.Security.Claims
+@using Microsoft.JSInterop
 
 <PageTitle>Configurações · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
 
@@ -44,6 +48,7 @@
             <nav class="settings-nav" aria-label="Seções das configurações">
                 <button type="button" class="settings-nav-link @(tab == "geral" ? "active" : "")" aria-current="@(tab == "geral" ? "true" : null)" @onclick='() => tab = "geral"'><Icon Name="settings" /> Geral</button>
                 <button type="button" class="settings-nav-link @(tab == "workflow" ? "active" : "")" aria-current="@(tab == "workflow" ? "true" : null)" @onclick='() => tab = "workflow"'><Icon Name="refresh" /> Fluxo de trabalho</button>
+                <button type="button" class="settings-nav-link @(tab == "integracoes" ? "active" : "")" aria-current="@(tab == "integracoes" ? "true" : null)" @onclick="ShowIntegrationsTab"><Icon Name="key" /> Integrações</button>
             </nav>
 
             <div class="settings-content">
@@ -136,7 +141,7 @@
                         </div>
                     </section>
                 }
-                else
+                else if (tab == "workflow")
                 {
                     <p class="form-section-description">Cada lista tem suas próprias colunas de status e regras de transição. Escolha uma lista para configurar o fluxo dela.</p>
 
@@ -179,6 +184,88 @@
                         }
                     }
                 }
+                else if (tab == "integracoes")
+                {
+                    <section class="card" aria-labelledby="api-keys-title">
+                        <h2 id="api-keys-title" class="form-section-title">Chaves de API</h2>
+                        <p class="form-section-description">
+                            Uma chave deixa um sistema externo, como um ERP, criar e acompanhar as tarefas deste workspace pela API.
+                            Ela aparece uma única vez, na criação: guarde-a no sistema que vai usá-la.
+                            A documentação está em <a href="/openapi/v1.json" target="_blank" rel="noopener">/openapi/v1.json</a>.
+                        </p>
+
+                        @if (newApiKeySecret is not null)
+                        {
+                            <div class="alert alert-success api-key-reveal" role="status">
+                                <Icon Name="key" />
+                                <div class="api-key-reveal-body">
+                                    <span><strong>Chave "@newApiKeyName" criada.</strong> Copie agora: ela não será mostrada de novo.</span>
+                                    <div class="api-key-reveal-row">
+                                        <code class="api-key-secret">@newApiKeySecret</code>
+                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="CopyNewApiKey"><Icon Name="copy" /> @(apiKeyCopied ? "Copiada" : "Copiar")</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(apiKeyError))
+                        {
+                            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@apiKeyError</span></div>
+                        }
+
+                        <EditForm Model="apiKeyModel" OnValidSubmit="HandleCreateApiKey" class="api-key-form">
+                            <DataAnnotationsValidator />
+                            <div class="form-field">
+                                <label for="api-key-name" class="required">Nome da chave</label>
+                                <InputText id="api-key-name" @bind-Value="apiKeyModel.Name" placeholder="Ex.: ERP Protheus" maxlength="@WorkspaceApiKey.MaxNameLength" />
+                                <ValidationMessage For="() => apiKeyModel.Name" />
+                            </div>
+                            <div class="form-actions form-actions--end">
+                                <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving"><Icon Name="plus" /> Gerar chave</button>
+                            </div>
+                        </EditForm>
+
+                        @if (apiKeys is null)
+                        {
+                            <Skeleton Count="3" />
+                        }
+                        else if (apiKeys.Count == 0)
+                        {
+                            <EmptyState Compact="true" Title="Nenhuma chave ainda" Description="Gere a primeira chave acima e configure-a no sistema que vai integrar." />
+                        }
+                        else
+                        {
+                            <table class="data-table api-keys-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Chave</th>
+                                        <th>Criada</th>
+                                        <th>Último uso</th>
+                                        <th><span class="sr-only">Ações</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var key in apiKeys)
+                                    {
+                                        <tr class="@(key.IsActive ? "" : "is-muted")">
+                                            <td class="cell-title">@key.Name @if (!key.IsActive) { <span class="badge">Revogada</span> }</td>
+                                            <td class="tabular"><code>@(key.KeyPrefix)…</code></td>
+                                            <td class="cell-muted tabular">@key.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td class="cell-muted tabular">@(key.LastUsedAtUtc is { } used ? used.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "Nunca")</td>
+                                            <td class="cell-actions">
+                                                @if (key.IsActive)
+                                                {
+                                                    <button type="button" class="btn btn-danger-ghost btn-sm" @onclick="() => HandleRevokeApiKey(key)">Revogar</button>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </section>
+                }
             </div>
         </div>
 
@@ -208,12 +295,112 @@
     private int memberCount;
     private bool isOwner;
 
+    // Aba Integrações (#66). A chave completa só existe em newApiKeySecret, até a pessoa sair da página.
+    private List<WorkspaceApiKey>? apiKeys;
+    private readonly ApiKeyModel apiKeyModel = new();
+    private string? newApiKeySecret;
+    private string? newApiKeyName;
+    private bool apiKeyCopied;
+    private string? apiKeyError;
+
     private static string PlanName(WorkspacePlan p) => p switch
     {
         WorkspacePlan.Pro => "Pro",
         WorkspacePlan.Business => "Business",
         _ => "Starter"
     };
+
+    private async Task ShowIntegrationsTab()
+    {
+        tab = "integracoes";
+        apiKeys ??= await ApiKeys.ListAsync(WorkspaceId);
+    }
+
+    private async Task HandleCreateApiKey()
+    {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        isSaving = true;
+        apiKeyError = null;
+        apiKeyCopied = false;
+
+        var result = await ApiKeys.CreateAsync(WorkspaceId, apiKeyModel.Name, await CurrentUserIdAsync());
+        isSaving = false;
+
+        switch (result.Status)
+        {
+            case ApiKeyCreateStatus.Created:
+                newApiKeySecret = result.Secret;
+                newApiKeyName = result.Key!.Name;
+                apiKeyModel.Name = "";
+                apiKeys = await ApiKeys.ListAsync(WorkspaceId);
+                break;
+            case ApiKeyCreateStatus.LimitReached:
+                apiKeyError = $"Este workspace já tem {WorkspaceApiKeyService.MaxActiveKeysPerWorkspace} chaves ativas. Revogue uma para gerar outra.";
+                break;
+            default:
+                apiKeyError = "Dê um nome à chave, como o sistema que vai usá-la.";
+                break;
+        }
+    }
+
+    private async Task CopyNewApiKey()
+    {
+        if (newApiKeySecret is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", newApiKeySecret);
+            apiKeyCopied = true;
+        }
+        catch (JSException)
+        {
+            // Sem permissão de clipboard (contexto não seguro, por exemplo): a chave continua na tela.
+            Toasts.Show("Não deu para copiar automaticamente. Selecione a chave e copie.", ToastKind.Error);
+        }
+    }
+
+    private async Task HandleRevokeApiKey(WorkspaceApiKey key)
+    {
+        if (confirm is null || !await confirm.AskAsync(new ConfirmRequest(
+                Title: $"Revogar a chave \"{key.Name}\"?",
+                Message: "O sistema que usa essa chave perde o acesso à API na hora. Essa ação não pode ser desfeita.",
+                ConfirmLabel: "Revogar chave")))
+        {
+            return;
+        }
+
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        if (await ApiKeys.RevokeAsync(WorkspaceId, key.Id, await CurrentUserIdAsync()))
+        {
+            Toasts.Show($"Chave \"{key.Name}\" revogada.");
+        }
+
+        apiKeys = await ApiKeys.ListAsync(WorkspaceId);
+    }
+
+    private async Task<string?> CurrentUserIdAsync()
+    {
+        var authState = await AuthStateTask!;
+        return authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    }
+
+    private sealed class ApiKeyModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Dê um nome à chave, como o sistema que vai usá-la.")]
+        [System.ComponentModel.DataAnnotations.StringLength(WorkspaceApiKey.MaxNameLength, ErrorMessage = "O nome pode ter no máximo 80 caracteres.")]
+        public string Name { get; set; } = "";
+    }
 
     protected override async Task OnParametersSetAsync()
     {

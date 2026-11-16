@@ -1990,3 +1990,36 @@
     padding-left: var(--space-5);
     color: var(--color-text-secondary);
 }
+
+/* Configurações → Integrações: a chave de API aparece uma única vez, logo depois de criada. */
+.api-key-reveal {
+    align-items: flex-start;
+}
+
+.api-key-reveal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.api-key-reveal-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.api-key-secret {
+    font-size: 0.85rem;
+    word-break: break-all;
+    user-select: all;
+}
+
+.api-key-form {
+    margin-bottom: 1rem;
+}
+
+.api-keys-table tr.is-muted td {
+    opacity: 0.6;
+}

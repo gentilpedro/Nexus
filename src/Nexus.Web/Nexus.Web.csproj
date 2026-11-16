@@ -38,6 +38,7 @@
     <!-- QR code da ativação do aplicativo autenticador, como no guia oficial "Enable QR code
          generation for TOTP authenticator apps in an ASP.NET Core Blazor Web App". -->
     <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="3.2.1" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" PrivateAssets="all" />
     <!-- Backs the /health/ready endpoint's database probe (AddDbContextCheck). -->

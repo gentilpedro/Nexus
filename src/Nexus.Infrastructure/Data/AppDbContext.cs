@@ -38,6 +38,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<WorkItemLabel> WorkItemLabels => Set<WorkItemLabel>();
     public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
     public DbSet<WorkspaceInvite> WorkspaceInvites => Set<WorkspaceInvite>();
+    public DbSet<WorkspaceApiKey> WorkspaceApiKeys => Set<WorkspaceApiKey>();
     public DbSet<CommercialContact> CommercialContacts => Set<CommercialContact>();
     public DbSet<StripeWebhookEvent> StripeWebhookEvents => Set<StripeWebhookEvent>();
 
