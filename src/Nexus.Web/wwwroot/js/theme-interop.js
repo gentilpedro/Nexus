@@ -18,13 +18,23 @@
     // data-theme always carries the *effective* theme — the saved choice, or the OS setting when
     // nothing was saved. The CSS reads it for things light-dark() can't express (the theme switch
     // icon, the select chevron), so it must never be absent once this script has run.
+    //
+    // Only writes when the value changes: every setAttribute is a mutation, and the productivity
+    // chart observes data-theme to repaint itself.
     function apply() {
         var theme = readSaved() || (systemDark.matches ? 'dark' : 'light');
-        root.setAttribute('data-theme', theme);
+        if (root.getAttribute('data-theme') !== theme) {
+            root.setAttribute('data-theme', theme);
+        }
         return theme;
     }
 
     apply();
+
+    // Blazor's enhanced navigation copies the <html> attributes from the server response, which
+    // has no data-theme, so the attribute is gone after every enhanced page update. This script
+    // only runs on a full load: Nexus.Web.lib.module.js calls this again after each update.
+    window.nexusApplyTheme = apply;
 
     // Following the OS only while the person hasn't picked a theme themselves.
     systemDark.addEventListener('change', function () {
@@ -150,6 +160,8 @@
 
     // Em telas estreitas a navegação de configurações vira uma faixa rolável: traz o item
     // ativo para a vista, senão "Dados pessoais" (por exemplo) fica escondido fora da tela.
+    // As abas trocam por navegação aprimorada, que não dispara DOMContentLoaded: o
+    // Nexus.Web.lib.module.js chama de novo depois de cada atualização.
     function revealActiveSettingsTab() {
         var active = document.querySelector('.settings-nav .active');
         var nav = active && active.closest('.settings-nav');
@@ -158,5 +170,5 @@
         }
     }
     document.addEventListener('DOMContentLoaded', revealActiveSettingsTab);
-    document.addEventListener('enhancedload', revealActiveSettingsTab);
+    window.nexusRevealActiveSettingsTab = revealActiveSettingsTab;
 })();
