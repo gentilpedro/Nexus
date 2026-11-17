@@ -810,6 +810,44 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.ToTable("Notifications");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.RunningTimer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActivityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("WorkItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.HasIndex("WorkItemId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("RunningTimers");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.Space", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1013,6 +1051,92 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("TaskListId");
 
                     b.ToTable("TaskStatusDefinitions");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.TimeActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId", "SortOrder");
+
+                    b.ToTable("TimeActivities");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.TimeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ActivityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Hours")
+                        .HasPrecision(6, 2)
+                        .HasColumnType("numeric(6,2)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("WorkItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("WorkItemId");
+
+                    b.HasIndex("WorkspaceId", "Date");
+
+                    b.HasIndex("WorkspaceId", "UserId", "Date");
+
+                    b.ToTable("TimeEntries");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WebhookDelivery", b =>
@@ -1340,6 +1464,110 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("WorkspaceId");
 
                     b.ToTable("WorkspaceApiKeys");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceCheckin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Finished")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("InProgress")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("NextSteps")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Observations")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("Perception")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("WeekStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("WorkspaceId", "WeekStartUtc")
+                        .IsUnique();
+
+                    b.ToTable("WorkspaceCheckins");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceContract", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ContractedHours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("numeric(9,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EndDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("StartDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("WarningNotifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkspaceId", "Status");
+
+                    b.ToTable("WorkspaceContracts");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceInvite", b =>
@@ -1856,6 +2084,32 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.RunningTimer", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Nexus.Domain.Entities.WorkItem", "WorkItem")
+                        .WithMany()
+                        .HasForeignKey("WorkItemId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("WorkItem");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.Space", b =>
                 {
                     b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
@@ -1928,6 +2182,57 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("TaskList");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.TimeActivity", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.TimeEntry", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.TimeActivity", "Activity")
+                        .WithMany()
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.WorkspaceContract", "Contract")
+                        .WithMany("TimeEntries")
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Nexus.Domain.Entities.WorkItem", "WorkItem")
+                        .WithMany()
+                        .HasForeignKey("WorkItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Activity");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("User");
+
+                    b.Navigation("WorkItem");
+
+                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WebhookDelivery", b =>
@@ -2061,6 +2366,35 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceCheckin", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceContract", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceInvite", b =>
                 {
                     b.HasOne("Nexus.Domain.Entities.ApplicationUser", "InvitedByUser")
@@ -2185,6 +2519,11 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Spaces");
 
                     b.Navigation("Subscription");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceContract", b =>
+                {
+                    b.Navigation("TimeEntries");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceWebhook", b =>

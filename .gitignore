@@ -65,3 +65,7 @@ coverage*.xml
 # Logs locais
 *.log
 logs/
+
+# Build local do site de documentação (docs-site/)
+docs-site/site/
+docs-site/.venv/

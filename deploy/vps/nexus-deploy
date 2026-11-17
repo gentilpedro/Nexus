@@ -6,6 +6,7 @@
 #   import-db            stdin: pg_dump --format=custom. SUBSTITUI o banco inteiro.
 #   import-uploads       stdin: tar.gz dos anexos. Acrescenta ao volume de uploads.
 #   import-check         só confere se o import está liberado
+#   docs-site <ref>      stdin: tar.gz do site gerado pelo MkDocs; publica em /var/www/docs-nexus/current
 #
 # Os dois import-* só funcionam enquanto existir /opt/nexus/.allow-import, criado à mão pelo
 # root na hora da migração e apagado em seguida: no dia a dia, a chave de deploy não consegue
@@ -13,6 +14,7 @@
 set -euo pipefail
 umask 077
 DIR=/opt/nexus
+DOCS=/var/www/docs-nexus
 read -r -a ARGS <<< "${SSH_ORIGINAL_COMMAND:-$*}"
 CMD="${ARGS[0]:-}"; VER="${ARGS[1]:-}"
 valid_ver() { [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || { echo "versão inválida: '$VER'" >&2; exit 2; }; }
@@ -47,6 +49,21 @@ case "$CMD" in
   import-check)
     require_import
     echo "ok: import liberado" ;;
+  docs-site)
+    # Documentação (docs-nexus.aamora.com.br, #73): cada publicação vai para uma pasta própria e o
+    # Nginx serve o symlink "current", trocado de uma vez só. Guarda as 3 últimas para voltar.
+    # Fica em /var/www (legível pelo Nginx e com o contexto SELinux de conteúdo web), não em
+    # /opt/nexus, que é 750 root.
+    [[ "$VER" =~ ^[0-9a-f]{7,40}$ ]] || { echo "ref inválida: '$VER'" >&2; exit 2; }
+    install -d -m 755 "$DOCS/releases"
+    DEST="$DOCS/releases/$VER"
+    rm -rf "$DEST" && mkdir -m 755 "$DEST"
+    tar xzf - -C "$DEST"
+    [ -f "$DEST/index.html" ] || { echo "pacote sem index.html" >&2; rm -rf "$DEST"; exit 1; }
+    chmod -R a+rX "$DEST"
+    ln -sfn "releases/$VER" "$DOCS/current.tmp" && mv -Tf "$DOCS/current.tmp" "$DOCS/current"
+    ls -1dt "$DOCS"/releases/*/ | tail -n +4 | xargs -r rm -rf
+    echo "ok: documentação $VER publicada" ;;
   import-db)
     require_import
     TMP=$(mktemp "$DIR/backups/import.XXXX.dump")

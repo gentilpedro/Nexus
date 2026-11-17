@@ -47,7 +47,7 @@ public class NexusToolsTests
     private static NexusTools Tools(IDbContextFactory<AppDbContext> factory)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["PUBLIC_BASE_URL"] = "https://nexus.test" }).Build();
-        return new NexusTools(factory, new WorkItemService(factory, new WorkItemQueryService(factory)), configuration);
+        return new NexusTools(factory, new WorkItemService(factory, new WorkItemQueryService(factory)), new CheckinService(factory), configuration);
     }
 
     [Fact]

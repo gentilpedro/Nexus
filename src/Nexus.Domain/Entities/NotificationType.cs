@@ -7,5 +7,6 @@ public enum NotificationType
     ChatMessage,
     ChatMention,
     WorkspaceInvite,
-    WebhookPaused
+    WebhookPaused,
+    ContractAlmostUsed
 }

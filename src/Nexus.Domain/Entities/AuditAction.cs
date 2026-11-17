@@ -12,4 +12,8 @@ public enum AuditAction
     WorkspaceApiKeyRevoked,
     WorkspaceWebhookCreated,
     WorkspaceWebhookDeleted,
+    ContractCreated,
+    ContractUpdated,
+    ContractDeleted,
+    TimeEntryDeletedByAdmin,
 }

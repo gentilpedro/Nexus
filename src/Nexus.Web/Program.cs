@@ -79,6 +79,14 @@ builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<WorkspaceApiKeyService>();
 builder.Services.AddScoped<WorkItemService>();
 builder.Services.AddScoped<CalendarFeedService>();
+builder.Services.AddScoped<CheckinService>();
+// Horas e contratos (#77, #78).
+builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.ContractService>();
+builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.TimeTrackingService>();
+// Horas e contratos (#77, #78).
+builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.ContractService>();
+builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.TimeTrackingService>();
+builder.Services.AddScoped<CalendarFeedService>();
 
 // Webhooks de saída (#75): cadastro e fila (WebhookService), tradução de "a tarefa mudou" em
 // eventos (WorkItemEventPublisher) e o job que entrega (WebhookSender + hosted service).
@@ -124,6 +132,18 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 // Especificação OpenAPI da API de integração, servida em /openapi/v1.json. Só as rotas de /api/v1
 // entram: os downloads e o webhook do Stripe não são parte do contrato com quem integra.
+// O site de documentação (docs-nexus.aamora.com.br, #73) lê /openapi/v1.json pelo navegador para
+// renderizar a referência da API. CORS liberado só para essa origem e só nessa rota; o resto do
+// app continua sem CORS. Docs:SiteUrl vazio = nenhuma origem liberada.
+const string DocsSiteCorsPolicy = "docs-site";
+var docsSiteUrl = builder.Configuration["Docs:SiteUrl"];
+builder.Services.AddCors(options => options.AddPolicy(DocsSiteCorsPolicy, policy =>
+{
+    if (!string.IsNullOrWhiteSpace(docsSiteUrl))
+    {
+        policy.WithOrigins(docsSiteUrl.TrimEnd('/')).WithMethods("GET");
+    }
+}));
 // Servidor MCP (#67): as ferramentas em Mcp/NexusTools.cs, pela mesma chave de API dos endpoints
 // de /api/v1. Sem sessão (stateless): cada chamada é uma requisição HTTP autenticada por conta
 // própria, o que dispensa afinidade de instância e deixa o limite de chamadas por chave valer.
@@ -395,6 +415,7 @@ app.Use(async (context, next) =>
 
 app.UseAntiforgery();
 app.UseRateLimiter();
+app.UseCors();
 
 // AllowAnonymous is required here despite MapStaticAssets serving public files: without it,
 // the global FallbackPolicy (RequireAuthenticatedUser) applies to these endpoints too, and an
@@ -454,6 +475,7 @@ app.MapGet("/version", () => Results.Json(new
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
 
+app.MapOpenApi().AllowAnonymous().RequireCors(DocsSiteCorsPolicy);
 // Feed iCalendar (#68). Anônimo de propósito: Google, Outlook e Apple buscam a URL sem login; o
 // token na URL é a credencial, e um token desconhecido responde 404 sem dizer mais nada.
 app.MapGet(CalendarFeedService.RoutePrefix + "{token}.ics", async (string token, CalendarFeedService feeds, IConfiguration configuration, HttpContext http, CancellationToken ct) =>
@@ -627,6 +649,51 @@ app.MapGet("/avatars/{userId:guid}/download", async (
     }
 
     return Results.File(fullPath, user.AvatarContentType ?? "application/octet-stream");
+}).RequireAuthorization();
+
+// Relatório de horas em planilha (#78). Member vê só as próprias horas; Admin e Owner, todas.
+app.MapGet("/workspaces/{id:guid}/hours/export.xlsx", async (
+    Guid id,
+    DateTime from,
+    DateTime to,
+    HttpContext http,
+    IAuthorizationService authorizationService,
+    Nexus.Web.Services.TimeTracking.TimeTrackingService timeTracking,
+    CancellationToken ct) =>
+{
+    var member = await authorizationService.AuthorizeAsync(http.User, id, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+    if (!member.Succeeded)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var admin = await authorizationService.AuthorizeAsync(http.User, id, new WorkspaceAccessRequirement(WorkspaceRole.Admin));
+    var onlyUser = admin.Succeeded ? null : http.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (to < from || (to - from).TotalDays > 400)
+    {
+        return Results.BadRequest("Período inválido: até 400 dias, com o fim depois do início.");
+    }
+
+    var report = await timeTracking.ReportAsync(id, from, to, Nexus.Web.Services.TimeTracking.TimeReportGroup.Day, onlyUser, ct);
+    var grid = new List<List<string>> { new() { "Data", "Pessoa", "Tarefa", "Lista", "Atividade", "Contrato", "Horas", "Comentário" } };
+    foreach (var e in report.Entries.OrderBy(e => e.Date).ThenBy(e => e.CreatedAtUtc))
+    {
+        grid.Add(new()
+        {
+            e.Date.ToString("dd/MM/yyyy"),
+            Nexus.Web.Services.ApiMappingNames.DisplayNameOf(e.User),
+            e.WorkItem is null ? "" : $"{e.WorkItem.Code} {e.WorkItem.Title}",
+            e.WorkItem?.TaskList?.Name ?? "",
+            e.Activity?.Name ?? "",
+            e.Contract?.Name ?? "",
+            e.Hours.ToString("0.00"),
+            e.Comment ?? "",
+        });
+    }
+
+    grid.Add(new() { "Total", "", "", "", "", "", report.TotalHours.ToString("0.00"), "" });
+    var bytes = SpreadsheetExportService.BuildXlsx($"Horas {from:dd-MM-yyyy} a {to:dd-MM-yyyy}", grid);
+    return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"horas-{from:yyyy-MM-dd}-{to:yyyy-MM-dd}.xlsx");
 }).RequireAuthorization();
 
 app.MapGet("/spreadsheets/{id:guid}/download.xlsx", async (

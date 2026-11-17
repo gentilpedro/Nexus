@@ -1,5 +1,6 @@
 @using System.Security.Claims
 @using Nexus.Domain.Entities
+@using Nexus.Web.Services.TimeTracking
 @using Nexus.Infrastructure.Data
 @using Nexus.Web.Authorization
 @using Nexus.Web.Extensions
@@ -9,6 +10,8 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
 @inject Nexus.Web.Services.Webhooks.WorkItemEventPublisher Events
+@inject Nexus.Web.Services.TimeTracking.TimeTrackingService TimeTracking
+@inject Nexus.Web.Services.TimeTracking.ContractService Contracts
 @inject AttachmentStorageService Storage
 @inject Mailer Mailer
 @inject NavigationManager NavigationManager
@@ -127,6 +130,53 @@
                 <section class="task-view-section" aria-labelledby="task-attach-title">
                     <h3 id="task-attach-title">Anexos @if (attachments.Count > 0) { <span class="tab-count">@attachments.Count</span> }</h3>
                     @AttachmentsBlock
+                </section>
+
+                <section class="task-view-section" aria-labelledby="task-hours-title">
+                    <h3 id="task-hours-title">Horas @if (taskHoursTotal > 0) { <span class="tab-count">@taskHoursTotal.ToString("0.##") h</span> }</h3>
+                    @if (!string.IsNullOrEmpty(hoursError))
+                    {
+                        <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@hoursError</span></div>
+                    }
+                    <div class="task-hours-actions">
+                        @if (runningTimer is null)
+                        {
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="StartTimerAsync"><Icon Name="clock" /> Iniciar timer</button>
+                        }
+                        else if (runningTimer.WorkItemId == editingId)
+                        {
+                            <span class="field-hint">Timer rodando desde @runningTimer.StartedAtUtc.ToLocalTime().ToString("HH:mm")</span>
+                            <button type="button" class="btn btn-sm @(isSavingHours ? "is-loading" : "")" disabled="@isSavingHours" @onclick="StopTimerAsync"><Icon Name="check" /> Parar e apontar</button>
+                        }
+                        else
+                        {
+                            <span class="field-hint">Você tem um timer rodando em outro lugar. Pare-o na aba Horas do workspace.</span>
+                        }
+                    </div>
+                    <div class="task-hours-quick">
+                        <label for="task-hours-value" class="sr-only">Horas</label>
+                        <input id="task-hours-value" type="number" step="0.25" min="0.25" max="24" @bind="quickHours" placeholder="Horas" />
+                        <label for="task-hours-comment" class="sr-only">Comentário</label>
+                        <input id="task-hours-comment" type="text" @bind="quickComment" placeholder="O que foi feito (opcional)" maxlength="@TimeEntry.MaxCommentLength" />
+                        @if (quickContractChoice is { Options.Count: > 1 })
+                        {
+                            <label for="task-hours-contract" class="sr-only">Contrato</label>
+                            <select id="task-hours-contract" @bind="quickContractId">
+                                <option value="">Contrato…</option>
+                                @foreach (var c in quickContractChoice.Options) { <option value="@c.Id">@c.Name</option> }
+                            </select>
+                        }
+                        <button type="button" class="btn btn-sm @(isSavingHours ? "is-loading" : "")" disabled="@(isSavingHours || quickHours <= 0)" @onclick="LogQuickHoursAsync">Apontar hoje</button>
+                    </div>
+                    @if (taskEntries is { Count: > 0 })
+                    {
+                        <ul class="task-hours-list">
+                            @foreach (var e in taskEntries.Take(8))
+                            {
+                                <li><span class="tabular">@e.Date.ToString("dd/MM")</span> · <strong>@e.Hours.ToString("0.##") h</strong> · @Nexus.Web.Services.ApiMappingNames.DisplayNameOf(e.User)@(string.IsNullOrEmpty(e.Comment) ? "" : $" · {e.Comment}")</li>
+                            }
+                        </ul>
+                    }
                 </section>
 
                 <section class="task-view-section task-view-comments" aria-labelledby="task-comments-title">
@@ -516,7 +566,7 @@
 
         uploadError = null;
         await LoadAttachmentsAsync();
-        await LoadCommentsAsync();
+        await LoadCommentsAndHoursAsync();
 
         isOpen = true;
         showRequested = true;
@@ -607,6 +657,99 @@
         comments = recent;
     }
 
+    // ---- Horas (#78) ----
+    private decimal taskHoursTotal;
+    private List<TimeEntry>? taskEntries;
+    private RunningTimer? runningTimer;
+    private decimal quickHours = 1m;
+    private string quickComment = "";
+    private Guid? quickContractId;
+    private Nexus.Web.Services.TimeTracking.ContractChoice? quickContractChoice;
+    private bool isSavingHours;
+    private string? hoursError;
+
+    private async Task LoadHoursAsync()
+    {
+        if (editingId is null)
+        {
+            return;
+        }
+
+        var authState = await AuthStateTask!;
+        var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        taskEntries = await TimeTracking.ListForTaskAsync(editingId.Value);
+        taskHoursTotal = taskEntries.Sum(e => e.Hours);
+        runningTimer = currentUserId is null ? null : await TimeTracking.GetRunningAsync(currentUserId);
+        var workspaceId = await QueryService.GetWorkspaceIdForListAsync(TaskListId);
+        quickContractChoice = workspaceId is null ? null : await Contracts.ChoiceAsync(workspaceId.Value);
+    }
+
+    private async Task StartTimerAsync()
+    {
+        hoursError = null;
+        var authState = await AuthStateTask!;
+        var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var workspaceId = await QueryService.GetWorkspaceIdForListAsync(TaskListId);
+        if (currentUserId is null || workspaceId is null || editingId is null)
+        {
+            return;
+        }
+
+        var result = await TimeTracking.StartAsync(currentUserId, workspaceId.Value, editingId, null, null);
+        if (result.AlreadyRunning is not null)
+        {
+            hoursError = "Você já tem um timer rodando. Pare-o antes de iniciar outro.";
+        }
+
+        runningTimer = await TimeTracking.GetRunningAsync(currentUserId);
+    }
+
+    private async Task StopTimerAsync()
+    {
+        hoursError = null;
+        isSavingHours = true;
+        var authState = await AuthStateTask!;
+        var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var result = await TimeTracking.StopAsync(currentUserId!, quickContractId);
+        isSavingHours = false;
+        if (result.Status != TimeEntryStatus.Ok)
+        {
+            hoursError = result.Error;
+            return;
+        }
+
+        Toasts.Show($"{result.Entry!.Hours:0.00} h apontadas.");
+        await LoadHoursAsync();
+    }
+
+    private async Task LogQuickHoursAsync()
+    {
+        hoursError = null;
+        isSavingHours = true;
+        var authState = await AuthStateTask!;
+        var currentUserId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var workspaceId = await QueryService.GetWorkspaceIdForListAsync(TaskListId);
+        if (currentUserId is null || workspaceId is null || editingId is null)
+        {
+            isSavingHours = false;
+            return;
+        }
+
+        var result = await TimeTracking.LogAsync(workspaceId.Value, currentUserId,
+            new Nexus.Web.Services.TimeTracking.TimeEntryInput(DateTime.Today, quickHours, editingId, null, quickContractId, quickComment));
+        isSavingHours = false;
+        if (result.Status != TimeEntryStatus.Ok)
+        {
+            hoursError = result.Error;
+            return;
+        }
+
+        quickHours = 1m;
+        quickComment = "";
+        Toasts.Show($"{result.Entry!.Hours:0.00} h apontadas.");
+        await LoadHoursAsync();
+    }
+
     private async Task HandleAddComment()
     {
         if (string.IsNullOrWhiteSpace(newCommentText) || editingId is null)
@@ -636,8 +779,10 @@
 
         newCommentText = "";
         isSavingComment = false;
-        await LoadCommentsAsync();
+        await LoadCommentsAndHoursAsync();
     }
+
+    private Task LoadCommentsAndHoursAsync() => Task.WhenAll(LoadCommentsAsync(), LoadHoursAsync());
 
     private static string CommentAuthorLabel(WorkItemComment comment) =>
         comment.User is null

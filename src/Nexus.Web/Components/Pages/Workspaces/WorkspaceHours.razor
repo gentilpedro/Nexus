@@ -1,0 +1,761 @@
+@page "/workspaces/{WorkspaceId:guid}/hours"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Services
+@using Nexus.Web.Services.TimeTracking
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAuthorizationService AuthorizationService
+@inject WorkspaceAccessGuard AccessGuard
+@inject NavigationContextService NavContext
+@inject ToastService Toasts
+@inject TimeTrackingService Time
+@inject ContractService Contracts
+
+<PageTitle>Horas · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notFound)
+    {
+        <EmptyState Icon="lock" Title="Workspace não encontrado" Description="Ele pode ter sido excluído, ou você não faz mais parte dele.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
+    }
+    else if (workspace is null)
+    {
+        <Skeleton Variant="text" Count="6" Label="Carregando horas…" />
+    }
+    else
+    {
+        <PageHeader Title="@workspace.Name">
+            <Breadcrumbs><a href="/workspaces">Workspaces</a></Breadcrumbs>
+        </PageHeader>
+        <WorkspaceTabs WorkspaceId="WorkspaceId" Active="hours" CanManage="isAdmin" />
+
+        <div class="settings-layout">
+            <nav class="settings-nav" aria-label="Seções de horas">
+                <button type="button" class="settings-nav-link @(tab == "minhas" ? "active" : "")" aria-current="@(tab == "minhas" ? "true" : null)" @onclick='() => tab = "minhas"'><Icon Name="clock" /> Minhas horas</button>
+                @if (isAdmin)
+                {
+                    <button type="button" class="settings-nav-link @(tab == "relatorio" ? "active" : "")" aria-current="@(tab == "relatorio" ? "true" : null)" @onclick="ShowReportAsync"><Icon Name="chart" /> Relatório</button>
+                }
+                <button type="button" class="settings-nav-link @(tab == "contratos" ? "active" : "")" aria-current="@(tab == "contratos" ? "true" : null)" @onclick='() => tab = "contratos"'><Icon Name="file" /> Contratos</button>
+                @if (isAdmin)
+                {
+                    <button type="button" class="settings-nav-link @(tab == "atividades" ? "active" : "")" aria-current="@(tab == "atividades" ? "true" : null)" @onclick="ShowActivitiesAsync"><Icon Name="tag" /> Atividades</button>
+                }
+            </nav>
+            <div class="settings-content">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
+                }
+
+                @if (tab == "minhas")
+                {
+                    <section class="card" aria-labelledby="timer-title">
+                        <h2 id="timer-title" class="form-section-title">Timer</h2>
+                        @if (runningTimer is null)
+                        {
+                            <p class="form-section-description">Inicie um timer numa tarefa, pelo painel dela, ou aqui como hora avulsa do workspace. Ao parar, vira um lançamento.</p>
+                            <div class="form-actions">
+                                <button type="button" class="btn" @onclick="StartLooseTimerAsync"><Icon Name="clock" /> Iniciar timer avulso</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="form-section-description">
+                                Rodando desde @runningTimer.StartedAtUtc.ToLocalTime().ToString("HH:mm")
+                                @if (runningTimer.WorkItem is not null)
+                                {
+                                    <text> em <strong>@runningTimer.WorkItem.Code @runningTimer.WorkItem.Title</strong></text>
+                                }
+                                else
+                                {
+                                    <text> como hora avulsa</text>
+                                }
+                                @if (runningTimer.WorkspaceId != WorkspaceId)
+                                {
+                                    <text> (em <strong>@runningTimer.Workspace.Name</strong>)</text>
+                                }
+                                <text>: <strong>@TimeTrackingService.HoursBetween(runningTimer.StartedAtUtc, DateTime.UtcNow).ToString("0.00") h</strong>.</text>
+                            </p>
+                            @if (stopNeedsContract)
+                            {
+                                <div class="form-field">
+                                    <label for="stop-contract" class="required">Qual contrato recebe as horas?</label>
+                                    <select id="stop-contract" @bind="stopContractId">
+                                        <option value="">Escolha…</option>
+                                        @foreach (var c in choice!.Options) { <option value="@c.Id">@c.Name</option> }
+                                    </select>
+                                </div>
+                            }
+                            <div class="form-actions">
+                                <button type="button" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving" @onclick="StopTimerAsync"><Icon Name="check" /> Parar e apontar</button>
+                                <button type="button" class="btn btn-danger-ghost" @onclick="DiscardTimerAsync">Descartar</button>
+                            </div>
+                        }
+                    </section>
+
+                    <section class="card" aria-labelledby="log-title">
+                        <h2 id="log-title" class="form-section-title">@(editingEntryId is null ? "Apontar horas" : "Editar lançamento")</h2>
+                        <EditForm Model="entryModel" OnValidSubmit="SaveEntryAsync" class="hours-form">
+                            <DataAnnotationsValidator />
+                            <div class="hours-form-row">
+                                <div class="form-field">
+                                    <label for="entry-date" class="required">Data</label>
+                                    <InputDate id="entry-date" @bind-Value="entryModel.Date" />
+                                </div>
+                                <div class="form-field">
+                                    <label for="entry-hours" class="required">Horas</label>
+                                    <InputNumber id="entry-hours" @bind-Value="entryModel.Hours" step="0.25" min="0.25" max="24" />
+                                    <ValidationMessage For="() => entryModel.Hours" />
+                                </div>
+                                <div class="form-field">
+                                    <label for="entry-activity">Atividade</label>
+                                    <InputSelect id="entry-activity" @bind-Value="entryModel.ActivityId">
+                                        <option value="">Sem atividade</option>
+                                        @foreach (var a in activities) { <option value="@a.Id">@a.Name</option> }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <div class="hours-form-row">
+                                <div class="form-field">
+                                    <label for="entry-task">Tarefa (código, ex.: TASK-12) ou vazio para hora avulsa</label>
+                                    <InputText id="entry-task" @bind-Value="entryModel.TaskCode" placeholder="TASK-12" />
+                                </div>
+                                @if (choice is { Options.Count: > 1 })
+                                {
+                                    <div class="form-field">
+                                        <label for="entry-contract" class="required">Contrato</label>
+                                        <InputSelect id="entry-contract" @bind-Value="entryModel.ContractId">
+                                            <option value="">Escolha…</option>
+                                            @foreach (var c in choice.Options) { <option value="@c.Id">@c.Name</option> }
+                                        </InputSelect>
+                                    </div>
+                                }
+                                else if (choice is { Options.Count: 1 })
+                                {
+                                    <div class="form-field">
+                                        <span class="field-label">Contrato</span>
+                                        <span class="field-hint">@choice.Options[0].Name (único contrato ativo)</span>
+                                    </div>
+                                }
+                            </div>
+                            <div class="form-field">
+                                <label for="entry-comment">Comentário</label>
+                                <InputText id="entry-comment" @bind-Value="entryModel.Comment" maxlength="@TimeEntry.MaxCommentLength" placeholder="O que foi feito" />
+                            </div>
+                            <div class="form-actions form-actions--end">
+                                @if (editingEntryId is not null)
+                                {
+                                    <button type="button" class="btn btn-ghost" @onclick="CancelEdit">Cancelar</button>
+                                }
+                                <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving">@(editingEntryId is null ? "Apontar" : "Salvar")</button>
+                            </div>
+                        </EditForm>
+                    </section>
+
+                    <section class="card" aria-labelledby="mine-title">
+                        <div class="section-header">
+                            <h2 id="mine-title" class="form-section-title">Meus lançamentos</h2>
+                            <div class="button-row">
+                                <button type="button" class="btn btn-secondary btn-sm @(mineRange == "semana" ? "active" : "")" @onclick='() => SetMineRangeAsync("semana")'>Esta semana</button>
+                                <button type="button" class="btn btn-secondary btn-sm @(mineRange == "mes" ? "active" : "")" @onclick='() => SetMineRangeAsync("mes")'>Este mês</button>
+                                <a class="btn btn-secondary btn-sm" href="@ExportUrl(mineFrom, mineTo)" target="_blank" rel="noopener"><Icon Name="download" /> Planilha</a>
+                            </div>
+                        </div>
+                        @if (mine is null)
+                        {
+                            <Skeleton Count="3" />
+                        }
+                        else if (mine.Count == 0)
+                        {
+                            <EmptyState Compact="true" Title="Nenhum lançamento no período" Description="Aponte acima ou use o timer numa tarefa." />
+                        }
+                        else
+                        {
+                            <p class="form-section-description"><strong>@mine.Sum(e => e.Hours).ToString("0.00") h</strong> no período.</p>
+                            <table class="data-table">
+                                <thead><tr><th>Data</th><th>Tarefa</th><th>Atividade</th><th>Contrato</th><th>Horas</th><th>Comentário</th><th><span class="sr-only">Ações</span></th></tr></thead>
+                                <tbody>
+                                    @foreach (var e in mine)
+                                    {
+                                        <tr>
+                                            <td class="tabular">@e.Date.ToString("dd/MM/yyyy")</td>
+                                            <td>@(e.WorkItem is null ? "Avulso" : $"{e.WorkItem.Code} {e.WorkItem.Title}")</td>
+                                            <td>@(e.Activity?.Name ?? "")</td>
+                                            <td>@(e.Contract?.Name ?? "")</td>
+                                            <td class="tabular">@e.Hours.ToString("0.00")</td>
+                                            <td class="cell-muted">@e.Comment</td>
+                                            <td class="cell-actions">
+                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="() => BeginEdit(e)">Editar</button>
+                                                <button type="button" class="btn btn-danger-ghost btn-sm" @onclick="() => DeleteEntryAsync(e)">Excluir</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </section>
+                }
+                else if (tab == "relatorio")
+                {
+                    <section class="card" aria-labelledby="report-title">
+                        <h2 id="report-title" class="form-section-title">Relatório</h2>
+                        <div class="hours-form-row">
+                            <div class="form-field"><label for="rep-from">De</label><InputDate id="rep-from" @bind-Value="reportFrom" /></div>
+                            <div class="form-field"><label for="rep-to">Até</label><InputDate id="rep-to" @bind-Value="reportTo" /></div>
+                            <div class="form-field">
+                                <label for="rep-group">Agrupar por</label>
+                                <InputSelect id="rep-group" @bind-Value="reportGroup">
+                                    <option value="@TimeReportGroup.Person">Pessoa</option>
+                                    <option value="@TimeReportGroup.List">Lista</option>
+                                    <option value="@TimeReportGroup.Contract">Contrato</option>
+                                    <option value="@TimeReportGroup.Activity">Atividade</option>
+                                    <option value="@TimeReportGroup.Day">Dia</option>
+                                </InputSelect>
+                            </div>
+                            <div class="form-actions">
+                                <button type="button" class="btn" @onclick="ShowReportAsync">Atualizar</button>
+                                <a class="btn btn-secondary" href="@ExportUrl(reportFrom, reportTo)" target="_blank" rel="noopener"><Icon Name="download" /> Planilha</a>
+                            </div>
+                        </div>
+                        @if (report is null)
+                        {
+                            <Skeleton Count="3" />
+                        }
+                        else if (report.Rows.Count == 0)
+                        {
+                            <EmptyState Compact="true" Title="Nenhuma hora no período" />
+                        }
+                        else
+                        {
+                            <p class="form-section-description"><strong>@report.TotalHours.ToString("0.00") h</strong> em @report.Entries.Count lançamentos.</p>
+                            <table class="data-table">
+                                <thead><tr><th>@reportGroup.ToString() switch { "Person" => "Pessoa", "List" => "Lista", "Contract" => "Contrato", "Activity" => "Atividade", _ => "Dia" }</th><th>Horas</th><th>Lançamentos</th><th>Parte</th></tr></thead>
+                                <tbody>
+                                    @foreach (var r in report.Rows)
+                                    {
+                                        <tr>
+                                            <td>@r.Label</td>
+                                            <td class="tabular">@r.Hours.ToString("0.00")</td>
+                                            <td class="tabular">@r.Entries</td>
+                                            <td class="tabular">@(report.TotalHours == 0 ? 0 : Math.Round(r.Hours * 100 / report.TotalHours))%</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </section>
+                }
+                else if (tab == "contratos")
+                {
+                    @if (isAdmin)
+                    {
+                        <section class="card" aria-labelledby="contract-form-title">
+                            <h2 id="contract-form-title" class="form-section-title">@(editingContractId is null ? "Novo contrato" : "Editar contrato")</h2>
+                            <EditForm Model="contractModel" OnValidSubmit="SaveContractAsync" class="hours-form">
+                                <DataAnnotationsValidator />
+                                <div class="hours-form-row">
+                                    <div class="form-field">
+                                        <label for="c-name" class="required">Nome</label>
+                                        <InputText id="c-name" @bind-Value="contractModel.Name" placeholder="Ex.: Suporte 2026" maxlength="@WorkspaceContract.MaxNameLength" />
+                                        <ValidationMessage For="() => contractModel.Name" />
+                                    </div>
+                                    <div class="form-field">
+                                        <label for="c-type">Tipo</label>
+                                        <InputSelect id="c-type" @bind-Value="contractModel.Type">
+                                            <option value="@ContractType.Hourly">Por hora</option>
+                                            <option value="@ContractType.Fixed">Valor fixo</option>
+                                        </InputSelect>
+                                    </div>
+                                    <div class="form-field">
+                                        <label for="c-hours">Horas contratadas</label>
+                                        <InputNumber id="c-hours" @bind-Value="contractModel.ContractedHours" step="1" min="0" />
+                                    </div>
+                                </div>
+                                <div class="hours-form-row">
+                                    <div class="form-field"><label for="c-start">Início</label><InputDate id="c-start" @bind-Value="contractModel.StartDate" /></div>
+                                    <div class="form-field"><label for="c-end">Fim</label><InputDate id="c-end" @bind-Value="contractModel.EndDate" /></div>
+                                </div>
+                                <div class="form-field">
+                                    <label for="c-notes">Observações</label>
+                                    <InputTextArea id="c-notes" @bind-Value="contractModel.Notes" rows="2" maxlength="@WorkspaceContract.MaxNotesLength" />
+                                </div>
+                                <div class="form-actions form-actions--end">
+                                    @if (editingContractId is not null)
+                                    {
+                                        <button type="button" class="btn btn-ghost" @onclick="CancelContractEdit">Cancelar</button>
+                                    }
+                                    <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving">@(editingContractId is null ? "Criar contrato" : "Salvar")</button>
+                                </div>
+                            </EditForm>
+                        </section>
+                    }
+
+                    <section class="card" aria-labelledby="contracts-title">
+                        <h2 id="contracts-title" class="form-section-title">Contratos</h2>
+                        <p class="form-section-description">Sem contrato, as horas entram sem vínculo. Com um ativo, vinculam sozinhas. Com dois ou mais, quem aponta escolhe. Travado ou encerrado não recebe hora nova. Aos 80% do contratado, os administradores recebem um aviso.</p>
+                        @if (contractUsages is null)
+                        {
+                            <Skeleton Count="2" />
+                        }
+                        else if (contractUsages.Count == 0)
+                        {
+                            <EmptyState Compact="true" Title="Nenhum contrato" Description="@(isAdmin ? "Cadastre o primeiro acima." : "As horas deste workspace entram sem vínculo de contrato.")" />
+                        }
+                        else
+                        {
+                            <table class="data-table">
+                                <thead><tr><th>Contrato</th><th>Tipo</th><th>Situação</th><th>Contratadas</th><th>Apontadas</th><th>Restantes</th><th>Vigência</th>@if (isAdmin) { <th><span class="sr-only">Ações</span></th> }</tr></thead>
+                                <tbody>
+                                    @foreach (var u in contractUsages)
+                                    {
+                                        <tr class="@(u.Contract.Status != ContractStatus.Active ? "is-muted" : "")">
+                                            <td class="cell-title">@u.Contract.Name @if (u.IsNearLimit) { <span class="badge">@u.Percent%</span> }</td>
+                                            <td>@(u.Contract.Type == ContractType.Hourly ? "Por hora" : "Valor fixo")</td>
+                                            <td>@StatusLabel(u.Contract.Status)</td>
+                                            <td class="tabular">@(u.Contract.ContractedHours?.ToString("0.##") ?? "—")</td>
+                                            <td class="tabular">@u.HoursLogged.ToString("0.##")</td>
+                                            <td class="tabular">@(u.Remaining?.ToString("0.##") ?? "—")</td>
+                                            <td class="cell-muted tabular">@(u.Contract.StartDateUtc?.ToString("dd/MM/yy") ?? "")@(u.Contract.StartDateUtc is not null || u.Contract.EndDateUtc is not null ? " – " : "")@(u.Contract.EndDateUtc?.ToString("dd/MM/yy") ?? "")</td>
+                                            @if (isAdmin)
+                                            {
+                                                <td class="cell-actions">
+                                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => BeginContractEdit(u.Contract)">Editar</button>
+                                                    @if (u.Contract.Status == ContractStatus.Active)
+                                                    {
+                                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="() => SetContractStatusAsync(u.Contract, ContractStatus.Locked)">Travar</button>
+                                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="() => SetContractStatusAsync(u.Contract, ContractStatus.Closed)">Encerrar</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="() => SetContractStatusAsync(u.Contract, ContractStatus.Active)">Reativar</button>
+                                                    }
+                                                    <button type="button" class="btn btn-danger-ghost btn-sm" @onclick="() => DeleteContractAsync(u.Contract)">Excluir</button>
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </section>
+                }
+                else if (tab == "atividades")
+                {
+                    <section class="card" aria-labelledby="activities-title">
+                        <h2 id="activities-title" class="form-section-title">Atividades</h2>
+                        <p class="form-section-description">O tipo de trabalho de cada lançamento. Desativar tira da escolha sem apagar o histórico.</p>
+                        <div class="hours-form-row">
+                            <div class="form-field">
+                                <label for="new-activity">Nova atividade</label>
+                                <input id="new-activity" type="text" @bind="newActivityName" maxlength="@TimeActivity.MaxNameLength" placeholder="Ex.: Deslocamento" />
+                            </div>
+                            <div class="form-actions"><button type="button" class="btn" @onclick="AddActivityAsync"><Icon Name="plus" /> Adicionar</button></div>
+                        </div>
+                        <ul class="plan-summary">
+                            @foreach (var a in allActivities)
+                            {
+                                <li>
+                                    <span class="@(a.IsActive ? "" : "cell-muted")">@a.Name</span>
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => ToggleActivityAsync(a)">@(a.IsActive ? "Desativar" : "Reativar")</button>
+                                </li>
+                            }
+                        </ul>
+                    </section>
+                }
+            </div>
+        </div>
+
+        <ConfirmDialog @ref="confirm" />
+    }
+</div>
+
+@code {
+    [Parameter] public Guid WorkspaceId { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private ConfirmDialog? confirm;
+    private Workspace? workspace;
+    private bool notFound;
+    private bool isAdmin;
+    private bool isSaving;
+    private string? errorMessage;
+    private string tab = "minhas";
+    private string? userId;
+    private Guid? loadedWorkspaceId;
+
+    private RunningTimer? runningTimer;
+    private bool stopNeedsContract;
+    private Guid? stopContractId;
+    private ContractChoice? choice;
+    private List<TimeActivity> activities = [];
+    private List<TimeActivity> allActivities = [];
+    private List<TimeEntry>? mine;
+    private string mineRange = "semana";
+    private DateTime mineFrom;
+    private DateTime mineTo;
+    private readonly EntryModel entryModel = new();
+    private Guid? editingEntryId;
+
+    private TimeReport? report;
+    private DateTime reportFrom = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek + 1).AddDays(-7);
+    private DateTime reportTo = DateTime.Today;
+    private TimeReportGroup reportGroup = TimeReportGroup.Person;
+
+    private List<ContractUsage>? contractUsages;
+    private readonly ContractModel contractModel = new();
+    private Guid? editingContractId;
+    private string newActivityName = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedWorkspaceId == WorkspaceId) return;
+        loadedWorkspaceId = WorkspaceId;
+        notFound = false;
+        workspace = null;
+
+        var authState = await AuthStateTask!;
+        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var member = await AuthorizationService.AuthorizeAsync(authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+        if (!member.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        isAdmin = (await AuthorizationService.AuthorizeAsync(authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin))).Succeeded;
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspace = await db.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        }
+
+        if (workspace is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        NavContext.SetWorkspace(WorkspaceId, workspace.Name);
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        runningTimer = await Time.GetRunningAsync(userId!);
+        choice = await Contracts.ChoiceAsync(WorkspaceId);
+        activities = await Time.ListActivitiesAsync(WorkspaceId);
+        contractUsages = await Contracts.ListAsync(WorkspaceId);
+        await SetMineRangeAsync(mineRange);
+    }
+
+    private async Task SetMineRangeAsync(string range)
+    {
+        mineRange = range;
+        var today = DateTime.Today;
+        if (range == "mes")
+        {
+            mineFrom = new DateTime(today.Year, today.Month, 1);
+            mineTo = mineFrom.AddMonths(1).AddDays(-1);
+        }
+        else
+        {
+            var offset = ((int)today.DayOfWeek + 6) % 7;
+            mineFrom = today.AddDays(-offset);
+            mineTo = mineFrom.AddDays(6);
+        }
+
+        mine = await Time.ListAsync(WorkspaceId, userId, mineFrom, mineTo);
+    }
+
+    private string ExportUrl(DateTime from, DateTime to) => $"/workspaces/{WorkspaceId}/hours/export.xlsx?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}";
+
+    private static string StatusLabel(ContractStatus status) => status switch
+    {
+        ContractStatus.Active => "Ativo",
+        ContractStatus.Locked => "Travado",
+        _ => "Encerrado",
+    };
+
+    // ---- timer ----
+
+    private async Task StartLooseTimerAsync()
+    {
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member)) { notFound = true; return; }
+        var result = await Time.StartAsync(userId!, WorkspaceId, null, null, null);
+        if (result.AlreadyRunning is not null)
+        {
+            errorMessage = "Você já tem um timer rodando. Pare ou descarte antes de iniciar outro.";
+        }
+        runningTimer = await Time.GetRunningAsync(userId!);
+    }
+
+    private async Task StopTimerAsync()
+    {
+        isSaving = true;
+        errorMessage = null;
+        var result = await Time.StopAsync(userId!, stopContractId);
+        isSaving = false;
+        if (result.Status == TimeEntryStatus.Ok)
+        {
+            Toasts.Show($"{result.Entry!.Hours:0.00} h apontadas.");
+            stopNeedsContract = false;
+            stopContractId = null;
+            await ReloadAsync();
+            return;
+        }
+
+        if (result.Error?.Contains("mais de um contrato") == true)
+        {
+            stopNeedsContract = true;
+            choice = await Contracts.ChoiceAsync(runningTimer?.WorkspaceId ?? WorkspaceId);
+            return;
+        }
+
+        errorMessage = result.Error;
+    }
+
+    private async Task DiscardTimerAsync()
+    {
+        if (confirm is null || !await confirm.AskAsync(new ConfirmRequest("Descartar o timer?", "O tempo contado até agora não vira lançamento.", "Descartar")))
+        {
+            return;
+        }
+
+        await Time.DiscardTimerAsync(userId!);
+        runningTimer = null;
+        stopNeedsContract = false;
+    }
+
+    // ---- lançamentos ----
+
+    private async Task SaveEntryAsync()
+    {
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Member)) { notFound = true; return; }
+        isSaving = true;
+        errorMessage = null;
+
+        Guid? workItemId = null;
+        if (!string.IsNullOrWhiteSpace(entryModel.TaskCode))
+        {
+            workItemId = await ResolveTaskAsync(entryModel.TaskCode);
+            if (workItemId is null)
+            {
+                errorMessage = $"Tarefa \"{entryModel.TaskCode}\" não encontrada neste workspace.";
+                isSaving = false;
+                return;
+            }
+        }
+
+        var input = new TimeEntryInput(entryModel.Date, entryModel.Hours, workItemId, entryModel.ActivityId, entryModel.ContractId, entryModel.Comment);
+        var result = editingEntryId is { } id
+            ? await Time.UpdateAsync(WorkspaceId, id, userId!, isAdmin, input)
+            : await Time.LogAsync(WorkspaceId, userId!, input);
+        isSaving = false;
+        if (result.Status != TimeEntryStatus.Ok)
+        {
+            errorMessage = result.Error ?? "Não foi possível gravar.";
+            return;
+        }
+
+        Toasts.Show(editingEntryId is null ? "Horas apontadas." : "Lançamento salvo.");
+        editingEntryId = null;
+        entryModel.Reset();
+        await ReloadAsync();
+    }
+
+    private async Task<Guid?> ResolveTaskAsync(string code)
+    {
+        var digits = code.Trim();
+        if (digits.StartsWith("TASK-", StringComparison.OrdinalIgnoreCase)) digits = digits[5..];
+        if (!int.TryParse(digits, out var number)) return null;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        return await db.WorkItems.Where(w => w.Number == number && w.TaskList.Space.WorkspaceId == WorkspaceId).Select(w => (Guid?)w.Id).FirstOrDefaultAsync();
+    }
+
+    private void BeginEdit(TimeEntry e)
+    {
+        editingEntryId = e.Id;
+        entryModel.Date = e.Date;
+        entryModel.Hours = e.Hours;
+        entryModel.ActivityId = e.ActivityId;
+        entryModel.ContractId = e.ContractId;
+        entryModel.TaskCode = e.WorkItem?.Code ?? "";
+        entryModel.Comment = e.Comment ?? "";
+    }
+
+    private void CancelEdit()
+    {
+        editingEntryId = null;
+        entryModel.Reset();
+    }
+
+    private async Task DeleteEntryAsync(TimeEntry e)
+    {
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("lançamento", $"{e.Hours:0.00} h em {e.Date:dd/MM}", "As horas saem do relatório e do contrato.")))
+        {
+            return;
+        }
+
+        var status = await Time.DeleteAsync(WorkspaceId, e.Id, userId!, isAdmin);
+        if (status != TimeEntryStatus.Ok)
+        {
+            errorMessage = "Não foi possível excluir.";
+        }
+
+        await ReloadAsync();
+    }
+
+    // ---- relatório ----
+
+    private async Task ShowReportAsync()
+    {
+        tab = "relatorio";
+        report = null;
+        report = await Time.ReportAsync(WorkspaceId, reportFrom, reportTo, reportGroup);
+    }
+
+    // ---- contratos ----
+
+    private async Task SaveContractAsync()
+    {
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin)) { notFound = true; return; }
+        isSaving = true;
+        errorMessage = null;
+        var input = new ContractInput(contractModel.Name, contractModel.Type, contractModel.ContractedHours, contractModel.StartDate, contractModel.EndDate, contractModel.Notes);
+        var result = editingContractId is { } id
+            ? await Contracts.UpdateAsync(WorkspaceId, id, input, userId)
+            : await Contracts.CreateAsync(WorkspaceId, input, userId);
+        isSaving = false;
+        if (result.Status != ContractSaveStatus.Ok)
+        {
+            errorMessage = result.Error ?? "Não foi possível salvar o contrato.";
+            return;
+        }
+
+        Toasts.Show(editingContractId is null ? "Contrato criado." : "Contrato salvo.");
+        editingContractId = null;
+        contractModel.Reset();
+        await ReloadAsync();
+    }
+
+    private void BeginContractEdit(WorkspaceContract c)
+    {
+        editingContractId = c.Id;
+        contractModel.Name = c.Name;
+        contractModel.Type = c.Type;
+        contractModel.ContractedHours = c.ContractedHours;
+        contractModel.StartDate = c.StartDateUtc;
+        contractModel.EndDate = c.EndDateUtc;
+        contractModel.Notes = c.Notes ?? "";
+    }
+
+    private void CancelContractEdit()
+    {
+        editingContractId = null;
+        contractModel.Reset();
+    }
+
+    private async Task SetContractStatusAsync(WorkspaceContract c, ContractStatus status)
+    {
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin)) { notFound = true; return; }
+        await Contracts.SetStatusAsync(WorkspaceId, c.Id, status, userId);
+        await ReloadAsync();
+    }
+
+    private async Task DeleteContractAsync(WorkspaceContract c)
+    {
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("contrato", c.Name, "As horas já apontadas ficam, sem vínculo com este contrato.")))
+        {
+            return;
+        }
+
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin)) { notFound = true; return; }
+        await Contracts.DeleteAsync(WorkspaceId, c.Id, userId);
+        await ReloadAsync();
+    }
+
+    // ---- atividades ----
+
+    private async Task ShowActivitiesAsync()
+    {
+        tab = "atividades";
+        allActivities = await Time.ListActivitiesAsync(WorkspaceId, includeInactive: true);
+    }
+
+    private async Task AddActivityAsync()
+    {
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin)) { notFound = true; return; }
+        if (await Time.AddActivityAsync(WorkspaceId, newActivityName) is null)
+        {
+            errorMessage = "Dê um nome à atividade, com até 60 caracteres.";
+            return;
+        }
+
+        newActivityName = "";
+        allActivities = await Time.ListActivitiesAsync(WorkspaceId, includeInactive: true);
+        activities = allActivities.Where(a => a.IsActive).ToList();
+    }
+
+    private async Task ToggleActivityAsync(TimeActivity a)
+    {
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin)) { notFound = true; return; }
+        await Time.SetActivityActiveAsync(WorkspaceId, a.Id, !a.IsActive);
+        allActivities = await Time.ListActivitiesAsync(WorkspaceId, includeInactive: true);
+        activities = allActivities.Where(x => x.IsActive).ToList();
+    }
+
+    private sealed class EntryModel
+    {
+        public DateTime Date { get; set; } = DateTime.Today;
+
+        [System.ComponentModel.DataAnnotations.Range(0.01, 24, ErrorMessage = "Entre 0,01 e 24 horas.")]
+        public decimal Hours { get; set; } = 1m;
+
+        public Guid? ActivityId { get; set; }
+        public Guid? ContractId { get; set; }
+        public string TaskCode { get; set; } = "";
+        public string Comment { get; set; } = "";
+
+        public void Reset()
+        {
+            Date = DateTime.Today;
+            Hours = 1m;
+            ActivityId = null;
+            ContractId = null;
+            TaskCode = "";
+            Comment = "";
+        }
+    }
+
+    private sealed class ContractModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Dê um nome ao contrato.")]
+        [System.ComponentModel.DataAnnotations.StringLength(WorkspaceContract.MaxNameLength)]
+        public string Name { get; set; } = "";
+
+        public ContractType Type { get; set; } = ContractType.Hourly;
+        public decimal? ContractedHours { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string Notes { get; set; } = "";
+
+        public void Reset()
+        {
+            Name = "";
+            Type = ContractType.Hourly;
+            ContractedHours = null;
+            StartDate = null;
+            EndDate = null;
+            Notes = "";
+        }
+    }
+}

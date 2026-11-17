@@ -27,6 +27,8 @@ navegador → Cloudflare (proxy, WAF) → Nginx do host :443 → 127.0.0.1:5100 
 | `/opt/nexus/backups/` | `nexus-backup` diário (03:45): dump do banco + anexos, 7 dias |
 | `/etc/nginx/conf.d/nexus.conf` | Cópia de `deploy/vps/nexus.conf` |
 | `/usr/local/bin/nexus-deploy` | Único comando que o usuário `deploy` (chave do Actions) pode rodar |
+| `/var/www/docs-nexus/current` | Site de documentação (docs-nexus.aamora.com.br), symlink para a última publicação em `releases/` (fora de `/opt/nexus`, que o Nginx não lê) |
+| `/etc/nginx/conf.d/docs-nexus.conf` | Cópia de `deploy/vps/docs-nexus.conf` |
 
 Os arquivos de `deploy/vps/` não são copiados automaticamente: mudou um deles, copie para o servidor.
 
@@ -41,6 +43,36 @@ Job `deploy-vps` em `.github/workflows/deploy-nexus.yml`:
 4. Confere `https://nexus.aamora.com.br/health/live` de fora.
 
 Secrets do repositório: `VPS_HOST`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
+
+### 3.1 Site de documentação
+
+O workflow `docs-site.yml` roda quando `docs-site/` muda: em PR só constrói (`mkdocs build
+--strict`, link quebrado falha); na `main` empacota o site e manda por SSH para
+`nexus-deploy docs-site <sha>`, que descompacta em `/var/www/docs-nexus/releases/<sha>` e troca o
+symlink `current` que o Nginx serve. Nada de container: é HTML estático.
+
+Para a primeira publicação, no servidor (uma vez):
+
+```bash
+sudo install -d -m 755 /var/www/docs-nexus
+sudo cp deploy/vps/nexus-deploy /usr/local/bin/nexus-deploy      # versão com o subcomando docs-site
+sudo cp deploy/vps/docs-nexus.conf /etc/nginx/conf.d/docs-nexus.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+O DNS já está coberto pelo registro `*.aamora.com.br` do Cloudflare (proxy ligado). O certificado
+não é curinga: é o Let's Encrypt `aamora`, com os nomes listados um a um. Um subdomínio novo
+precisa responder o desafio HTTP-01 na porta 80 (`include snippets/acme-challenge.conf` antes do
+redirecionamento, como no `docs-nexus.conf`) e entrar no certificado:
+
+```bash
+sudo certbot certonly --webroot -w /var/www/letsencrypt --cert-name aamora --expand   -d aamora.com.br -d www.aamora.com.br -d nexus.aamora.com.br -d docs-nexus.aamora.com.br   <...os demais nomes já cobertos...>
+sudo systemctl reload nginx
+```
+
+Sem isso o Cloudflare responde 526 (certificado da origem não cobre o nome). O Nexus libera CORS do `/openapi/v1.json` só para essa origem
+(`Docs:SiteUrl` em `appsettings.Production.json`), para a página de referência da API carregar a
+especificação de produção.
 
 E-mail: o app envia para o relay SMTP da Aamora (`/opt/smtp`, container na rede Docker externa
 `mail`), que repassa pelo Resend na 587 — a VPS não sai pela porta 25. O remetente é
