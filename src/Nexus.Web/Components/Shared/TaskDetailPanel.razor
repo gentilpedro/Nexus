@@ -8,6 +8,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject WorkItemQueryService QueryService
+@inject Nexus.Web.Services.Webhooks.WorkItemEventPublisher Events
 @inject AttachmentStorageService Storage
 @inject Mailer Mailer
 @inject NavigationManager NavigationManager
@@ -620,15 +621,17 @@
 
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
-            db.WorkItemComments.Add(new WorkItemComment
+            var comment = new WorkItemComment
             {
                 Id = Guid.NewGuid(),
                 WorkItemId = editingId.Value,
                 UserId = currentUserId,
                 Content = newCommentText.Trim(),
                 CreatedAtUtc = DateTime.UtcNow
-            });
+            };
+            db.WorkItemComments.Add(comment);
             await db.SaveChangesAsync();
+            await Events.CommentCreatedAsync(db, comment.Id, new Nexus.Web.Services.Webhooks.EventActor(currentUserId));
         }
 
         newCommentText = "";
@@ -885,9 +888,11 @@
         await using (var db = await DbFactory.CreateDbContextAsync())
         {
             WorkItem workItem;
+            Nexus.Web.Services.Webhooks.WorkItemSnapshot? previous = null;
             if (isEditing && editingId is not null)
             {
                 workItem = await db.WorkItems.FirstAsync(w => w.Id == editingId.Value);
+                previous = Nexus.Web.Services.Webhooks.WorkItemSnapshot.Of(workItem);
             }
             else
             {
@@ -1020,6 +1025,17 @@
             }
 
             await db.SaveChangesAsync();
+
+            // Webhooks de saída (#75): depois de tudo gravado, para o evento já sair com a tarefa completa.
+            var eventActor = new Nexus.Web.Services.Webhooks.EventActor(currentUserId);
+            if (previous is not null)
+            {
+                await Events.TaskChangedAsync(db, workItem.Id, previous, eventActor);
+            }
+            else
+            {
+                await Events.TaskCreatedAsync(db, workItem.Id, eventActor);
+            }
         }
 
         isSaving = false;

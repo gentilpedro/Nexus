@@ -31,6 +31,7 @@ public class WorkspacePlanTests
         Assert.Equal(1, starter.MaxOwnedWorkspaces);
         Assert.False(starter.IncludesSprintsGanttAndBurndown);
         Assert.False(starter.IncludesPrioritySupport);
+        Assert.False(starter.IncludesApiAccess);
     }
 
     [Theory]
@@ -44,6 +45,7 @@ public class WorkspacePlanTests
         Assert.Null(caps.MaxOwnedWorkspaces);
         Assert.True(caps.IncludesSprintsGanttAndBurndown);
         Assert.True(caps.IncludesPrioritySupport);
+        Assert.True(caps.IncludesApiAccess);
     }
 
     [Theory]

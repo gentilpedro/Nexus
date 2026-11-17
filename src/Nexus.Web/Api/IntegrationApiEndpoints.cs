@@ -1,53 +1,12 @@
 using System.Security.Claims;
-using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
 using Nexus.Web.Services;
 
 namespace Nexus.Web.Api;
-
-// Respostas JSON da API de integração. Separadas das entidades para a API ter um contrato
-// estável: mudar uma coluna no banco não muda o que o ERP recebe.
-public sealed record WorkspaceResponse(Guid Id, string Name, string Slug, bool IsArchived);
-
-public sealed record SpaceResponse(Guid Id, string Name, IReadOnlyList<ListResponse> Lists);
-
-public sealed record ListResponse(Guid Id, string Name, IReadOnlyList<StatusResponse> Statuses);
-
-public sealed record StatusResponse(Guid Id, string Name, StatusCategory Category, bool IsDefault);
-
-public sealed record MemberResponse(string Id, string Name, string? Email, WorkspaceRole Role);
-
-public sealed record PersonResponse(string Id, string Name, string? Email);
-
-public sealed record TaskListRef(Guid Id, string Name);
-
-public sealed record TaskResponse(
-    Guid Id,
-    string Code,
-    int Number,
-    string Title,
-    string? Description,
-    WorkItemType Type,
-    WorkItemPriority Priority,
-    StatusResponse Status,
-    TaskListRef List,
-    PersonResponse? Assignee,
-    DateTime? StartDateUtc,
-    DateTime? DueDateUtc,
-    string? ExternalReference,
-    DateTime CreatedAtUtc,
-    DateTime? UpdatedAtUtc,
-    string? Url);
-
-public sealed record TaskPageResponse(IReadOnlyList<TaskResponse> Items, int Page, int PageSize, int Total);
-
-/// <param name="Task">A tarefa que já existe com a mesma referência externa.</param>
-public sealed record TaskConflictResponse(string Message, TaskResponse Task);
 
 /// <summary>Filtros de GET /api/v1/tasks, lidos da query string. Todos opcionais.</summary>
 public sealed class TaskListQuery
@@ -64,35 +23,19 @@ public sealed class TaskListQuery
 public static class IntegrationApiEndpoints
 {
     public const string RoutePrefix = "/api/v1";
-    public const string RateLimitPolicy = "api";
-
-    public static void AddIntegrationApiRateLimit(this RateLimiterOptions options)
-    {
-        // Por chave, não por IP: um ERP inteiro costuma sair por um único endereço. O limitador
-        // roda antes da autenticação do endpoint, então a partição usa o hash do cabeçalho (nunca
-        // o valor em si, que ficaria em memória) e cai para o IP quando não há cabeçalho.
-        options.AddPolicy(RateLimitPolicy, httpContext =>
-        {
-            var header = httpContext.Request.Headers.Authorization.ToString();
-            var partition = header.Length > 0
-                ? "key:" + WorkspaceApiKeyService.Hash(header)
-                : "ip:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-            return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 120,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-            });
-        });
-    }
 
     public static IEndpointRouteBuilder MapIntegrationApi(this IEndpointRouteBuilder app)
     {
+        // O limite de chamadas é o GlobalLimiter (IntegrationApiRateLimiter); aqui só os
+        // cabeçalhos que contam o que resta. Os filtros rodam depois da autenticação, na ordem:
+        // plano, workspace arquivado, escopo da chave.
         var api = app.MapGroup(RoutePrefix)
             .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = ApiKeyAuthenticationHandler.SchemeName })
-            .RequireRateLimiting(RateLimitPolicy)
             .DisableAntiforgery()
-            .AddEndpointFilter(RejectArchivedWorkspaceAsync);
+            .AddEndpointFilter(AddRateLimitHeadersAsync)
+            .AddEndpointFilter(RejectPlanWithoutApiAsync)
+            .AddEndpointFilter(RejectArchivedWorkspaceAsync)
+            .AddEndpointFilter(RejectWriteWithReadOnlyKeyAsync);
 
         api.MapGet("/workspace", GetWorkspaceAsync)
             .WithTags("Workspace")
@@ -130,6 +73,42 @@ public static class IntegrationApiEndpoints
             .WithDescription("Atualização parcial: campo ausente não muda. String vazia limpa description, assigneeId ou externalReference. Mudança de status respeita o fluxo de trabalho da lista.");
 
         return app;
+    }
+
+    private static async ValueTask<object?> AddRateLimitHeadersAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var http = context.HttpContext;
+        var limiter = http.RequestServices.GetRequiredService<IntegrationApiRateLimiter>();
+        http.Response.Headers["X-RateLimit-Limit"] = IntegrationApiRateLimiter.PermitLimit.ToString();
+        http.Response.Headers["X-RateLimit-Remaining"] = limiter.Remaining(http).ToString();
+        return await next(context);
+    }
+
+    private static async ValueTask<object?> RejectPlanWithoutApiAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        if (!context.HttpContext.User.HasApiAccess())
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "A API não faz parte do plano deste workspace",
+                detail: "A API de integração está disponível nos planos Pro e Business. Assine em Configurações do workspace, Plano e cobrança; as chaves já criadas voltam a funcionar.");
+        }
+
+        return await next(context);
+    }
+
+    private static async ValueTask<object?> RejectWriteWithReadOnlyKeyAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var http = context.HttpContext;
+        if (!HttpMethods.IsGet(http.Request.Method) && !HttpMethods.IsHead(http.Request.Method) && !http.User.CanWrite())
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Chave só de leitura",
+                detail: "Esta chave só consulta. Para criar ou atualizar tarefas, gere uma chave de leitura e escrita em Configurações do workspace, Integrações.");
+        }
+
+        return await next(context);
     }
 
     private static async ValueTask<object?> RejectArchivedWorkspaceAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -267,27 +246,9 @@ public static class IntegrationApiEndpoints
             : configured.TrimEnd('/');
     }
 
-    private static string DisplayNameOf(string? displayName, string? email) =>
-        string.IsNullOrWhiteSpace(displayName) ? (email ?? "") : displayName;
+    private static string DisplayNameOf(string? displayName, string? email) => ApiMapping.DisplayNameOf(displayName, email);
 
-    private static StatusResponse ToResponse(TaskStatusDefinition status) =>
-        new(status.Id, status.Name, status.Category, status.IsDefault);
+    private static StatusResponse ToResponse(TaskStatusDefinition status) => ApiMapping.ToResponse(status);
 
-    private static TaskResponse ToResponse(WorkItem item, string baseUrl) => new(
-        item.Id,
-        item.Code,
-        item.Number,
-        item.Title,
-        item.Description,
-        item.Type,
-        item.Priority,
-        ToResponse(item.Status),
-        new TaskListRef(item.TaskListId, item.TaskList.Name),
-        item.Assignee is null ? null : new PersonResponse(item.Assignee.Id, DisplayNameOf(item.Assignee.DisplayName, item.Assignee.Email), item.Assignee.Email),
-        item.StartDateUtc,
-        item.DueDateUtc,
-        item.ExternalReference,
-        item.CreatedAtUtc,
-        item.UpdatedAtUtc,
-        $"{baseUrl}/lists/{item.TaskListId}/list");
+    private static TaskResponse ToResponse(WorkItem item, string baseUrl) => ApiMapping.ToResponse(item, baseUrl);
 }

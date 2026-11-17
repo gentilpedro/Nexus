@@ -12,13 +12,24 @@ public enum ApiKeyCreateStatus
     Created,
     InvalidName,
     LimitReached,
+
+    /// <summary>O plano do workspace não inclui a API (#74).</summary>
+    PlanDoesNotIncludeApi,
 }
 
 /// <param name="Secret">O valor completo da chave. Só existe aqui: o banco guarda o hash.</param>
 public sealed record ApiKeyCreateResult(ApiKeyCreateStatus Status, WorkspaceApiKey? Key = null, string? Secret = null);
 
 /// <summary>Quem está do outro lado de uma requisição da API, depois de validar a chave.</summary>
-public sealed record ApiKeyIdentity(Guid KeyId, Guid WorkspaceId, string Name, string? CreatedByUserId, bool WorkspaceArchived);
+/// <param name="ApiAccessAllowed">False quando o plano do workspace não inclui a API: a chave existe, mas responde 403.</param>
+public sealed record ApiKeyIdentity(
+    Guid KeyId,
+    Guid WorkspaceId,
+    string Name,
+    ApiKeyScope Scope,
+    string? CreatedByUserId,
+    bool WorkspaceArchived,
+    bool ApiAccessAllowed);
 
 // Chaves da API de integração (#66). O segredo é "nxk_" + 32 bytes aleatórios; no banco fica só
 // o SHA-256 dele, então um vazamento do banco não entrega chave nenhuma. Como o segredo tem
@@ -26,6 +37,7 @@ public sealed record ApiKeyIdentity(Guid KeyId, Guid WorkspaceId, string Name, s
 public class WorkspaceApiKeyService(
     IDbContextFactory<AppDbContext> dbFactory,
     AuditLogService audit,
+    WorkspacePlanService plans,
     TimeProvider? timeProvider = null)
 {
     public const string SecretPrefix = "nxk_";
@@ -54,7 +66,7 @@ public class WorkspaceApiKeyService(
             .ToListAsync(ct);
     }
 
-    public async Task<ApiKeyCreateResult> CreateAsync(Guid workspaceId, string? name, string? createdByUserId, CancellationToken ct = default)
+    public async Task<ApiKeyCreateResult> CreateAsync(Guid workspaceId, string? name, ApiKeyScope scope, string? createdByUserId, CancellationToken ct = default)
     {
         name = name?.Trim() ?? "";
         if (name.Length is 0 or > WorkspaceApiKey.MaxNameLength)
@@ -63,6 +75,11 @@ public class WorkspaceApiKeyService(
         }
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        if (!await plans.HasApiAccessAsync(db, workspaceId, ct))
+        {
+            return new ApiKeyCreateResult(ApiKeyCreateStatus.PlanDoesNotIncludeApi);
+        }
 
         var active = await db.WorkspaceApiKeys.CountAsync(k => k.WorkspaceId == workspaceId && k.RevokedAtUtc == null, ct);
         if (active >= MaxActiveKeysPerWorkspace)
@@ -76,6 +93,7 @@ public class WorkspaceApiKeyService(
             Id = Guid.NewGuid(),
             WorkspaceId = workspaceId,
             Name = name,
+            Scope = scope,
             KeyPrefix = PrefixOf(secret),
             KeyHash = Hash(secret),
             CreatedByUserId = createdByUserId,
@@ -84,7 +102,8 @@ public class WorkspaceApiKeyService(
         db.WorkspaceApiKeys.Add(key);
         await db.SaveChangesAsync(ct);
 
-        await audit.LogAsync(createdByUserId, AuditAction.WorkspaceApiKeyCreated, key.Id.ToString(), $"{name} ({key.KeyPrefix}) no workspace {workspaceId}", ct);
+        var scopeLabel = scope == ApiKeyScope.ReadOnly ? "só leitura" : "leitura e escrita";
+        await audit.LogAsync(createdByUserId, AuditAction.WorkspaceApiKeyCreated, key.Id.ToString(), $"{name} ({key.KeyPrefix}, {scopeLabel}) no workspace {workspaceId}", ct);
 
         return new ApiKeyCreateResult(ApiKeyCreateStatus.Created, key, secret);
     }
@@ -121,7 +140,7 @@ public class WorkspaceApiKeyService(
         var key = await db.WorkspaceApiKeys
             .AsNoTracking()
             .Where(k => k.KeyHash == hash && k.RevokedAtUtc == null)
-            .Select(k => new { k.Id, k.WorkspaceId, k.Name, k.CreatedByUserId, k.LastUsedAtUtc, k.Workspace.IsArchived })
+            .Select(k => new { k.Id, k.WorkspaceId, k.Name, k.Scope, k.CreatedByUserId, k.LastUsedAtUtc, k.Workspace.IsArchived })
             .FirstOrDefaultAsync(ct);
         if (key is null)
         {
@@ -134,7 +153,11 @@ public class WorkspaceApiKeyService(
             await TouchAsync(db, key.Id, now, ct);
         }
 
-        return new ApiKeyIdentity(key.Id, key.WorkspaceId, key.Name, key.CreatedByUserId, key.IsArchived);
+        // Plano conferido a cada chamada, não na criação da chave: um workspace que voltou ao
+        // Starter perde a API na hora, e volta a ter quando assinar de novo, sem gerar chave nova.
+        var apiAccessAllowed = await plans.HasApiAccessAsync(db, key.WorkspaceId, ct);
+
+        return new ApiKeyIdentity(key.Id, key.WorkspaceId, key.Name, key.Scope, key.CreatedByUserId, key.IsArchived, apiAccessAllowed);
     }
 
     private static async Task TouchAsync(AppDbContext db, Guid keyId, DateTime now, CancellationToken ct)

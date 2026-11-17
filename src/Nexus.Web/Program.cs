@@ -77,6 +77,18 @@ builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<WorkspaceApiKeyService>();
 builder.Services.AddScoped<WorkItemService>();
+
+// Webhooks de saída (#75): cadastro e fila (WebhookService), tradução de "a tarefa mudou" em
+// eventos (WorkItemEventPublisher) e o job que entrega (WebhookSender + hosted service).
+builder.Services.Configure<Nexus.Web.Services.Webhooks.WebhookOptions>(builder.Configuration.GetSection("Webhooks"));
+builder.Services.AddScoped<Nexus.Web.Services.Webhooks.WebhookService>();
+builder.Services.AddScoped<Nexus.Web.Services.Webhooks.WorkItemEventPublisher>();
+builder.Services.AddScoped<Nexus.Web.Services.Webhooks.WebhookSender>();
+builder.Services.AddHostedService<WebhookDeliveryHostedService>();
+// Sem seguir redirecionamento: um 302 para um endereço interno seria um jeito de contornar a
+// validação da URL. O timeout por entrega fica no WebhookSender.
+builder.Services.AddHttpClient(Nexus.Web.Services.Webhooks.WebhookSender.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
 // Chat ao vivo e rate limiting do circuito. Sem Redis:ConnectionString configurado,
 // registra as implementacoes de instancia unica — o comportamento anterior.
 builder.Services.AddChatBackplane(builder.Configuration);
@@ -195,9 +207,16 @@ builder.Services.AddSingleton<WorkspacePlanService>();
 // requests this middleware can see and throttle, unlike most of the app which runs over a
 // persistent SignalR circuit. Keyed by client IP (post-ForwardedHeaders in production) so
 // one abusive client can't lock out everyone else sharing the limiter.
+// Limitador da API de integração (#74). Fica fora do AddRateLimiter para o endpoint conseguir ler
+// quantas chamadas restam (X-RateLimit-Remaining): a instância é a mesma que o middleware usa.
+var integrationApiRateLimiter = new IntegrationApiRateLimiter();
+builder.Services.AddSingleton(integrationApiRateLimiter);
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = integrationApiRateLimiter.Limiter;
+    options.OnRejected = IntegrationApiRateLimiter.OnRejectedAsync;
     options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         factory: _ => new FixedWindowRateLimiterOptions
@@ -229,7 +248,6 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0
         }));
 
-    options.AddIntegrationApiRateLimit();
 });
 
 var app = builder.Build();

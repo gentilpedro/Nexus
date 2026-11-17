@@ -10,4 +10,6 @@ public enum AuditAction
     WorkspaceInviteCanceled,
     WorkspaceApiKeyCreated,
     WorkspaceApiKeyRevoked,
+    WorkspaceWebhookCreated,
+    WorkspaceWebhookDeleted,
 }

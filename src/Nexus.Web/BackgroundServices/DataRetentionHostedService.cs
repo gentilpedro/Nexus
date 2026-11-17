@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
 
 namespace Nexus.Web.BackgroundServices;
@@ -65,6 +66,15 @@ public class DataRetentionHostedService(
             var stripeEventCutoff = DateTime.UtcNow.AddDays(-90);
             await db.StripeWebhookEvents
                 .Where(e => e.ProcessedAtUtc < stripeEventCutoff)
+                .ExecuteDeleteAsync(ct);
+
+            // Entregas de webhook (#75) existem para a aba Integrações mostrar o que foi avisado ao
+            // cliente e para reenviar; um mês cobre qualquer investigação. O corpo carrega título e
+            // descrição da tarefa, então também é dado que não precisa viver para sempre.
+            var webhookDeliveryRetentionDays = configuration.GetValue("WEBHOOK_DELIVERY_RETENTION_DAYS", 30);
+            var webhookDeliveryCutoff = DateTime.UtcNow.AddDays(-webhookDeliveryRetentionDays);
+            await db.WebhookDeliveries
+                .Where(d => d.Status != WebhookDeliveryStatus.Pending && d.CreatedAtUtc < webhookDeliveryCutoff)
                 .ExecuteDeleteAsync(ct);
 
             if (deletedAuditLogs > 0 || deletedNotifications > 0 || deletedContacts > 0)

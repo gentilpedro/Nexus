@@ -2023,3 +2023,15 @@
 .api-keys-table tr.is-muted td {
     opacity: 0.6;
 }
+
+.api-key-locked {
+    align-items: flex-start;
+}
+
+.api-key-form .radio-option {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    padding: 0.25rem 0;
+    cursor: pointer;
+}

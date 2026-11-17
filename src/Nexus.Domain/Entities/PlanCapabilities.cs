@@ -7,7 +7,8 @@ public sealed record PlanCapabilities(
     int? MaxMembers,
     int? MaxOwnedWorkspaces,
     bool IncludesSprintsGanttAndBurndown,
-    bool IncludesPrioritySupport)
+    bool IncludesPrioritySupport,
+    bool IncludesApiAccess)
 {
     public const int StarterMaxMembers = 5;
     public const int StarterMaxOwnedWorkspaces = 1;
@@ -15,9 +16,9 @@ public sealed record PlanCapabilities(
     public static PlanCapabilities For(WorkspacePlan plan) => plan switch
     {
         WorkspacePlan.Starter => new(plan, StarterMaxMembers, StarterMaxOwnedWorkspaces,
-            IncludesSprintsGanttAndBurndown: false, IncludesPrioritySupport: false),
+            IncludesSprintsGanttAndBurndown: false, IncludesPrioritySupport: false, IncludesApiAccess: false),
         WorkspacePlan.Pro or WorkspacePlan.Business => new(plan, MaxMembers: null, MaxOwnedWorkspaces: null,
-            IncludesSprintsGanttAndBurndown: true, IncludesPrioritySupport: true),
+            IncludesSprintsGanttAndBurndown: true, IncludesPrioritySupport: true, IncludesApiAccess: true),
         _ => throw new ArgumentOutOfRangeException(nameof(plan), plan, null)
     };
 
