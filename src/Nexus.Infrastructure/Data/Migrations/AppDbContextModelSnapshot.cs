@@ -1466,6 +1466,60 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.ToTable("WorkspaceApiKeys");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceCheckin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AuthorId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Finished")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("InProgress")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("NextSteps")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("Observations")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<int>("Perception")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("WeekStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("WorkspaceId", "WeekStartUtc")
+                        .IsUnique();
+
+                    b.ToTable("WorkspaceCheckins");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceContract", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2308,6 +2362,24 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("CreatedByUser");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceCheckin", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
 
                     b.Navigation("Workspace");
                 });

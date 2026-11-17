@@ -78,6 +78,11 @@ builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<WorkspaceApiKeyService>();
 builder.Services.AddScoped<WorkItemService>();
+builder.Services.AddScoped<CalendarFeedService>();
+builder.Services.AddScoped<CheckinService>();
+// Horas e contratos (#77, #78).
+builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.ContractService>();
+builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.TimeTrackingService>();
 // Horas e contratos (#77, #78).
 builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.ContractService>();
 builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.TimeTrackingService>();
