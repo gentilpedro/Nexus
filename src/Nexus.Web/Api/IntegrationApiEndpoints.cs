@@ -8,45 +8,6 @@ using Nexus.Web.Services;
 
 namespace Nexus.Web.Api;
 
-// Respostas JSON da API de integração. Separadas das entidades para a API ter um contrato
-// estável: mudar uma coluna no banco não muda o que o ERP recebe.
-public sealed record WorkspaceResponse(Guid Id, string Name, string Slug, bool IsArchived);
-
-public sealed record SpaceResponse(Guid Id, string Name, IReadOnlyList<ListResponse> Lists);
-
-public sealed record ListResponse(Guid Id, string Name, IReadOnlyList<StatusResponse> Statuses);
-
-public sealed record StatusResponse(Guid Id, string Name, StatusCategory Category, bool IsDefault);
-
-public sealed record MemberResponse(string Id, string Name, string? Email, WorkspaceRole Role);
-
-public sealed record PersonResponse(string Id, string Name, string? Email);
-
-public sealed record TaskListRef(Guid Id, string Name);
-
-public sealed record TaskResponse(
-    Guid Id,
-    string Code,
-    int Number,
-    string Title,
-    string? Description,
-    WorkItemType Type,
-    WorkItemPriority Priority,
-    StatusResponse Status,
-    TaskListRef List,
-    PersonResponse? Assignee,
-    DateTime? StartDateUtc,
-    DateTime? DueDateUtc,
-    string? ExternalReference,
-    DateTime CreatedAtUtc,
-    DateTime? UpdatedAtUtc,
-    string? Url);
-
-public sealed record TaskPageResponse(IReadOnlyList<TaskResponse> Items, int Page, int PageSize, int Total);
-
-/// <param name="Task">A tarefa que já existe com a mesma referência externa.</param>
-public sealed record TaskConflictResponse(string Message, TaskResponse Task);
-
 /// <summary>Filtros de GET /api/v1/tasks, lidos da query string. Todos opcionais.</summary>
 public sealed class TaskListQuery
 {
@@ -285,27 +246,9 @@ public static class IntegrationApiEndpoints
             : configured.TrimEnd('/');
     }
 
-    private static string DisplayNameOf(string? displayName, string? email) =>
-        string.IsNullOrWhiteSpace(displayName) ? (email ?? "") : displayName;
+    private static string DisplayNameOf(string? displayName, string? email) => ApiMapping.DisplayNameOf(displayName, email);
 
-    private static StatusResponse ToResponse(TaskStatusDefinition status) =>
-        new(status.Id, status.Name, status.Category, status.IsDefault);
+    private static StatusResponse ToResponse(TaskStatusDefinition status) => ApiMapping.ToResponse(status);
 
-    private static TaskResponse ToResponse(WorkItem item, string baseUrl) => new(
-        item.Id,
-        item.Code,
-        item.Number,
-        item.Title,
-        item.Description,
-        item.Type,
-        item.Priority,
-        ToResponse(item.Status),
-        new TaskListRef(item.TaskListId, item.TaskList.Name),
-        item.Assignee is null ? null : new PersonResponse(item.Assignee.Id, DisplayNameOf(item.Assignee.DisplayName, item.Assignee.Email), item.Assignee.Email),
-        item.StartDateUtc,
-        item.DueDateUtc,
-        item.ExternalReference,
-        item.CreatedAtUtc,
-        item.UpdatedAtUtc,
-        $"{baseUrl}/lists/{item.TaskListId}/list");
+    private static TaskResponse ToResponse(WorkItem item, string baseUrl) => ApiMapping.ToResponse(item, baseUrl);
 }

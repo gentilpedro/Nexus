@@ -77,6 +77,18 @@ builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<WorkspaceApiKeyService>();
 builder.Services.AddScoped<WorkItemService>();
+
+// Webhooks de saída (#75): cadastro e fila (WebhookService), tradução de "a tarefa mudou" em
+// eventos (WorkItemEventPublisher) e o job que entrega (WebhookSender + hosted service).
+builder.Services.Configure<Nexus.Web.Services.Webhooks.WebhookOptions>(builder.Configuration.GetSection("Webhooks"));
+builder.Services.AddScoped<Nexus.Web.Services.Webhooks.WebhookService>();
+builder.Services.AddScoped<Nexus.Web.Services.Webhooks.WorkItemEventPublisher>();
+builder.Services.AddScoped<Nexus.Web.Services.Webhooks.WebhookSender>();
+builder.Services.AddHostedService<WebhookDeliveryHostedService>();
+// Sem seguir redirecionamento: um 302 para um endereço interno seria um jeito de contornar a
+// validação da URL. O timeout por entrega fica no WebhookSender.
+builder.Services.AddHttpClient(Nexus.Web.Services.Webhooks.WebhookSender.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
 // Chat ao vivo e rate limiting do circuito. Sem Redis:ConnectionString configurado,
 // registra as implementacoes de instancia unica — o comportamento anterior.
 builder.Services.AddChatBackplane(builder.Configuration);
