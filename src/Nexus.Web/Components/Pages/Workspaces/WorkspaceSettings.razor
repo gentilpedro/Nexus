@@ -16,6 +16,7 @@
 @inject WorkspacePlanService PlanService
 @inject Nexus.Web.Services.Billing.BillingService Billing
 @inject WorkspaceApiKeyService ApiKeys
+@inject Nexus.Web.Services.Webhooks.WebhookService Webhooks
 @inject IJSRuntime JS
 @using System.Security.Claims
 @using Microsoft.JSInterop
@@ -289,6 +290,148 @@
                             </table>
                         }
                     </section>
+
+                    <section class="card" aria-labelledby="webhooks-title">
+                        <h2 id="webhooks-title" class="form-section-title">Webhooks de saída</h2>
+                        <p class="form-section-description">
+                            O Nexus chama a URL do seu sistema quando uma tarefa é criada, muda, troca de status ou de responsável, ou recebe um comentário.
+                            Cada chamada vai assinada com o segredo do webhook, que aparece uma única vez.
+                            Formato dos eventos e validação da assinatura na <a href="https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/Webhooks-de-Saida" target="_blank" rel="noopener">documentação</a>.
+                        </p>
+
+                        @if (newWebhookSecret is not null)
+                        {
+                            <div class="alert alert-success api-key-reveal" role="status">
+                                <Icon Name="key" />
+                                <div class="api-key-reveal-body">
+                                    <span><strong>Webhook "@newWebhookName" cadastrado.</strong> Copie o segredo agora: ele não será mostrado de novo. Use-o para conferir a assinatura de cada chamada.</span>
+                                    <div class="api-key-reveal-row">
+                                        <code class="api-key-secret">@newWebhookSecret</code>
+                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="CopyNewWebhookSecret"><Icon Name="copy" /> @(webhookCopied ? "Copiado" : "Copiar")</button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(webhookError))
+                        {
+                            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@webhookError</span></div>
+                        }
+
+                        @if (apiAccessAllowed != false)
+                        {
+                            <EditForm Model="webhookModel" OnValidSubmit="HandleCreateWebhook" class="api-key-form">
+                                <DataAnnotationsValidator />
+                                <div class="form-field">
+                                    <label for="webhook-name" class="required">Nome</label>
+                                    <InputText id="webhook-name" @bind-Value="webhookModel.Name" placeholder="Ex.: ERP Protheus" maxlength="@WorkspaceWebhook.MaxNameLength" />
+                                    <ValidationMessage For="() => webhookModel.Name" />
+                                </div>
+                                <div class="form-field">
+                                    <label for="webhook-url" class="required">URL (https)</label>
+                                    <InputText id="webhook-url" @bind-Value="webhookModel.Url" placeholder="https://erp.suaempresa.com.br/nexus/webhook" maxlength="@WorkspaceWebhook.MaxUrlLength" />
+                                    <ValidationMessage For="() => webhookModel.Url" />
+                                </div>
+                                <fieldset class="form-fieldset">
+                                    <legend class="field-label">Eventos</legend>
+                                    <label class="radio-option"><InputCheckbox @bind-Value="webhookModel.TaskCreated" /> <span><strong>Tarefa criada</strong> (<code>task.created</code>)</span></label>
+                                    <label class="radio-option"><InputCheckbox @bind-Value="webhookModel.TaskStatusChanged" /> <span><strong>Status mudou</strong> (<code>task.status_changed</code>)</span></label>
+                                    <label class="radio-option"><InputCheckbox @bind-Value="webhookModel.TaskAssigneeChanged" /> <span><strong>Responsável mudou</strong> (<code>task.assignee_changed</code>)</span></label>
+                                    <label class="radio-option"><InputCheckbox @bind-Value="webhookModel.TaskUpdated" /> <span><strong>Outros campos mudaram</strong>: título, descrição, tipo, prioridade, datas (<code>task.updated</code>)</span></label>
+                                    <label class="radio-option"><InputCheckbox @bind-Value="webhookModel.CommentCreated" /> <span><strong>Comentário novo</strong> (<code>comment.created</code>)</span></label>
+                                </fieldset>
+                                <div class="form-actions form-actions--end">
+                                    <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving"><Icon Name="plus" /> Cadastrar webhook</button>
+                                </div>
+                            </EditForm>
+                        }
+
+                        @if (webhooks is null)
+                        {
+                            <Skeleton Count="2" />
+                        }
+                        else if (webhooks.Count == 0)
+                        {
+                            <EmptyState Compact="true" Title="Nenhum webhook ainda" Description="Cadastre a URL do sistema que deve ser avisado quando as tarefas mudarem." />
+                        }
+                        else
+                        {
+                            <table class="data-table api-keys-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nome e URL</th>
+                                        <th>Eventos</th>
+                                        <th>Situação</th>
+                                        <th>Último envio</th>
+                                        <th><span class="sr-only">Ações</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var hook in webhooks)
+                                    {
+                                        <tr class="@(hook.IsActive ? "" : "is-muted")">
+                                            <td class="cell-title">@hook.Name<br /><code class="api-key-secret">@hook.Url</code></td>
+                                            <td>@EventsLabel(hook.Events)</td>
+                                            <td>
+                                                @if (hook.IsActive)
+                                                {
+                                                    <span class="badge badge--accent">Ativo</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge">Pausado</span>
+                                                }
+                                                @if (hook.ConsecutiveFailures > 0)
+                                                {
+                                                    <span class="cell-muted"> · @hook.ConsecutiveFailures @(hook.ConsecutiveFailures == 1 ? "falha seguida" : "falhas seguidas")</span>
+                                                }
+                                            </td>
+                                            <td class="cell-muted tabular">@(hook.LastDeliveryAtUtc is { } sent ? sent.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "Nunca")</td>
+                                            <td class="cell-actions">
+                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="() => HandleTestWebhook(hook)">Enviar teste</button>
+                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="() => ToggleDeliveries(hook)">@(expandedWebhookId == hook.Id ? "Ocultar entregas" : "Entregas")</button>
+                                                <button type="button" class="btn btn-secondary btn-sm" @onclick="() => HandleToggleWebhook(hook)">@(hook.IsActive ? "Pausar" : "Reativar")</button>
+                                                <button type="button" class="btn btn-danger-ghost btn-sm" @onclick="() => HandleDeleteWebhook(hook)">Excluir</button>
+                                            </td>
+                                        </tr>
+                                        @if (expandedWebhookId == hook.Id)
+                                        {
+                                            <tr>
+                                                <td colspan="5">
+                                                    @if (deliveries is null)
+                                                    {
+                                                        <Skeleton Count="2" />
+                                                    }
+                                                    else if (deliveries.Count == 0)
+                                                    {
+                                                        <p class="cell-muted">Nenhuma entrega ainda. Use "Enviar teste" para disparar um <code>ping</code>.</p>
+                                                    }
+                                                    else
+                                                    {
+                                                        <table class="data-table">
+                                                            <thead><tr><th>Evento</th><th>Quando</th><th>Situação</th><th>Resposta</th><th><span class="sr-only">Ações</span></th></tr></thead>
+                                                            <tbody>
+                                                                @foreach (var delivery in deliveries)
+                                                                {
+                                                                    <tr>
+                                                                        <td><code>@delivery.EventType</code></td>
+                                                                        <td class="cell-muted tabular">@delivery.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm:ss")</td>
+                                                                        <td>@DeliveryLabel(delivery)</td>
+                                                                        <td class="cell-muted">@delivery.ResponseSummary</td>
+                                                                        <td class="cell-actions"><button type="button" class="btn btn-secondary btn-sm" @onclick="() => HandleResend(hook, delivery)">Reenviar</button></td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </section>
                 }
             </div>
         </div>
@@ -328,6 +471,16 @@
     private string? apiKeyError;
     private bool? apiAccessAllowed;
 
+    // Webhooks de saída (#75).
+    private List<WorkspaceWebhook>? webhooks;
+    private readonly WebhookModel webhookModel = new();
+    private string? newWebhookSecret;
+    private string? newWebhookName;
+    private bool webhookCopied;
+    private string? webhookError;
+    private Guid? expandedWebhookId;
+    private List<WebhookDelivery>? deliveries;
+
     private static string PlanName(WorkspacePlan p) => p switch
     {
         WorkspacePlan.Pro => "Pro",
@@ -340,6 +493,198 @@
         tab = "integracoes";
         apiAccessAllowed ??= await PlanService.HasApiAccessAsync(WorkspaceId);
         apiKeys ??= await ApiKeys.ListAsync(WorkspaceId);
+        webhooks ??= await Webhooks.ListAsync(WorkspaceId);
+    }
+
+    private static string EventsLabel(WebhookEvents events)
+    {
+        var parts = new List<string>();
+        if (events.HasFlag(WebhookEvents.TaskCreated)) parts.Add("criada");
+        if (events.HasFlag(WebhookEvents.TaskStatusChanged)) parts.Add("status");
+        if (events.HasFlag(WebhookEvents.TaskAssigneeChanged)) parts.Add("responsável");
+        if (events.HasFlag(WebhookEvents.TaskUpdated)) parts.Add("outros campos");
+        if (events.HasFlag(WebhookEvents.CommentCreated)) parts.Add("comentários");
+        return string.Join(", ", parts);
+    }
+
+    private static string DeliveryLabel(WebhookDelivery delivery) => delivery.Status switch
+    {
+        WebhookDeliveryStatus.Delivered => "Entregue",
+        WebhookDeliveryStatus.Failed => $"Falhou ({delivery.Attempts} tentativas)",
+        _ => delivery.Attempts == 0 ? "Na fila" : $"Tentando de novo ({delivery.Attempts} de {WebhookDelivery.MaxAttempts})",
+    };
+
+    private async Task HandleCreateWebhook()
+    {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        isSaving = true;
+        webhookError = null;
+        webhookCopied = false;
+
+        var result = await Webhooks.CreateAsync(WorkspaceId, webhookModel.Name, webhookModel.Url, webhookModel.ToEvents(), await CurrentUserIdAsync());
+        isSaving = false;
+
+        switch (result.Status)
+        {
+            case Nexus.Web.Services.Webhooks.WebhookCreateStatus.Created:
+                newWebhookSecret = result.Secret;
+                newWebhookName = result.Webhook!.Name;
+                webhookModel.Reset();
+                webhooks = await Webhooks.ListAsync(WorkspaceId);
+                break;
+            case Nexus.Web.Services.Webhooks.WebhookCreateStatus.LimitReached:
+                webhookError = $"Este workspace já tem {Nexus.Web.Services.Webhooks.WebhookService.MaxWebhooksPerWorkspace} webhooks. Exclua um para cadastrar outro.";
+                break;
+            case Nexus.Web.Services.Webhooks.WebhookCreateStatus.PlanDoesNotIncludeApi:
+                apiAccessAllowed = false;
+                break;
+            default:
+                webhookError = result.Error ?? "Confira o nome, a URL e os eventos.";
+                break;
+        }
+    }
+
+    private async Task CopyNewWebhookSecret()
+    {
+        if (newWebhookSecret is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", newWebhookSecret);
+            webhookCopied = true;
+        }
+        catch (JSException)
+        {
+            Toasts.Show("Não deu para copiar automaticamente. Selecione o segredo e copie.", ToastKind.Error);
+        }
+    }
+
+    private async Task HandleTestWebhook(WorkspaceWebhook hook)
+    {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        if (await Webhooks.SendTestAsync(WorkspaceId, hook.Id))
+        {
+            Toasts.Show($"Teste enfileirado para \"{hook.Name}\". A entrega aparece em alguns segundos.");
+            if (expandedWebhookId == hook.Id)
+            {
+                deliveries = await Webhooks.ListDeliveriesAsync(WorkspaceId, hook.Id);
+            }
+        }
+    }
+
+    private async Task HandleToggleWebhook(WorkspaceWebhook hook)
+    {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        if (await Webhooks.SetActiveAsync(WorkspaceId, hook.Id, !hook.IsActive))
+        {
+            Toasts.Show(hook.IsActive ? $"Webhook \"{hook.Name}\" pausado." : $"Webhook \"{hook.Name}\" reativado.");
+        }
+
+        webhooks = await Webhooks.ListAsync(WorkspaceId);
+    }
+
+    private async Task HandleDeleteWebhook(WorkspaceWebhook hook)
+    {
+        if (confirm is null || !await confirm.AskAsync(ConfirmRequest.Delete("webhook", hook.Name, "O sistema deixa de ser avisado e o histórico de entregas é apagado.")))
+        {
+            return;
+        }
+
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        if (await Webhooks.DeleteAsync(WorkspaceId, hook.Id, await CurrentUserIdAsync()))
+        {
+            Toasts.Show($"Webhook \"{hook.Name}\" excluído.");
+        }
+
+        if (expandedWebhookId == hook.Id)
+        {
+            expandedWebhookId = null;
+            deliveries = null;
+        }
+
+        webhooks = await Webhooks.ListAsync(WorkspaceId);
+    }
+
+    private async Task ToggleDeliveries(WorkspaceWebhook hook)
+    {
+        if (expandedWebhookId == hook.Id)
+        {
+            expandedWebhookId = null;
+            deliveries = null;
+            return;
+        }
+
+        expandedWebhookId = hook.Id;
+        deliveries = null;
+        deliveries = await Webhooks.ListDeliveriesAsync(WorkspaceId, hook.Id);
+    }
+
+    private async Task HandleResend(WorkspaceWebhook hook, WebhookDelivery delivery)
+    {
+        if (!await StillAdminAsync())
+        {
+            return;
+        }
+
+        if (await Webhooks.ResendAsync(WorkspaceId, delivery.Id))
+        {
+            Toasts.Show("Entrega enfileirada de novo.");
+            deliveries = await Webhooks.ListDeliveriesAsync(WorkspaceId, hook.Id);
+        }
+    }
+
+    private sealed class WebhookModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Dê um nome ao webhook, como o sistema que vai recebê-lo.")]
+        [System.ComponentModel.DataAnnotations.StringLength(WorkspaceWebhook.MaxNameLength, ErrorMessage = "O nome pode ter no máximo 80 caracteres.")]
+        public string Name { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Informe a URL que vai receber os eventos.")]
+        [System.ComponentModel.DataAnnotations.StringLength(WorkspaceWebhook.MaxUrlLength, ErrorMessage = "A URL pode ter no máximo 500 caracteres.")]
+        public string Url { get; set; } = "";
+
+        public bool TaskCreated { get; set; } = true;
+        public bool TaskUpdated { get; set; }
+        public bool TaskStatusChanged { get; set; } = true;
+        public bool TaskAssigneeChanged { get; set; } = true;
+        public bool CommentCreated { get; set; }
+
+        public WebhookEvents ToEvents() =>
+            (TaskCreated ? WebhookEvents.TaskCreated : WebhookEvents.None)
+            | (TaskUpdated ? WebhookEvents.TaskUpdated : WebhookEvents.None)
+            | (TaskStatusChanged ? WebhookEvents.TaskStatusChanged : WebhookEvents.None)
+            | (TaskAssigneeChanged ? WebhookEvents.TaskAssigneeChanged : WebhookEvents.None)
+            | (CommentCreated ? WebhookEvents.CommentCreated : WebhookEvents.None);
+
+        public void Reset()
+        {
+            Name = "";
+            Url = "";
+            TaskCreated = true;
+            TaskUpdated = false;
+            TaskStatusChanged = true;
+            TaskAssigneeChanged = true;
+            CommentCreated = false;
+        }
     }
 
     private async Task HandleCreateApiKey()

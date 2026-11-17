@@ -9,7 +9,7 @@ namespace Nexus.Web.Services;
 // Uses IDbContextFactory (not an injected AppDbContext) so each call gets a
 // short-lived context, rather than accumulating tracked entities for the
 // lifetime of the Blazor Server circuit.
-public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory, WorkspacePlanService? plans = null)
+public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory, WorkspacePlanService? plans = null, Webhooks.WorkItemEventPublisher? events = null)
 {
     public async Task<Guid?> GetWorkspaceIdForListAsync(Guid taskListId, CancellationToken ct = default)
     {
@@ -121,6 +121,7 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory, Wor
             return false;
         }
 
+        var snapshot = Webhooks.WorkItemSnapshot.Of(workItem);
         workItem.StatusId = newStatusId;
         workItem.SortOrder = newSortOrder;
         workItem.UpdatedAtUtc = DateTime.UtcNow;
@@ -134,6 +135,11 @@ public class WorkItemQueryService(IDbContextFactory<AppDbContext> dbFactory, Wor
             // Someone else changed this WorkItem between our read and this save — treat it the
             // same as any other "not allowed" outcome; the caller reloads and shows a message.
             return false;
+        }
+
+        if (events is not null)
+        {
+            await events.TaskChangedAsync(db, workItem.Id, snapshot, actor: null, ct);
         }
 
         return true;

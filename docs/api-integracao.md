@@ -132,9 +132,24 @@ Todos os filtros são opcionais. `pageSize` vai até 100. `updatedSince` traz s�
 ou alteradas a partir da data: é o jeito de sincronizar sem baixar tudo a cada vez. A resposta
 tem `items`, `page`, `pageSize` e `total`.
 
+## Webhooks de saída
+
+O caminho de volta: o Nexus chama a URL do seu sistema quando uma tarefa é criada, muda de
+status ou de responsável, tem outros campos alterados ou recebe um comentário. Cadastro em
+**Configurações do workspace → Integrações → Webhooks de saída**, com URL `https` pública e os
+eventos que interessam. O segredo (`whsec_...`) aparece uma vez e assina cada chamada em
+`X-Nexus-Signature: sha256=<HMAC-SHA256 do corpo>`.
+
+Entrega por `POST` com o mesmo JSON de tarefa da API dentro de `task`, mais `type`, `id` do
+evento, `actor` e `previous` (o que mudou). `2xx` conta como entregue; senão o Nexus tenta de novo
+em 1, 5 e 30 minutos e desiste na quarta falha. 50 falhas definitivas seguidas pausam o webhook e
+avisam os administradores. As últimas 20 entregas ficam na tela, com "reenviar" e "enviar teste".
+
+Eventos, corpo completo, validação da assinatura em C# e Python e boas práticas do receptor:
+[Webhooks de Saída na Wiki](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/Webhooks-de-Saida).
+
 ## O que a API não faz (ainda)
 
-- Avisar o ERP quando uma tarefa muda (webhook de saída).
 - Comentários, anexos, etiquetas e campos personalizados.
 - Excluir tarefas.
 

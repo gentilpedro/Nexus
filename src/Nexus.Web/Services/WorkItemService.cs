@@ -71,7 +71,8 @@ public class WorkItemService(
     IDbContextFactory<AppDbContext> dbFactory,
     WorkItemQueryService queries,
     Mailer? mailer = null,
-    IConfiguration? configuration = null)
+    IConfiguration? configuration = null,
+    Webhooks.WorkItemEventPublisher? events = null)
 {
     public const int MaxPageSize = 100;
     public const int MaxTitleLength = 500;
@@ -138,6 +139,11 @@ public class WorkItemService(
         }
 
         await db.SaveChangesAsync(ct);
+        if (events is not null)
+        {
+            await events.TaskCreatedAsync(db, item.Id, new Webhooks.EventActor(actor.UserId, actor.DisplayName), ct);
+        }
+
         return new WorkItemOutcome(WorkItemOutcomeStatus.Ok, await LoadAsync(db, item.Id, ct));
     }
 
@@ -193,6 +199,7 @@ public class WorkItemService(
         }
 
         var previousAssigneeId = item.AssigneeId;
+        var snapshot = Webhooks.WorkItemSnapshot.Of(item);
         item.Title = title!;
         item.Description = description;
         item.Type = request.Type ?? item.Type;
@@ -219,6 +226,11 @@ public class WorkItemService(
             {
                 [""] = ["Essa tarefa foi alterada por outra pessoa durante a atualização. Leia de novo e tente outra vez."],
             });
+        }
+
+        if (events is not null)
+        {
+            await events.TaskChangedAsync(db, item.Id, snapshot, new Webhooks.EventActor(actor.UserId, actor.DisplayName), ct);
         }
 
         return new WorkItemOutcome(WorkItemOutcomeStatus.Ok, await LoadAsync(db, item.Id, ct));

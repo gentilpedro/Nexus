@@ -1000,6 +1000,61 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.ToTable("TaskStatusDefinitions");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.WebhookDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeliveredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("LastAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ResponseStatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ResponseSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("WebhookId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptAtUtc");
+
+                    b.HasIndex("WebhookId", "CreatedAtUtc");
+
+                    b.ToTable("WebhookDeliveries");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.WorkItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1391,6 +1446,60 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .HasFilter("\"StripeSubscriptionId\" IS NOT NULL");
 
                     b.ToTable("WorkspaceSubscriptions");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceWebhook", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Events")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastDeliveryAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime?>("PausedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SecretProtected")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("WorkspaceWebhooks");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -1806,6 +1915,17 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("TaskList");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.WebhookDelivery", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.WorkspaceWebhook", "Webhook")
+                        .WithMany("Deliveries")
+                        .HasForeignKey("WebhookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Webhook");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.WorkItem", b =>
                 {
                     b.HasOne("Nexus.Domain.Entities.ApplicationUser", "Assignee")
@@ -1974,6 +2094,24 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceWebhook", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("Nexus.Domain.Entities.ChatConversation", b =>
                 {
                     b.Navigation("Members");
@@ -2032,6 +2170,11 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Spaces");
 
                     b.Navigation("Subscription");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceWebhook", b =>
+                {
+                    b.Navigation("Deliveries");
                 });
 #pragma warning restore 612, 618
         }

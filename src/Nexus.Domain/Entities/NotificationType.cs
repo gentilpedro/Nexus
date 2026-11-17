@@ -6,5 +6,6 @@ public enum NotificationType
     DueDateApproaching,
     ChatMessage,
     ChatMention,
-    WorkspaceInvite
+    WorkspaceInvite,
+    WebhookPaused
 }
