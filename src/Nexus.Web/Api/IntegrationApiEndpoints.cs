@@ -1,8 +1,6 @@
 using System.Security.Claims;
-using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.Data;
@@ -64,35 +62,19 @@ public sealed class TaskListQuery
 public static class IntegrationApiEndpoints
 {
     public const string RoutePrefix = "/api/v1";
-    public const string RateLimitPolicy = "api";
-
-    public static void AddIntegrationApiRateLimit(this RateLimiterOptions options)
-    {
-        // Por chave, não por IP: um ERP inteiro costuma sair por um único endereço. O limitador
-        // roda antes da autenticação do endpoint, então a partição usa o hash do cabeçalho (nunca
-        // o valor em si, que ficaria em memória) e cai para o IP quando não há cabeçalho.
-        options.AddPolicy(RateLimitPolicy, httpContext =>
-        {
-            var header = httpContext.Request.Headers.Authorization.ToString();
-            var partition = header.Length > 0
-                ? "key:" + WorkspaceApiKeyService.Hash(header)
-                : "ip:" + (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
-            return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 120,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-            });
-        });
-    }
 
     public static IEndpointRouteBuilder MapIntegrationApi(this IEndpointRouteBuilder app)
     {
+        // O limite de chamadas é o GlobalLimiter (IntegrationApiRateLimiter); aqui só os
+        // cabeçalhos que contam o que resta. Os filtros rodam depois da autenticação, na ordem:
+        // plano, workspace arquivado, escopo da chave.
         var api = app.MapGroup(RoutePrefix)
             .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = ApiKeyAuthenticationHandler.SchemeName })
-            .RequireRateLimiting(RateLimitPolicy)
             .DisableAntiforgery()
-            .AddEndpointFilter(RejectArchivedWorkspaceAsync);
+            .AddEndpointFilter(AddRateLimitHeadersAsync)
+            .AddEndpointFilter(RejectPlanWithoutApiAsync)
+            .AddEndpointFilter(RejectArchivedWorkspaceAsync)
+            .AddEndpointFilter(RejectWriteWithReadOnlyKeyAsync);
 
         api.MapGet("/workspace", GetWorkspaceAsync)
             .WithTags("Workspace")
@@ -130,6 +112,42 @@ public static class IntegrationApiEndpoints
             .WithDescription("Atualização parcial: campo ausente não muda. String vazia limpa description, assigneeId ou externalReference. Mudança de status respeita o fluxo de trabalho da lista.");
 
         return app;
+    }
+
+    private static async ValueTask<object?> AddRateLimitHeadersAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var http = context.HttpContext;
+        var limiter = http.RequestServices.GetRequiredService<IntegrationApiRateLimiter>();
+        http.Response.Headers["X-RateLimit-Limit"] = IntegrationApiRateLimiter.PermitLimit.ToString();
+        http.Response.Headers["X-RateLimit-Remaining"] = limiter.Remaining(http).ToString();
+        return await next(context);
+    }
+
+    private static async ValueTask<object?> RejectPlanWithoutApiAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        if (!context.HttpContext.User.HasApiAccess())
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "A API não faz parte do plano deste workspace",
+                detail: "A API de integração está disponível nos planos Pro e Business. Assine em Configurações do workspace, Plano e cobrança; as chaves já criadas voltam a funcionar.");
+        }
+
+        return await next(context);
+    }
+
+    private static async ValueTask<object?> RejectWriteWithReadOnlyKeyAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var http = context.HttpContext;
+        if (!HttpMethods.IsGet(http.Request.Method) && !HttpMethods.IsHead(http.Request.Method) && !http.User.CanWrite())
+        {
+            return TypedResults.Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Chave só de leitura",
+                detail: "Esta chave só consulta. Para criar ou atualizar tarefas, gere uma chave de leitura e escrita em Configurações do workspace, Integrações.");
+        }
+
+        return await next(context);
     }
 
     private static async ValueTask<object?> RejectArchivedWorkspaceAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)

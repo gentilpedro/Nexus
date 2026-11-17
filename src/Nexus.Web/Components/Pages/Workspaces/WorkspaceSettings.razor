@@ -213,17 +213,39 @@
                             <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@apiKeyError</span></div>
                         }
 
-                        <EditForm Model="apiKeyModel" OnValidSubmit="HandleCreateApiKey" class="api-key-form">
-                            <DataAnnotationsValidator />
-                            <div class="form-field">
-                                <label for="api-key-name" class="required">Nome da chave</label>
-                                <InputText id="api-key-name" @bind-Value="apiKeyModel.Name" placeholder="Ex.: ERP Protheus" maxlength="@WorkspaceApiKey.MaxNameLength" />
-                                <ValidationMessage For="() => apiKeyModel.Name" />
+                        @if (apiAccessAllowed == false)
+                        {
+                            <div class="alert alert-info api-key-locked" role="status">
+                                <Icon Name="lock" />
+                                <span>A API de integração faz parte dos planos Pro e Business. As chaves já criadas param de funcionar enquanto o workspace estiver no Starter.
+                                @if (isOwner)
+                                {
+                                    <a href="@($"/workspaces/{WorkspaceId}/billing")">Ver plano e cobrança</a>
+                                }
+                                </span>
                             </div>
-                            <div class="form-actions form-actions--end">
-                                <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving"><Icon Name="plus" /> Gerar chave</button>
-                            </div>
-                        </EditForm>
+                        }
+                        else
+                        {
+                            <EditForm Model="apiKeyModel" OnValidSubmit="HandleCreateApiKey" class="api-key-form">
+                                <DataAnnotationsValidator />
+                                <div class="form-field">
+                                    <label for="api-key-name" class="required">Nome da chave</label>
+                                    <InputText id="api-key-name" @bind-Value="apiKeyModel.Name" placeholder="Ex.: ERP Protheus" maxlength="@WorkspaceApiKey.MaxNameLength" />
+                                    <ValidationMessage For="() => apiKeyModel.Name" />
+                                </div>
+                                <fieldset class="form-fieldset">
+                                    <legend class="field-label">O que a chave pode fazer</legend>
+                                    <InputRadioGroup @bind-Value="apiKeyModel.Scope">
+                                        <label class="radio-option"><InputRadio Value="ApiKeyScope.ReadWrite" /> <span><strong>Leitura e escrita</strong>: cria e atualiza tarefas. Para um ERP.</span></label>
+                                        <label class="radio-option"><InputRadio Value="ApiKeyScope.ReadOnly" /> <span><strong>Só leitura</strong>: consulta tarefas, listas e membros. Para painéis e relatórios.</span></label>
+                                    </InputRadioGroup>
+                                </fieldset>
+                                <div class="form-actions form-actions--end">
+                                    <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving"><Icon Name="plus" /> Gerar chave</button>
+                                </div>
+                            </EditForm>
+                        }
 
                         @if (apiKeys is null)
                         {
@@ -239,6 +261,7 @@
                                 <thead>
                                     <tr>
                                         <th>Nome</th>
+                                        <th>Escopo</th>
                                         <th>Chave</th>
                                         <th>Criada</th>
                                         <th>Último uso</th>
@@ -250,6 +273,7 @@
                                     {
                                         <tr class="@(key.IsActive ? "" : "is-muted")">
                                             <td class="cell-title">@key.Name @if (!key.IsActive) { <span class="badge">Revogada</span> }</td>
+                                            <td>@(key.Scope == ApiKeyScope.ReadOnly ? "Só leitura" : "Leitura e escrita")</td>
                                             <td class="tabular"><code>@(key.KeyPrefix)…</code></td>
                                             <td class="cell-muted tabular">@key.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                             <td class="cell-muted tabular">@(key.LastUsedAtUtc is { } used ? used.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "Nunca")</td>
@@ -302,6 +326,7 @@
     private string? newApiKeyName;
     private bool apiKeyCopied;
     private string? apiKeyError;
+    private bool? apiAccessAllowed;
 
     private static string PlanName(WorkspacePlan p) => p switch
     {
@@ -313,6 +338,7 @@
     private async Task ShowIntegrationsTab()
     {
         tab = "integracoes";
+        apiAccessAllowed ??= await PlanService.HasApiAccessAsync(WorkspaceId);
         apiKeys ??= await ApiKeys.ListAsync(WorkspaceId);
     }
 
@@ -327,7 +353,7 @@
         apiKeyError = null;
         apiKeyCopied = false;
 
-        var result = await ApiKeys.CreateAsync(WorkspaceId, apiKeyModel.Name, await CurrentUserIdAsync());
+        var result = await ApiKeys.CreateAsync(WorkspaceId, apiKeyModel.Name, apiKeyModel.Scope, await CurrentUserIdAsync());
         isSaving = false;
 
         switch (result.Status)
@@ -336,10 +362,14 @@
                 newApiKeySecret = result.Secret;
                 newApiKeyName = result.Key!.Name;
                 apiKeyModel.Name = "";
+                apiKeyModel.Scope = ApiKeyScope.ReadWrite;
                 apiKeys = await ApiKeys.ListAsync(WorkspaceId);
                 break;
             case ApiKeyCreateStatus.LimitReached:
                 apiKeyError = $"Este workspace já tem {WorkspaceApiKeyService.MaxActiveKeysPerWorkspace} chaves ativas. Revogue uma para gerar outra.";
+                break;
+            case ApiKeyCreateStatus.PlanDoesNotIncludeApi:
+                apiAccessAllowed = false;
                 break;
             default:
                 apiKeyError = "Dê um nome à chave, como o sistema que vai usá-la.";
@@ -400,6 +430,8 @@
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Dê um nome à chave, como o sistema que vai usá-la.")]
         [System.ComponentModel.DataAnnotations.StringLength(WorkspaceApiKey.MaxNameLength, ErrorMessage = "O nome pode ter no máximo 80 caracteres.")]
         public string Name { get; set; } = "";
+
+        public ApiKeyScope Scope { get; set; } = ApiKeyScope.ReadWrite;
     }
 
     protected override async Task OnParametersSetAsync()

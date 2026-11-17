@@ -1252,6 +1252,11 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("RevokedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("Scope")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid");
 

@@ -14,6 +14,8 @@ public class WorkspaceApiKey
 
     public string Name { get; set; } = "";
 
+    public ApiKeyScope Scope { get; set; } = ApiKeyScope.ReadWrite;
+
     public string KeyPrefix { get; set; } = "";
     public string KeyHash { get; set; } = "";
 

@@ -22,11 +22,22 @@ Authorization: Bearer nxk_sua_chave
 | Situação | Resposta |
 |---|---|
 | Sem chave, chave inválida ou revogada | `401` com `application/problem+json` |
+| Plano do workspace sem a API (Starter, com os limites de plano ligados) | `403` |
 | Workspace arquivado | `403` |
-| Mais de 120 chamadas por minuto com a mesma chave | `429` |
+| Chave só de leitura em `POST` ou `PATCH` | `403` |
+| Mais de 120 chamadas por minuto com a mesma chave | `429` com `Retry-After` em segundos |
 
-Revogar uma chave (na mesma tela) corta o acesso na hora. Criação e revogação ficam no log de
-auditoria.
+Ao gerar a chave, escolha o **escopo**: *leitura e escrita* (para um ERP) ou *só leitura* (para
+painéis e relatórios, que não devem conseguir criar tarefa). Revogar uma chave (na mesma tela)
+corta o acesso na hora. Criação e revogação ficam no log de auditoria.
+
+A API faz parte dos planos **Pro e Business** (`PlanCapabilities.IncludesApiAccess`). Como os
+outros recursos pagos, a regra só é aplicada com `Plans:EnforceLimits` ligado; um workspace que
+volta ao Starter recebe `403` em toda chamada e volta a funcionar ao assinar de novo, com as
+mesmas chaves.
+
+Toda resposta traz `X-RateLimit-Limit` (120) e `X-RateLimit-Remaining` (quantas chamadas ainda
+cabem no minuto atual). No `429`, `Retry-After` diz quantos segundos esperar.
 
 ## Rotas
 

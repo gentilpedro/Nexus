@@ -195,9 +195,16 @@ builder.Services.AddSingleton<WorkspacePlanService>();
 // requests this middleware can see and throttle, unlike most of the app which runs over a
 // persistent SignalR circuit. Keyed by client IP (post-ForwardedHeaders in production) so
 // one abusive client can't lock out everyone else sharing the limiter.
+// Limitador da API de integração (#74). Fica fora do AddRateLimiter para o endpoint conseguir ler
+// quantas chamadas restam (X-RateLimit-Remaining): a instância é a mesma que o middleware usa.
+var integrationApiRateLimiter = new IntegrationApiRateLimiter();
+builder.Services.AddSingleton(integrationApiRateLimiter);
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = integrationApiRateLimiter.Limiter;
+    options.OnRejected = IntegrationApiRateLimiter.OnRejectedAsync;
     options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         factory: _ => new FixedWindowRateLimiterOptions
@@ -229,7 +236,6 @@ builder.Services.AddRateLimiter(options =>
             QueueLimit = 0
         }));
 
-    options.AddIntegrationApiRateLimit();
 });
 
 var app = builder.Build();
