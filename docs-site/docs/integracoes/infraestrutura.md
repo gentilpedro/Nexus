@@ -7,7 +7,7 @@
 
 ## E-mail transacional (SMTP)
 
-Um único componente, [`Mailer`](https://github.com/gentilpedro/Nexus/blob/main/src/Nexus.Web/Services/Mailer.cs),
+Um único componente, `Mailer`,
 manda todos os e-mails: confirmação de conta e redefinição de senha (Identity), convites para
 workspace, atribuição de tarefa (pela tela e pela [API](api.md)), prazo se aproximando e
 o formulário comercial.
@@ -39,8 +39,7 @@ backplane em `src/Nexus.Web/Services/Backplane/`.
 | `Redis__ConnectionString` | Configurada: pub/sub do chat e dos docs e rate limit passam pelo Redis. **Vazia: implementações locais de instância única**, o comportamento de sempre |
 
 Só identificadores cruzam a rede (`{instanceId, workspaceId, messageId}`): a instância que recebe
-recarrega do banco, com os mesmos `Include` que a tela usa. Detalhes e decisões em
-[`docs/escalabilidade-horizontal.md`](https://github.com/gentilpedro/Nexus/blob/main/docs/escalabilidade-horizontal.md).
+recarrega do banco, com os mesmos `Include` que a tela usa.
 
 ## Health checks e versão
 
@@ -62,7 +61,7 @@ para isso não valia a pena.
 | Variável | O quê |
 |---|---|
 | `ConnectionStrings__DefaultConnection` | PostgreSQL (`Host=...;Database=Nexus;Username=...;Password=...`) |
-| `APPLY_MIGRATIONS_ON_STARTUP` | `true` em produção: o app aplica as migrations ao subir. Não há rollback automático, então [backup antes de migration destrutiva](https://github.com/gentilpedro/Nexus/blob/main/docs/backup-restore.md) |
+| `APPLY_MIGRATIONS_ON_STARTUP` | `true` em produção: o app aplica as migrations ao subir. Não há rollback automático, então faça [backup](../self-hosted/backup.md) antes de uma migration destrutiva |
 | `PUBLIC_BASE_URL` | Endereço público (`https://nexus.aamora.com.br`). Usado nos links de e-mail e no campo `url` da API |
 | `UPLOADS_PATH` | Pasta dos anexos (volume persistente) |
 | `AUDIT_LOG_RETENTION_DAYS`, `NOTIFICATION_RETENTION_DAYS`, `COMMERCIAL_CONTACT_RETENTION_DAYS` | Retenção aplicada pelo job diário (LGPD) |

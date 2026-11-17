@@ -1,12 +1,10 @@
 # GitHub ↔ GitLab
 
 !!! abstract ""
-    O Nexus vive em dois repositórios: o [GitLab](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus),
+    O Nexus vive em dois repositórios: o GitLab,
     exigido pelo TCC, onde as issues são abertas e os Merge Requests são revisados; e o
-    [GitHub](https://github.com/gentilpedro/Nexus), de onde sai o deploy para produção. Os dois têm o
-    **mesmo histórico de commits** e se mantêm iguais sozinhos. Detalhes em
-    [`docs/sincronizacao-github-gitlab.md`](https://github.com/gentilpedro/Nexus/blob/main/docs/sincronizacao-github-gitlab.md)
-    e [`docs/sincronizacao-issues.md`](https://github.com/gentilpedro/Nexus/blob/main/docs/sincronizacao-issues.md).
+    GitHub, de onde sai o deploy para produção. Os dois têm o
+    **mesmo histórico de commits** e se mantêm iguais sozinhos.
 
 ## O fluxo de uma mudança
 
@@ -26,7 +24,7 @@ flowchart LR
 2. **Branch** `feature/N-slug`, `fix/N-slug` ou `hotfix/N-slug`, e um **MR em Draft** desde o começo,
    com `Closes #N` na descrição.
 3. Commits em **Conventional Commits** em português (`feat:`, `fix:`, `docs:`...). É deles que a
-   versão semântica é calculada ([CI/CD e Deploy](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/CI-CD-e-Deploy)).
+   versão semântica é calculada.
 4. **Merge no GitLab.** O job `sync-github` do GitLab CI empurra a `main` para a branch `sync/gitlab`
    do GitHub e abre um PR.
 5. **Merge do PR no GitHub.** A `main` do GitHub exige PR com o job `verify` verde (build, testes,
