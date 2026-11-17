@@ -8,6 +8,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NotificationBadgeService Badge
 @inject Nexus.Web.Services.SupportLinks Support
+@inject IConfiguration Configuration
 @implements IDisposable
 
 <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
@@ -144,6 +145,11 @@
         @Body
 
         <footer class="app-footer">
+            @if (!string.IsNullOrWhiteSpace(Configuration["Docs:SiteUrl"]))
+            {
+                <a href="@Configuration["Docs:SiteUrl"]" target="_blank" rel="noopener">Documentação</a>
+                <span aria-hidden="true">·</span>
+            }
             <a href="/privacidade" data-enhance-nav="false">Política de Privacidade</a>
             <span aria-hidden="true">·</span>
             <a href="/termos-de-uso" data-enhance-nav="false">Termos de Uso</a>

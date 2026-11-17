@@ -1,0 +1,3 @@
+# Build do site de documentação (docs-site/). Versão fixada para o build ser reproduzível;
+# subir a versão é uma mudança consciente, revisada num MR como qualquer outra.
+mkdocs-material==9.7.7

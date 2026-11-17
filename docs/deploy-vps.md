@@ -27,6 +27,8 @@ navegador → Cloudflare (proxy, WAF) → Nginx do host :443 → 127.0.0.1:5100 
 | `/opt/nexus/backups/` | `nexus-backup` diário (03:45): dump do banco + anexos, 7 dias |
 | `/etc/nginx/conf.d/nexus.conf` | Cópia de `deploy/vps/nexus.conf` |
 | `/usr/local/bin/nexus-deploy` | Único comando que o usuário `deploy` (chave do Actions) pode rodar |
+| `/opt/nexus/docs-site/current` | Site de documentação (docs-nexus.aamora.com.br), symlink para a última publicação em `docs-site/releases/` |
+| `/etc/nginx/conf.d/docs-nexus.conf` | Cópia de `deploy/vps/docs-nexus.conf` |
 
 Os arquivos de `deploy/vps/` não são copiados automaticamente: mudou um deles, copie para o servidor.
 
@@ -41,6 +43,27 @@ Job `deploy-vps` em `.github/workflows/deploy-nexus.yml`:
 4. Confere `https://nexus.aamora.com.br/health/live` de fora.
 
 Secrets do repositório: `VPS_HOST`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`.
+
+### 3.1 Site de documentação
+
+O workflow `docs-site.yml` roda quando `docs-site/` muda: em PR só constrói (`mkdocs build
+--strict`, link quebrado falha); na `main` empacota o site e manda por SSH para
+`nexus-deploy docs-site <sha>`, que descompacta em `/opt/nexus/docs-site/releases/<sha>` e troca o
+symlink `current` que o Nginx serve. Nada de container: é HTML estático.
+
+Para a primeira publicação, no servidor (uma vez):
+
+```bash
+sudo install -d -m 755 -o deploy /opt/nexus/docs-site
+sudo cp deploy/vps/nexus-deploy /usr/local/bin/nexus-deploy      # versão com o subcomando docs-site
+sudo cp deploy/vps/docs-nexus.conf /etc/nginx/conf.d/docs-nexus.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+E no Cloudflare, um registro `A`/`AAAA` (ou `CNAME` para `nexus`) para `docs-nexus.aamora.com.br`,
+com proxy ligado, igual ao do app. O Nexus libera CORS do `/openapi/v1.json` só para essa origem
+(`Docs:SiteUrl` em `appsettings.Production.json`), para a página de referência da API carregar a
+especificação de produção.
 
 E-mail: o app envia para o relay SMTP da Aamora (`/opt/smtp`, container na rede Docker externa
 `mail`), que repassa pelo Resend na 587 — a VPS não sai pela porta 25. O remetente é

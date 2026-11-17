@@ -122,6 +122,19 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 // Especificação OpenAPI da API de integração, servida em /openapi/v1.json. Só as rotas de /api/v1
 // entram: os downloads e o webhook do Stripe não são parte do contrato com quem integra.
+// O site de documentação (docs-nexus.aamora.com.br, #73) lê /openapi/v1.json pelo navegador para
+// renderizar a referência da API. CORS liberado só para essa origem e só nessa rota; o resto do
+// app continua sem CORS. Docs:SiteUrl vazio = nenhuma origem liberada.
+const string DocsSiteCorsPolicy = "docs-site";
+var docsSiteUrl = builder.Configuration["Docs:SiteUrl"];
+builder.Services.AddCors(options => options.AddPolicy(DocsSiteCorsPolicy, policy =>
+{
+    if (!string.IsNullOrWhiteSpace(docsSiteUrl))
+    {
+        policy.WithOrigins(docsSiteUrl.TrimEnd('/')).WithMethods("GET");
+    }
+}));
+
 builder.Services.AddOpenApi("v1", options =>
 {
     options.ShouldInclude = description => description.RelativePath?.StartsWith("api/v1", StringComparison.OrdinalIgnoreCase) == true;
@@ -371,6 +384,7 @@ app.Use(async (context, next) =>
 
 app.UseAntiforgery();
 app.UseRateLimiter();
+app.UseCors();
 
 // AllowAnonymous is required here despite MapStaticAssets serving public files: without it,
 // the global FallbackPolicy (RequireAuthenticatedUser) applies to these endpoints too, and an
@@ -430,7 +444,7 @@ app.MapGet("/version", () => Results.Json(new
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
 
-app.MapOpenApi().AllowAnonymous();
+app.MapOpenApi().AllowAnonymous().RequireCors(DocsSiteCorsPolicy);
 app.MapIntegrationApi();
 
 app.MapGet("/attachments/{id:guid}/download", async (
