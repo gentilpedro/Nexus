@@ -11,5 +11,10 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
         builder.Property(u => u.DisplayName).HasMaxLength(200).IsRequired();
         builder.Property(u => u.AvatarStoragePath).HasMaxLength(500);
         builder.Property(u => u.AvatarContentType).HasMaxLength(200);
+
+        // Toda requisição do feed de calendário começa por esta busca.
+        builder.Property(u => u.CalendarFeedTokenHash).HasMaxLength(64);
+        builder.Property(u => u.CalendarFeedTokenProtected).HasMaxLength(1024);
+        builder.HasIndex(u => u.CalendarFeedTokenHash).IsUnique().HasFilter("\"CalendarFeedTokenHash\" IS NOT NULL");
     }
 }

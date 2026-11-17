@@ -77,6 +77,7 @@ builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<WorkspaceApiKeyService>();
 builder.Services.AddScoped<WorkItemService>();
+builder.Services.AddScoped<CalendarFeedService>();
 
 // Webhooks de saída (#75): cadastro e fila (WebhookService), tradução de "a tarefa mudou" em
 // eventos (WorkItemEventPublisher) e o job que entrega (WebhookSender + hosted service).
@@ -234,6 +235,17 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = 10,
             Window = TimeSpan.FromMinutes(10),
+            QueueLimit = 0
+        }));
+
+    // Feed de calendário (#68): os calendários consultam de hora em hora, por usuário; o limite
+    // por IP só precisa conter uma varredura de tokens, não o uso normal.
+    options.AddPolicy("calendar", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         }));
 
@@ -429,6 +441,27 @@ app.MapGet("/version", () => Results.Json(new
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+// Feed iCalendar (#68). Anônimo de propósito: Google, Outlook e Apple buscam a URL sem login; o
+// token na URL é a credencial, e um token desconhecido responde 404 sem dizer mais nada.
+app.MapGet(CalendarFeedService.RoutePrefix + "{token}.ics", async (string token, CalendarFeedService feeds, IConfiguration configuration, HttpContext http, CancellationToken ct) =>
+{
+    var baseUrl = configuration["PUBLIC_BASE_URL"];
+    if (string.IsNullOrWhiteSpace(baseUrl))
+    {
+        baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
+    }
+
+    var ics = await feeds.BuildAsync(token, baseUrl, ct);
+    if (ics is null)
+    {
+        return Results.NotFound();
+    }
+
+    http.Response.Headers.CacheControl = "private, max-age=300";
+    http.Response.Headers.ContentDisposition = "inline; filename=\"nexus-tarefas.ics\"";
+    return Results.Text(ics, "text/calendar; charset=utf-8");
+}).AllowAnonymous().RequireRateLimiting("calendar");
 
 app.MapOpenApi().AllowAnonymous();
 app.MapIntegrationApi();
