@@ -1,5 +1,8 @@
 # API de integração (tarefas)
 
+> Guia completo para quem integra, com referência de cada rota e receitas em C#, Python e curl:
+> [Integrações na Wiki do projeto](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/Integracoes).
+
 A API (#66) existe para um sistema externo, normalmente um ERP, criar e acompanhar tarefas de um
 workspace sem ninguém digitar nada de novo no Nexus. A primeira versão cobre tarefas, listas,
 status e membros. A especificação OpenAPI gerada pelo próprio app fica em `/openapi/v1.json`.
