@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Nexus.Domain.Entities;
 using Nexus.Web.Services;
 
 namespace Nexus.Web.Api;
@@ -16,6 +17,8 @@ public static class ApiKeyClaims
     public const string KeyName = "nexus:api_key_name";
     public const string CreatedByUserId = "nexus:api_key_created_by";
     public const string WorkspaceArchived = "nexus:workspace_archived";
+    public const string Scope = "nexus:api_key_scope";
+    public const string ApiAccessAllowed = "nexus:api_access_allowed";
 
     public static Guid GetWorkspaceId(this ClaimsPrincipal user) =>
         Guid.Parse(user.FindFirstValue(WorkspaceId) ?? throw new InvalidOperationException("Requisição sem chave de API autenticada."));
@@ -23,6 +26,10 @@ public static class ApiKeyClaims
     public static string GetKeyName(this ClaimsPrincipal user) => user.FindFirstValue(KeyName) ?? "API";
 
     public static string? GetKeyCreatorUserId(this ClaimsPrincipal user) => user.FindFirstValue(CreatedByUserId);
+
+    public static bool CanWrite(this ClaimsPrincipal user) => user.HasClaim(Scope, nameof(ApiKeyScope.ReadWrite));
+
+    public static bool HasApiAccess(this ClaimsPrincipal user) => user.HasClaim(ApiAccessAllowed, "true");
 }
 
 // Esquema "ApiKey" da API de integração (#66), no padrão AuthenticationHandler do ASP.NET Core:
@@ -61,6 +68,8 @@ public sealed class ApiKeyAuthenticationHandler(
             new(ApiKeyClaims.KeyName, identity.Name),
             new(ClaimTypes.Name, identity.Name),
             new(ApiKeyClaims.WorkspaceArchived, identity.WorkspaceArchived ? "true" : "false"),
+            new(ApiKeyClaims.Scope, identity.Scope.ToString()),
+            new(ApiKeyClaims.ApiAccessAllowed, identity.ApiAccessAllowed ? "true" : "false"),
         };
         if (identity.CreatedByUserId is not null)
         {

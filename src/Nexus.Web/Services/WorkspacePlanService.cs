@@ -118,6 +118,32 @@ public class WorkspacePlanService(
     }
 
     /// <summary>
+    /// Whether the workspace may use the integration API and webhooks (#74). Same rule as the
+    /// other paid features: only enforced when Plans:EnforceLimits is on.
+    /// </summary>
+    public async Task<bool> HasApiAccessAsync(Guid workspaceId, CancellationToken cancellationToken = default)
+    {
+        if (!enforceLimits)
+        {
+            return true;
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        return await HasApiAccessAsync(db, workspaceId, cancellationToken);
+    }
+
+    public async Task<bool> HasApiAccessAsync(AppDbContext db, Guid workspaceId, CancellationToken cancellationToken = default)
+    {
+        if (!enforceLimits)
+        {
+            return true;
+        }
+
+        var plan = await GetAsync(db, workspaceId, cancellationToken);
+        return plan.Capabilities.IncludesApiAccess;
+    }
+
+    /// <summary>
     /// Whether one more person fits in the workspace's plan. With <paramref name="countPendingInvites"/>,
     /// invites still waiting for an answer take a seat too — otherwise a Starter admin could send
     /// twenty invites and the plan would only notice when they were accepted.

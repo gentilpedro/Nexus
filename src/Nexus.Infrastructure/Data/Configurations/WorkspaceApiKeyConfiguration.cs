@@ -11,6 +11,9 @@ public class WorkspaceApiKeyConfiguration : IEntityTypeConfiguration<WorkspaceAp
         builder.Property(k => k.Name).HasMaxLength(WorkspaceApiKey.MaxNameLength).IsRequired();
         builder.Property(k => k.KeyPrefix).HasMaxLength(16).IsRequired();
 
+        // Chaves criadas antes do escopo existir (1.16.0) continuam lendo e escrevendo.
+        builder.Property(k => k.Scope).HasDefaultValue(ApiKeyScope.ReadWrite);
+
         // SHA-256 em hexadecimal: sempre 64 caracteres.
         builder.Property(k => k.KeyHash).HasMaxLength(64).IsRequired();
 
