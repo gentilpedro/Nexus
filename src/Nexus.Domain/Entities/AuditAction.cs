@@ -8,4 +8,6 @@ public enum AuditAction
     WorkspaceMemberRemoved,
     WorkspaceInviteSent,
     WorkspaceInviteCanceled,
+    WorkspaceApiKeyCreated,
+    WorkspaceApiKeyRevoked,
 }

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Nexus.Domain.Entities;
 using Nexus.Infrastructure.DependencyInjection;
+using Nexus.Web.Api;
 using Nexus.Web.Authorization;
 using Nexus.Web.BackgroundServices;
 using Nexus.Web.Components;
@@ -73,6 +75,8 @@ builder.Services.AddScoped<NavigationContextService>();
 builder.Services.AddScoped<NotificationBadgeService>();
 builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<AuditLogService>();
+builder.Services.AddScoped<WorkspaceApiKeyService>();
+builder.Services.AddScoped<WorkItemService>();
 // Chat ao vivo e rate limiting do circuito. Sem Redis:ConnectionString configurado,
 // registra as implementacoes de instancia unica — o comportamento anterior.
 builder.Services.AddChatBackplane(builder.Configuration);
@@ -93,6 +97,29 @@ builder.Services.AddAuthentication(options =>
         options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
     })
     .AddIdentityCookies();
+
+// API de integração (#66): chaves de API por workspace, só nas rotas de /api/v1 (ver
+// IntegrationApiEndpoints). O cookie continua sendo o esquema padrão do restante do app.
+builder.Services.AddAuthentication()
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, displayName: null, configureOptions: null);
+
+// Enums da API como texto ("Bug", "High"): legível para quem integra e estável se a ordem do enum
+// mudar. Vale só para os endpoints minimal API; o Blazor não passa por aqui.
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
+// Especificação OpenAPI da API de integração, servida em /openapi/v1.json. Só as rotas de /api/v1
+// entram: os downloads e o webhook do Stripe não são parte do contrato com quem integra.
+builder.Services.AddOpenApi("v1", options =>
+{
+    options.ShouldInclude = description => description.RelativePath?.StartsWith("api/v1", StringComparison.OrdinalIgnoreCase) == true;
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info.Title = "Nexus · API de integração";
+        document.Info.Description = "Crie e acompanhe tarefas de um workspace a partir de um ERP ou de qualquer outro sistema. Autentique com \"Authorization: Bearer <chave>\"; as chaves são geradas nas configurações do workspace, em Integrações.";
+        return Task.CompletedTask;
+    });
+});
 
 // Mensagens do Identity (regras de senha, e-mail duplicado, link expirado) em português. Registrado
 // depois da infraestrutura: AddIdentityCore usa TryAdd para o describer padrão, e a última
@@ -201,6 +228,8 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         }));
+
+    options.AddIntegrationApiRateLimit();
 });
 
 var app = builder.Build();
@@ -382,6 +411,9 @@ app.MapGet("/version", () => Results.Json(new
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+app.MapOpenApi().AllowAnonymous();
+app.MapIntegrationApi();
 
 app.MapGet("/attachments/{id:guid}/download", async (
     Guid id,

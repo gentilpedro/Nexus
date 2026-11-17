@@ -1022,6 +1022,10 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("DueDateUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ExternalReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("Number")
                         .HasColumnType("integer");
 
@@ -1071,6 +1075,9 @@ namespace Nexus.Infrastructure.Data.Migrations
 
                     b.HasIndex("DueDateUtc")
                         .HasFilter("\"DueDateUtc\" IS NOT NULL");
+
+                    b.HasIndex("ExternalReference")
+                        .HasFilter("\"ExternalReference\" IS NOT NULL");
 
                     b.HasIndex("ParentEpicId");
 
@@ -1210,6 +1217,54 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("Workspaces");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceApiKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("KeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("KeyPrefix")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime?>("LastUsedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("KeyHash")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("WorkspaceApiKeys");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceInvite", b =>
@@ -1846,6 +1901,24 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Navigation("Label");
 
                     b.Navigation("WorkItem");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceApiKey", b =>
+                {
+                    b.HasOne("Nexus.Domain.Entities.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Nexus.Domain.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.WorkspaceInvite", b =>

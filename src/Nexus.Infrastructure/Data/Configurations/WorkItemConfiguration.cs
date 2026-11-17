@@ -21,6 +21,12 @@ public class WorkItemConfiguration : IEntityTypeConfiguration<WorkItem>
         // overwrite the first's changes with no conflict detected.
         builder.Property<uint>("Version").IsRowVersion();
 
+        // Parcial pelo mesmo motivo do índice de DueDateUtc abaixo: quase nenhuma tarefa tem
+        // referência externa, e a API procura só entre as que têm.
+        builder.Property(w => w.ExternalReference).HasMaxLength(WorkItem.MaxExternalReferenceLength);
+        builder.HasIndex(w => w.ExternalReference)
+            .HasFilter("\"ExternalReference\" IS NOT NULL");
+
         // Restrict, not cascade: deleting a status must not silently delete the work items in it.
         builder.HasOne(w => w.Status)
             .WithMany()
