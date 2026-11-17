@@ -79,6 +79,7 @@ builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<WorkspaceApiKeyService>();
 builder.Services.AddScoped<WorkItemService>();
 builder.Services.AddScoped<CalendarFeedService>();
+builder.Services.AddScoped<CheckinService>();
 
 // Webhooks de saída (#75): cadastro e fila (WebhookService), tradução de "a tarefa mudou" em
 // eventos (WorkItemEventPublisher) e o job que entrega (WebhookSender + hosted service).

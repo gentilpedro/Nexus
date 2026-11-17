@@ -18,6 +18,7 @@ namespace Nexus.Web.Mcp;
 public sealed class NexusTools(
     IDbContextFactory<AppDbContext> dbFactory,
     WorkItemService tasks,
+    CheckinService checkins,
     IConfiguration configuration)
 {
     private string? BaseUrl => configuration["PUBLIC_BASE_URL"];
@@ -145,6 +146,37 @@ public sealed class NexusTools(
             WorkItemOutcomeStatus.Conflict when outcome.Item is not null => throw new McpException($"Já existe outra tarefa com essa externalReference: {outcome.Item.Code}."),
             _ => throw new McpException(Errors(outcome)),
         };
+    }
+
+    [McpServerTool(Name = "list_checkins"), Description("Lista os check-ins semanais do workspace, do mais recente para o mais antigo: percepção (OnTrack, Frozen, OffTrack, AtRisk) e os quatro textos.")]
+    public async Task<IReadOnlyList<CheckinResponse>> ListCheckins(ClaimsPrincipal user, CancellationToken ct)
+    {
+        var list = await checkins.ListAsync(WorkspaceOf(user), ct: ct);
+        return list.Select(CheckinEndpoints.ToResponse).ToList();
+    }
+
+    [McpServerTool(Name = "draft_checkin"), Description("Sugere o rascunho do check-in de uma semana a partir do quadro: tarefas concluídas na semana e em andamento. Use antes de post_checkin, e mostre o texto à pessoa antes de postar.")]
+    public async Task<CheckinDraft> DraftCheckin(ClaimsPrincipal user, [Description("Qualquer data da semana (ISO 8601); padrão: hoje.")] DateTime? weekDate = null, CancellationToken ct = default)
+        => await checkins.DraftAsync(WorkspaceOf(user), weekDate ?? DateTime.UtcNow, ct);
+
+    [McpServerTool(Name = "post_checkin"), Description("Registra ou atualiza o check-in da semana. Exige chave de leitura e escrita. Pelo menos um de finished, inProgress ou nextSteps.")]
+    public async Task<CheckinResponse> PostCheckin(
+        ClaimsPrincipal user,
+        [Description("OnTrack, Frozen, OffTrack ou AtRisk.")] CheckinPerception perception,
+        [Description("O que foi concluído na semana.")] string? finished = null,
+        [Description("O que está em andamento.")] string? inProgress = null,
+        [Description("Próximos passos.")] string? nextSteps = null,
+        [Description("Observações, riscos, pedidos.")] string? observations = null,
+        [Description("Qualquer data da semana (ISO 8601); padrão: hoje.")] DateTime? weekDate = null,
+        CancellationToken ct = default)
+    {
+        RequireWrite(user);
+        var result = await checkins.SaveAsync(WorkspaceOf(user),
+            new CheckinInput(weekDate ?? DateTime.UtcNow, perception, finished, inProgress, nextSteps, observations),
+            user.GetKeyCreatorUserId(), ct);
+        return result.Status == CheckinSaveStatus.Invalid
+            ? throw new McpException(result.Error ?? "Check-in inválido.")
+            : CheckinEndpoints.ToResponse(result.Checkin!);
     }
 
     // As mesmas recusas dos endpoints de /api/v1 (plano sem API, workspace arquivado), como erro

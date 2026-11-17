@@ -6,6 +6,7 @@
     <a class="@Cls("docs")" href="@($"/workspaces/{WorkspaceId}/docs")" aria-current="@Current("docs")"><Icon Name="doc" /> Documentos</a>
     <a class="@Cls("chat")" href="@($"/workspaces/{WorkspaceId}/chat")" aria-current="@Current("chat")"><Icon Name="chat" /> Chat</a>
     <a class="@Cls("members")" href="@($"/workspaces/{WorkspaceId}/members")" aria-current="@Current("members")"><Icon Name="team" /> Membros</a>
+    <a class="@Cls("checkin")" href="@($"/workspaces/{WorkspaceId}/checkin")" aria-current="@Current("checkin")"><Icon Name="flag" /> Check-in</a>
     @if (CanManage)
     {
         <a class="@Cls("settings")" href="@($"/workspaces/{WorkspaceId}/settings")" aria-current="@Current("settings")"><Icon Name="settings" /> Configurações</a>

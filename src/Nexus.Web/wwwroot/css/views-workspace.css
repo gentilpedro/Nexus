@@ -2033,6 +2033,50 @@
     opacity: 0.6;
 }
 
+/* Check-in semanal (#79) */
+.checkin-card {
+    margin-bottom: 1rem;
+}
+
+.checkin-card-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.checkin-fields {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.35rem 1rem;
+    margin: 0;
+}
+
+.checkin-fields dt {
+    font-weight: 600;
+}
+
+.checkin-fields dd {
+    margin: 0;
+    white-space: pre-line;
+}
+
+.checkin-badge {
+    text-decoration: none;
+}
+
+.checkin-ontrack { background: var(--badge-status-done-bg); color: var(--badge-status-done-fg); }
+.checkin-frozen { background: var(--badge-status-todo-bg); color: var(--badge-status-todo-fg); }
+.checkin-offtrack { background: var(--badge-status-inprogress-bg); color: var(--badge-status-inprogress-fg); }
+.checkin-atrisk { background: var(--color-danger-soft, #fde2e2); color: var(--color-danger-text, #8a1c1c); }
+
+@media (max-width: 520px) {
+    .checkin-fields {
+        grid-template-columns: 1fr;
+    }
+}
+
 .api-key-locked {
     align-items: flex-start;
 }

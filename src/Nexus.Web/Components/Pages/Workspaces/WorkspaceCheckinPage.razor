@@ -1,0 +1,225 @@
+@page "/workspaces/{WorkspaceId:guid}/checkin"
+@attribute [Authorize]
+@using System.Security.Claims
+@using Nexus.Domain.Entities
+@using Nexus.Infrastructure.Data
+@using Nexus.Web.Authorization
+@using Nexus.Web.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject IAuthorizationService AuthorizationService
+@inject WorkspaceAccessGuard AccessGuard
+@inject NavigationContextService NavContext
+@inject ToastService Toasts
+@inject CheckinService Checkins
+
+<PageTitle>Check-in · @(workspace?.Name ?? "Workspace") · Nexus</PageTitle>
+
+<div class="page-container page-container--wide">
+    @if (notFound)
+    {
+        <EmptyState Icon="lock" Title="Workspace não encontrado" Description="Ele pode ter sido excluído, ou você não faz mais parte dele.">
+            <a class="btn btn-secondary" href="/workspaces">Ver meus workspaces</a>
+        </EmptyState>
+    }
+    else if (workspace is null)
+    {
+        <Skeleton Variant="text" Count="6" Label="Carregando check-ins…" />
+    }
+    else
+    {
+        <PageHeader Title="@workspace.Name">
+            <Breadcrumbs><a href="/workspaces">Workspaces</a></Breadcrumbs>
+        </PageHeader>
+        <WorkspaceTabs WorkspaceId="WorkspaceId" Active="checkin" CanManage="isAdmin" />
+
+        <div class="dashboard-layout">
+            <section aria-labelledby="checkin-form-title">
+                @if (isAdmin)
+                {
+                    <div class="card form-card">
+                        <h2 id="checkin-form-title" class="form-section-title">@(existingForWeek is null ? "Check-in desta semana" : "Editar o check-in desta semana")</h2>
+                        <p class="form-section-description">Semana de @WeekLabel(weekStart). Quatro campos curtos, para quem não vive no quadro. O rascunho vem do que mudou nesta semana; edite antes de salvar.</p>
+                        @if (!string.IsNullOrEmpty(errorMessage))
+                        {
+                            <div class="alert alert-danger" role="alert"><Icon Name="alert-circle" /> <span>@errorMessage</span></div>
+                        }
+                        <EditForm Model="model" OnValidSubmit="SaveAsync">
+                            <fieldset class="form-fieldset">
+                                <legend class="field-label">Percepção</legend>
+                                <InputRadioGroup @bind-Value="model.Perception">
+                                    @foreach (var p in Enum.GetValues<CheckinPerception>())
+                                    {
+                                        <label class="radio-option"><InputRadio Value="p" /> <span>@p.Emoji() @p.Label()</span></label>
+                                    }
+                                </InputRadioGroup>
+                            </fieldset>
+                            <div class="form-field">
+                                <label for="ci-finished">Concluído</label>
+                                <InputTextArea id="ci-finished" @bind-Value="model.Finished" rows="4" maxlength="@WorkspaceCheckin.MaxTextLength" />
+                            </div>
+                            <div class="form-field">
+                                <label for="ci-inprogress">Em andamento</label>
+                                <InputTextArea id="ci-inprogress" @bind-Value="model.InProgress" rows="4" maxlength="@WorkspaceCheckin.MaxTextLength" />
+                            </div>
+                            <div class="form-field">
+                                <label for="ci-next">Próximos passos</label>
+                                <InputTextArea id="ci-next" @bind-Value="model.NextSteps" rows="3" maxlength="@WorkspaceCheckin.MaxTextLength" />
+                            </div>
+                            <div class="form-field">
+                                <label for="ci-obs">Observações</label>
+                                <InputTextArea id="ci-obs" @bind-Value="model.Observations" rows="2" maxlength="@WorkspaceCheckin.MaxTextLength" placeholder="Riscos, pedidos ao cliente, decisões" />
+                            </div>
+                            <div class="form-actions form-actions--end">
+                                <button type="submit" class="btn @(isSaving ? "is-loading" : "")" disabled="@isSaving">@(existingForWeek is null ? "Registrar check-in" : "Salvar alterações")</button>
+                            </div>
+                        </EditForm>
+                    </div>
+                }
+                else
+                {
+                    <p class="form-section-description">Owner e Admin registram o check-in; aqui você acompanha o histórico.</p>
+                }
+            </section>
+
+            <section aria-labelledby="checkin-history-title">
+                <div class="section-header"><h2 id="checkin-history-title" class="section-title">Histórico</h2></div>
+                @if (history is null)
+                {
+                    <Skeleton Variant="card" Count="2" />
+                }
+                else if (history.Count == 0)
+                {
+                    <div class="card"><EmptyState Compact="true" Title="Nenhum check-in ainda" Description="O primeiro aparece aqui assim que for registrado." /></div>
+                }
+                else
+                {
+                    @foreach (var c in history)
+                    {
+                        <article class="card checkin-card" aria-label="@($"Check-in da semana de {WeekLabel(c.WeekStartUtc)}")">
+                            <header class="checkin-card-header">
+                                <span class="badge checkin-badge checkin-@c.Perception.ToString().ToLowerInvariant()">@c.Perception.Emoji() @c.Perception.Label()</span>
+                                <strong>Semana de @WeekLabel(c.WeekStartUtc)</strong>
+                                <span class="cell-muted">por @ApiMappingNames.DisplayNameOf(c.Author) · @((c.UpdatedAtUtc ?? c.CreatedAtUtc).ToLocalTime().ToString("dd/MM HH:mm"))</span>
+                                @if (isAdmin && c.WeekStartUtc == weekStart)
+                                {
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="() => LoadIntoForm(c)">Editar</button>
+                                }
+                            </header>
+                            <dl class="checkin-fields">
+                                @if (c.Finished.Length > 0) { <dt>Concluído</dt><dd>@c.Finished</dd> }
+                                @if (c.InProgress.Length > 0) { <dt>Em andamento</dt><dd>@c.InProgress</dd> }
+                                @if (c.NextSteps.Length > 0) { <dt>Próximos passos</dt><dd>@c.NextSteps</dd> }
+                                @if (c.Observations.Length > 0) { <dt>Observações</dt><dd>@c.Observations</dd> }
+                            </dl>
+                        </article>
+                    }
+                }
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid WorkspaceId { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private Workspace? workspace;
+    private bool notFound;
+    private bool isAdmin;
+    private bool isSaving;
+    private string? errorMessage;
+    private string? userId;
+    private Guid? loadedWorkspaceId;
+    private DateTime weekStart = WorkspaceCheckin.WeekStartOf(DateTime.UtcNow);
+    private WorkspaceCheckin? existingForWeek;
+    private List<WorkspaceCheckin>? history;
+    private readonly CheckinModel model = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedWorkspaceId == WorkspaceId) return;
+        loadedWorkspaceId = WorkspaceId;
+        notFound = false;
+        workspace = null;
+
+        var authState = await AuthStateTask!;
+        userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var member = await AuthorizationService.AuthorizeAsync(authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Member));
+        if (!member.Succeeded)
+        {
+            notFound = true;
+            return;
+        }
+
+        isAdmin = (await AuthorizationService.AuthorizeAsync(authState.User, WorkspaceId, new WorkspaceAccessRequirement(WorkspaceRole.Admin))).Succeeded;
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            workspace = await db.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == WorkspaceId);
+        }
+
+        if (workspace is null)
+        {
+            notFound = true;
+            return;
+        }
+
+        NavContext.SetWorkspace(WorkspaceId, workspace.Name);
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        history = await Checkins.ListAsync(WorkspaceId);
+        existingForWeek = history.FirstOrDefault(c => c.WeekStartUtc == weekStart);
+        if (existingForWeek is not null)
+        {
+            LoadIntoForm(existingForWeek);
+        }
+        else if (isAdmin && string.IsNullOrEmpty(model.Finished) && string.IsNullOrEmpty(model.InProgress))
+        {
+            var draft = await Checkins.DraftAsync(WorkspaceId, weekStart);
+            model.Finished = draft.Finished;
+            model.InProgress = draft.InProgress;
+        }
+    }
+
+    private void LoadIntoForm(WorkspaceCheckin c)
+    {
+        model.Perception = c.Perception;
+        model.Finished = c.Finished;
+        model.InProgress = c.InProgress;
+        model.NextSteps = c.NextSteps;
+        model.Observations = c.Observations;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!await AccessGuard.HasAccessAsync(AuthStateTask, WorkspaceId, WorkspaceRole.Admin)) { notFound = true; return; }
+        isSaving = true;
+        errorMessage = null;
+        var result = await Checkins.SaveAsync(WorkspaceId, new CheckinInput(weekStart, model.Perception, model.Finished, model.InProgress, model.NextSteps, model.Observations), userId);
+        isSaving = false;
+        if (result.Status == CheckinSaveStatus.Invalid)
+        {
+            errorMessage = result.Error;
+            return;
+        }
+
+        Toasts.Show(result.Status == CheckinSaveStatus.Created ? "Check-in registrado." : "Check-in atualizado.");
+        await ReloadAsync();
+    }
+
+    private static string WeekLabel(DateTime weekStart) => $"{weekStart:dd/MM} a {weekStart.AddDays(6):dd/MM}";
+
+    private sealed class CheckinModel
+    {
+        public CheckinPerception Perception { get; set; } = CheckinPerception.OnTrack;
+        public string Finished { get; set; } = "";
+        public string InProgress { get; set; } = "";
+        public string NextSteps { get; set; } = "";
+        public string Observations { get; set; } = "";
+    }
+}
