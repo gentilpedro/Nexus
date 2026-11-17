@@ -41,6 +41,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<WorkspaceApiKey> WorkspaceApiKeys => Set<WorkspaceApiKey>();
     public DbSet<WorkspaceWebhook> WorkspaceWebhooks => Set<WorkspaceWebhook>();
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<WorkspaceContract> WorkspaceContracts => Set<WorkspaceContract>();
+    public DbSet<TimeActivity> TimeActivities => Set<TimeActivity>();
+    public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
+    public DbSet<RunningTimer> RunningTimers => Set<RunningTimer>();
     public DbSet<CommercialContact> CommercialContacts => Set<CommercialContact>();
     public DbSet<StripeWebhookEvent> StripeWebhookEvents => Set<StripeWebhookEvent>();
 
