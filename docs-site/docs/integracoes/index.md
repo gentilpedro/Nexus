@@ -38,6 +38,8 @@ flowchart LR
 |---|---|---|---|
 | **API de integração** (tarefas, listas, membros) | entrada | [API de Integração](api.md) · [Referência](api-referencia.md) · [Receitas](api-receitas.md) | `src/Nexus.Web/Api/`, `Services/WorkItemService.cs`, `Services/WorkspaceApiKeyService.cs` |
 | **Webhooks de saída** (o Nexus avisa o ERP quando a tarefa muda) | saída | [Webhooks de saída](webhooks.md) | `Services/Webhooks/`, `BackgroundServices/WebhookDeliveryHostedService.cs` |
+| **Assistentes de IA** (Claude, ChatGPT, Copilot pelo servidor MCP) | entrada | [Assistentes de IA (MCP)](mcp.md) | `src/Nexus.Web/Mcp/NexusTools.cs` |
+| **Feed iCal** (tarefas no calendário da pessoa) | saída | [Calendário](../guia/calendario.md) | `Services/CalendarFeedService.cs` |
 | **Stripe** (cobrança do plano Pro) | entrada (webhook) e saída (Checkout, portal) | [Stripe](stripe.md) | `src/Nexus.Web/Services/Billing/` |
 | **E-mail** (confirmação, convites, atribuições, prazos) | saída | [E-mail, Redis e Monitoramento](infraestrutura.md) | `src/Nexus.Web/Services/Mailer.cs` |
 | **Redis** (tempo real com mais de uma instância) | infraestrutura | [E-mail, Redis e Monitoramento](infraestrutura.md) | `src/Nexus.Web/Services/Backplane/` |
@@ -57,9 +59,3 @@ flowchart LR
 - **Toda ação administrativa deixa rastro.** Criar e revogar chave de API entram no log de auditoria
   (`AuditLogEntries`), como convites e mudanças de papel.
 
-## O que vem a seguir
-
-| Issue | O quê | Depende de |
-|---|---|---|
-| [#67](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/67) | **Servidor MCP** para assistentes de IA (Claude, ChatGPT, Copilot) operarem tarefas do workspace, hospedado em `/mcp` com o SDK oficial em C# | chaves de API (#66) |
-| [#68](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/68) | **Feed iCal (.ics)** por usuário, para assinar as tarefas datadas no Google, Outlook e Apple Calendar | — |

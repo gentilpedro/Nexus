@@ -10,8 +10,8 @@ documentação é para três leitores diferentes. Escolha o seu.
 
     ---
 
-    Como usar o Nexus no dia a dia: workspaces, tarefas, quadro, sprints, docs, chat, conta e
-    planos.
+    Como usar o Nexus no dia a dia: workspaces, tarefas, quadro, sprints, docs, chat, horas e
+    contratos, check-in semanal, calendário, conta e planos.
 
     [Começar pelo guia](guia/index.md)
 
@@ -19,8 +19,9 @@ documentação é para três leitores diferentes. Escolha o seu.
 
     ---
 
-    Para programadores: chaves de API, rotas de tarefas, webhooks de saída, receitas em C#,
-    Python e curl, e o que o Nexus conecta (Stripe, e-mail, Redis, GitHub e GitLab).
+    Para programadores: chaves de API, rotas de tarefas, horas e check-ins, webhooks de saída,
+    assistentes de IA pelo servidor MCP, receitas em C#, Python e curl, e o que o Nexus conecta
+    (Stripe, e-mail, Redis, GitHub e GitLab).
 
     [Ver as integrações](integracoes/index.md)
 

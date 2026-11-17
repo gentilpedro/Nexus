@@ -79,6 +79,9 @@ nav:
       - Docs e planilhas: guia/docs-e-planilhas.md
       - Chat e notificações: guia/chat.md
       - Conta e segurança: guia/conta.md
+      - Calendário (feed iCal): guia/calendario.md
+      - Horas e contratos: guia/horas-e-contratos.md
+      - Check-in semanal: guia/check-in.md
       - Planos: guia/planos.md
   - Integrações:
       - Visão geral: integracoes/index.md
@@ -86,6 +89,7 @@ nav:
       - Referência da API: integracoes/api-referencia.md
       - Receitas: integracoes/api-receitas.md
       - Webhooks de saída: integracoes/webhooks.md
+      - Assistentes de IA (MCP): integracoes/mcp.md
       - Stripe (cobrança): integracoes/stripe.md
       - E-mail, Redis e monitoramento: integracoes/infraestrutura.md
       - GitHub e GitLab: integracoes/github-gitlab.md
