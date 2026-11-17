@@ -83,6 +83,10 @@ builder.Services.AddScoped<CheckinService>();
 // Horas e contratos (#77, #78).
 builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.ContractService>();
 builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.TimeTrackingService>();
+// Horas e contratos (#77, #78).
+builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.ContractService>();
+builder.Services.AddScoped<Nexus.Web.Services.TimeTracking.TimeTrackingService>();
+builder.Services.AddScoped<CalendarFeedService>();
 
 // Webhooks de saída (#75): cadastro e fila (WebhookService), tradução de "a tarefa mudou" em
 // eventos (WorkItemEventPublisher) e o job que entrega (WebhookSender + hosted service).
