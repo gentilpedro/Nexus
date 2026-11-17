@@ -1,0 +1,114 @@
+@page "/Account/Manage/Calendar"
+
+@using Nexus.Domain.Entities
+@using Microsoft.AspNetCore.Identity
+@using Nexus.Web.Services
+
+@inject UserManager<ApplicationUser> UserManager
+@inject IdentityRedirectManager RedirectManager
+@inject CalendarFeedService Feeds
+@inject PublicUrlBuilder PublicUrl
+
+<PageTitle>Calendário · Nexus</PageTitle>
+
+<AccountSection Title="Calendário" Description="Veja as suas tarefas com prazo no Google Calendar, no Outlook ou no Apple Calendar, como um calendário de assinatura que se atualiza sozinho.">
+    <StatusMessage />
+
+    <div class="card form-card">
+        @if (feed is null)
+        {
+            <h2 class="form-section-title">Assinar as minhas tarefas</h2>
+            <p class="form-section-description">
+                O feed traz as tarefas em que você é responsável e que têm data de início ou prazo, de todos os seus workspaces,
+                como eventos de dia inteiro. Tarefas concluídas somem depois de 30 dias. Quem tiver a URL consegue ler o feed:
+                trate-a como uma senha.
+            </p>
+            <form @formname="calendar-enable" @onsubmit="EnableAsync" method="post" class="form-actions">
+                <AntiforgeryToken />
+                <button type="submit" class="btn"><Icon Name="calendar" /> Gerar a URL do feed</button>
+            </form>
+        }
+        else
+        {
+            <h2 class="form-section-title">A sua URL de assinatura</h2>
+            <p class="form-section-description">Gerada em @feed.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm"). Quem tiver esta URL consegue ler as suas tarefas: trate-a como uma senha.</p>
+            <div class="form-field">
+                <label for="calendar-url">URL do feed</label>
+                <input id="calendar-url" type="text" readonly value="@feed.Url" onfocus="this.select()" />
+                <span class="field-hint">Selecione tudo e copie. Os calendários atualizam a assinatura mais ou menos a cada hora.</span>
+            </div>
+
+            <h3 class="form-section-title">Como assinar</h3>
+            <ul class="plan-summary">
+                <li><strong>Google Calendar</strong> (no computador): ao lado de "Outros calendários", clique em + → <em>Por URL</em> e cole a URL.</li>
+                <li><strong>Outlook</strong>: Adicionar calendário → <em>Assinar da Web</em>, cole a URL e dê um nome.</li>
+                <li><strong>Apple Calendar</strong>: Arquivo → <em>Nova assinatura de calendário</em> e cole a URL. No iPhone: Ajustes → Calendário → Contas → Adicionar conta → Outro → <em>Adicionar calendário assinado</em>.</li>
+            </ul>
+
+            <div class="form-actions form-actions--end">
+                <form @formname="calendar-regenerate" @onsubmit="RegenerateAsync" method="post">
+                    <AntiforgeryToken />
+                    <button type="submit" class="btn btn-secondary"><Icon Name="refresh" /> Gerar outra URL</button>
+                </form>
+                <form @formname="calendar-disable" @onsubmit="DisableAsync" method="post">
+                    <AntiforgeryToken />
+                    <button type="submit" class="btn btn-danger-ghost">Desativar o feed</button>
+                </form>
+            </div>
+            <p class="field-hint">Gerar outra URL ou desativar faz a URL atual parar de funcionar na hora, em todos os calendários onde ela foi assinada.</p>
+        }
+    </div>
+</AccountSection>
+
+@code {
+    private ApplicationUser? user;
+    private CalendarFeedInfo? feed;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserManager.GetUserAsync(HttpContext.User);
+        if (user is null)
+        {
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            return;
+        }
+
+        feed = await Feeds.GetAsync(user.Id, PublicUrl.BaseUrl);
+    }
+
+    private async Task EnableAsync()
+    {
+        if (user is null)
+        {
+            return;
+        }
+
+        await Feeds.RegenerateAsync(user.Id, PublicUrl.BaseUrl);
+        RedirectManager.RedirectToCurrentPageWithStatus("Feed criado. Copie a URL abaixo e assine no seu calendário.", HttpContext);
+    }
+
+    private async Task RegenerateAsync()
+    {
+        if (user is null)
+        {
+            return;
+        }
+
+        await Feeds.RegenerateAsync(user.Id, PublicUrl.BaseUrl);
+        RedirectManager.RedirectToCurrentPageWithStatus("URL nova gerada. A anterior parou de funcionar; assine de novo com a URL abaixo.", HttpContext);
+    }
+
+    private async Task DisableAsync()
+    {
+        if (user is null)
+        {
+            return;
+        }
+
+        await Feeds.DisableAsync(user.Id);
+        RedirectManager.RedirectToCurrentPageWithStatus("Feed desativado. A URL parou de funcionar.", HttpContext);
+    }
+}

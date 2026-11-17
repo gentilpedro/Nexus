@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using ModelContextProtocol.AspNetCore;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -77,6 +78,7 @@ builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<WorkspaceApiKeyService>();
 builder.Services.AddScoped<WorkItemService>();
+builder.Services.AddScoped<CalendarFeedService>();
 
 // Webhooks de saída (#75): cadastro e fila (WebhookService), tradução de "a tarefa mudou" em
 // eventos (WorkItemEventPublisher) e o job que entrega (WebhookSender + hosted service).
@@ -122,6 +124,17 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 // Especificação OpenAPI da API de integração, servida em /openapi/v1.json. Só as rotas de /api/v1
 // entram: os downloads e o webhook do Stripe não são parte do contrato com quem integra.
+// Servidor MCP (#67): as ferramentas em Mcp/NexusTools.cs, pela mesma chave de API dos endpoints
+// de /api/v1. Sem sessão (stateless): cada chamada é uma requisição HTTP autenticada por conta
+// própria, o que dispensa afinidade de instância e deixa o limite de chamadas por chave valer.
+builder.Services.AddMcpServer(options =>
+    {
+        options.ServerInfo = new() { Name = "Nexus", Version = AppVersion.Current.Version };
+        options.ServerInstructions = "Ferramentas para operar as tarefas de um workspace do Nexus. Comece por list_lists para obter os ids de lista e status; use list_members para o id do responsável. Códigos de tarefa têm a forma TASK-12.";
+    })
+    .WithHttpTransport(options => options.SessionMode = HttpServerSessionMode.Stateless)
+    .WithTools<Nexus.Web.Mcp.NexusTools>();
+
 builder.Services.AddOpenApi("v1", options =>
 {
     options.ShouldInclude = description => description.RelativePath?.StartsWith("api/v1", StringComparison.OrdinalIgnoreCase) == true;
@@ -234,6 +247,17 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = 10,
             Window = TimeSpan.FromMinutes(10),
+            QueueLimit = 0
+        }));
+
+    // Feed de calendário (#68): os calendários consultam de hora em hora, por usuário; o limite
+    // por IP só precisa conter uma varredura de tokens, não o uso normal.
+    options.AddPolicy("calendar", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         }));
 
@@ -430,7 +454,33 @@ app.MapGet("/version", () => Results.Json(new
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
 
+// Feed iCalendar (#68). Anônimo de propósito: Google, Outlook e Apple buscam a URL sem login; o
+// token na URL é a credencial, e um token desconhecido responde 404 sem dizer mais nada.
+app.MapGet(CalendarFeedService.RoutePrefix + "{token}.ics", async (string token, CalendarFeedService feeds, IConfiguration configuration, HttpContext http, CancellationToken ct) =>
+{
+    var baseUrl = configuration["PUBLIC_BASE_URL"];
+    if (string.IsNullOrWhiteSpace(baseUrl))
+    {
+        baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
+    }
+
+    var ics = await feeds.BuildAsync(token, baseUrl, ct);
+    if (ics is null)
+    {
+        return Results.NotFound();
+    }
+
+    http.Response.Headers.CacheControl = "private, max-age=300";
+    http.Response.Headers.ContentDisposition = "inline; filename=\"nexus-tarefas.ics\"";
+    return Results.Text(ics, "text/calendar; charset=utf-8");
+}).AllowAnonymous().RequireRateLimiting("calendar");
+
 app.MapOpenApi().AllowAnonymous();
+
+// /mcp exige a chave de API como /api/v1; o modelo nunca escolhe o workspace, a chave decide.
+app.MapMcp(Nexus.Web.Api.IntegrationApiRateLimiter.McpRoute)
+    .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = ApiKeyAuthenticationHandler.SchemeName })
+    .DisableAntiforgery();
 app.MapIntegrationApi();
 
 app.MapGet("/attachments/{id:guid}/download", async (
