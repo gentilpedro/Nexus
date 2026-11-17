@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Nexus.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261117164718_AddWorkspaceCheckins")]
+    [Migration("20261117162132_AddWorkspaceCheckins")]
     partial class AddWorkspaceCheckins
     {
         /// <inheritdoc />
