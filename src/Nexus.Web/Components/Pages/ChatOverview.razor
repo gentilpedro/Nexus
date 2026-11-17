@@ -36,6 +36,11 @@
                     <label for="chats-filter" class="sr-only">Buscar conversas</label>
                     <input id="chats-filter" type="search" placeholder="Buscar conversas" @bind="filterText" @bind:event="oninput" />
                 </div>
+                <div class="chats-sidebar-new">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="OpenNewDirectConversationAsync">
+                        <Icon Name="user-plus" /> Nova conversa individual
+                    </button>
+                </div>
                 <div class="chats-sidebar-list">
                     @foreach (var group in groups)
                     {
@@ -298,6 +303,10 @@
 
     private Task OpenNewConversationAsync(Guid workspaceId) =>
         newConversationDialog?.OpenAsync(workspaceId) ?? Task.CompletedTask;
+
+    // Fora de qualquer workspace (#72): a pessoa vem primeiro, o workspace em comum vem depois.
+    private Task OpenNewDirectConversationAsync() =>
+        newConversationDialog?.OpenAcrossWorkspacesAsync() ?? Task.CompletedTask;
 
     private async Task HandleConversationCreatedAsync(Guid conversationId)
     {
