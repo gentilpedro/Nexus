@@ -114,4 +114,5 @@ nav:
       - Configuração: self-hosted/configuracao.md
       - Backup e restauração: self-hosted/backup.md
       - Atualização: self-hosted/atualizacao.md
+      - Licença: self-hosted/licenca.md
   - API (OpenAPI): api/index.md

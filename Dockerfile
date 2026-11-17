@@ -4,6 +4,7 @@ WORKDIR /src
 COPY Nexus.slnx .
 COPY src/Nexus.Domain/Nexus.Domain.csproj src/Nexus.Domain/
 COPY src/Nexus.Infrastructure/Nexus.Infrastructure.csproj src/Nexus.Infrastructure/
+COPY src/Nexus.Licensing/Nexus.Licensing.csproj src/Nexus.Licensing/
 COPY src/Nexus.Web/Nexus.Web.csproj src/Nexus.Web/
 COPY tests/Nexus.Domain.Tests/Nexus.Domain.Tests.csproj tests/Nexus.Domain.Tests/
 COPY tests/Nexus.Infrastructure.Tests/Nexus.Infrastructure.Tests.csproj tests/Nexus.Infrastructure.Tests/

@@ -54,6 +54,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Nexus.Domain\Nexus.Domain.csproj" />
     <ProjectReference Include="..\Nexus.Infrastructure\Nexus.Infrastructure.csproj" />
+    <ProjectReference Include="..\Nexus.Licensing\Nexus.Licensing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

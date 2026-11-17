@@ -1,0 +1,157 @@
+@page "/admin/licenca"
+@attribute [ExcludeFromInteractiveRouting]
+
+@using System.ComponentModel.DataAnnotations
+@using Nexus.Web.Components.Account
+@using Nexus.Web.Components.Account.Shared
+@using Nexus.Web.Services.Licensing
+
+@inject LicenseService License
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Licença · Nexus</PageTitle>
+
+<div class="page-container page-container--wide">
+    <PageHeader Title="Licença da instalação" Description="O que a Aamora licenciou para esta instância, até quando, e a chave em uso." />
+    <div class="account-content">
+        <StatusMessage Message="@message" />
+
+        @if (!status.IsEnforced)
+        {
+            <div class="card form-card">
+                <h2 class="form-section-title">Esta instância não exige licença</h2>
+                <p class="form-section-description">
+                    <code>License__Enforce</code> está desligado: é a oferta em nuvem da Aamora ou um ambiente de desenvolvimento.
+                    Numa instalação self-hosted, deixe ligado para a licença valer.
+                </p>
+            </div>
+        }
+        else
+        {
+            <div class="card form-card">
+                <h2 class="form-section-title">
+                    Situação
+                    <span class="badge @StateClass">@StateLabel</span>
+                </h2>
+                <dl class="license-facts">
+                    @if (status.Claims is { } c)
+                    {
+                        <dt>Cliente</dt><dd>@c.Customer</dd>
+                        <dt>Licença</dt><dd><code>@c.LicenseId</code> · plano @c.Plan</dd>
+                        <dt>Validade</dt><dd>@c.ExpiresAt.ToLocalTime().ToString("dd/MM/yyyy") @DaysLabel</dd>
+                        <dt>Atualizações até</dt><dd>@c.UpdatesUntil.ToLocalTime().ToString("dd/MM/yyyy") <span class="field-hint">só sobem imagens construídas antes desta data</span></dd>
+                        <dt>Usuários ativos</dt>
+                        <dd>
+                            @status.ActiveUsers de @(c.IsUnlimited ? "ilimitados" : c.MaxActiveUsers.ToString())
+                            <span class="field-hint">ativo = entrou nos últimos 30 dias</span>
+                            @if (status.OverUserLimit)
+                            {
+                                <span class="badge badge-status-todo">acima do limite: contas novas bloqueadas</span>
+                            }
+                        </dd>
+                    }
+                    else
+                    {
+                        <dt>Chave</dt><dd>@(status.State == LicenseState.Invalid ? "instalada, mas não verifica: " + status.Error : "nenhuma")</dd>
+                        <dt>Avaliação até</dt><dd>@status.ExpiresAt?.ToLocalTime().ToString("dd/MM/yyyy") @DaysLabel</dd>
+                        <dt>Usuários ativos</dt><dd>@status.ActiveUsers <span class="field-hint">ativo = entrou nos últimos 30 dias</span></dd>
+                    }
+                    <dt>Origem da chave</dt><dd>@status.Source</dd>
+                    <dt>Esta versão</dt><dd>Nexus @AppVersion.Current.Version, construída em @(AppVersion.Current.BuiltAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "máquina local")</dd>
+                </dl>
+                <p class="form-section-description">
+                    Com a licença vencida a instalação continua funcionando para todo mundo. O que trava é subir uma imagem publicada
+                    depois da data de atualizações. Para renovar, fale com comercialnexus@aamora.com.br.
+                </p>
+            </div>
+
+            <div class="card form-card">
+                <h2 class="form-section-title">@(status.Claims is null ? "Instalar a chave" : "Trocar a chave")</h2>
+                <p class="form-section-description">
+                    Cole a chave recebida da Aamora (começa com <code>NXL-</code>). Ela é verificada antes de ser guardada e tem
+                    precedência sobre <code>License__Key</code> e <code>License__KeyFile</code>.
+                </p>
+                <EditForm Model="Input" FormName="license-install" OnValidSubmit="InstallAsync" method="post">
+                    <DataAnnotationsValidator />
+                    <div class="form-field">
+                        <label for="license-key">Chave de licença</label>
+                        <InputTextArea id="license-key" @bind-Value="Input.Key" rows="4" autocomplete="off" spellcheck="false" />
+                        <ValidationMessage For="() => Input.Key" />
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn"><Icon Name="key" /> Verificar e instalar</button>
+                    </div>
+                </EditForm>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private LicenseStatus status = LicenseStatus.NotEnforced;
+    private string? message;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+        if (!License.IsAdministrator(HttpContext.User))
+        {
+            NavigationManager.NavigateTo("/not-found", replace: true);
+            return;
+        }
+
+        status = License.Current;
+    }
+
+    private string StateLabel => status.State switch
+    {
+        LicenseState.Valid => "válida",
+        LicenseState.ExpiringSoon => "vence em breve",
+        LicenseState.Expired => status.Claims is null ? "avaliação encerrada" : "vencida",
+        LicenseState.Trial => "avaliação",
+        LicenseState.Invalid => "chave inválida",
+        _ => "sem licença",
+    };
+
+    private string StateClass => status.State switch
+    {
+        LicenseState.Valid => "badge-status-done",
+        LicenseState.ExpiringSoon or LicenseState.Trial => "badge-status-inprogress",
+        _ => "badge-status-todo",
+    };
+
+    private string DaysLabel => status.DaysUntilExpiry switch
+    {
+        null => "",
+        < 0 => $"(venceu há {-status.DaysUntilExpiry} dias)",
+        0 => "(vence hoje)",
+        1 => "(vence amanhã)",
+        var d => $"(faltam {d} dias)",
+    };
+
+    private async Task InstallAsync()
+    {
+        var (ok, text) = await License.InstallKeyAsync(Input.Key, HttpContext.RequestAborted);
+        if (!ok)
+        {
+            message = "Erro: " + text;
+            status = License.Current;
+            return;
+        }
+
+        RedirectManager.RedirectToCurrentPageWithStatus(text, HttpContext);
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Cole a chave.")]
+        public string Key { get; set; } = "";
+    }
+}

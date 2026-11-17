@@ -13,6 +13,7 @@ POSTGRES_DB=Nexus
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=$(openssl rand -base64 32)
 DP_CERT_PASSWORD=$(openssl rand -base64 32)
+NEXUS_LICENSE_KEY=NXL-...   # a chave recebida da Aamora; vazio = 30 dias de avaliação
 EOF
 chmod 600 .env
 ```
@@ -71,6 +72,8 @@ services:
       Smtp__UserName: nexus
       Smtp__Password: ${SMTP_PASSWORD}
       Smtp__SenderEmail: nexus@suaempresa.com.br
+      License__Key: ${NEXUS_LICENSE_KEY}
+      License__Administrators__0: ti@suaempresa.com.br
     volumes:
       - uploads:/app/App_Data/uploads
       - ./dataprotection.pfx:/app/dp/dataprotection.pfx:ro

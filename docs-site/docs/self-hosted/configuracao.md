@@ -41,6 +41,7 @@ sublinhados na variável (`Smtp:Host` → `Smtp__Host`).
 | `Plans__UnlimitedAccounts` | E-mails de contas sem limite |
 | `Support__Email`, `Support__WhatsAppNumber`, `Commercial__Email` | Contatos mostrados nas telas |
 | `Stripe__*` | Só para a oferta em nuvem; numa instalação self-hosted ficam vazias e a cobrança fica desligada |
+| `License__Key`, `License__KeyFile`, `License__Administrators` | A licença da instalação; ver [Licença](licenca.md) |
 
 ## Logs
 

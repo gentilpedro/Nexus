@@ -13,6 +13,10 @@ NEXUS_VERSION=1.18.0 docker compose up -d --wait web # 3. troca; as migrations r
 curl -s https://nexus.suaempresa.com.br/version     # 4. confere
 ```
 
+Antes do passo 2, confira em `/admin/licenca` a data limite de atualizações da sua
+[licença](licenca.md): uma imagem publicada depois dela sobe só com a página de bloqueio, sem
+tocar no banco, e o passo 3 falha no `--wait`. Nesse caso, renove a licença ou use o rollback.
+
 O `--wait` espera o container ficar saudável (`/health/live`). Se não ficar, o compose falha e o
 container antigo já foi substituído: use o rollback abaixo.
 

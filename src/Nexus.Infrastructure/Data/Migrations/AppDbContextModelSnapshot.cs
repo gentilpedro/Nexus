@@ -238,6 +238,9 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("LastLoginAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -724,6 +727,25 @@ namespace Nexus.Infrastructure.Data.Migrations
                     b.HasIndex("WorkspaceId");
 
                     b.ToTable("DocPages");
+                });
+
+            modelBuilder.Entity("Nexus.Domain.Entities.InstanceSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("InstanceSettings");
                 });
 
             modelBuilder.Entity("Nexus.Domain.Entities.Label", b =>
