@@ -2,7 +2,7 @@
 
 !!! abstract ""
     Para um ERP, um script ou qualquer sistema criar e acompanhar tarefas de um workspace sem ninguém
-    digitar nada de novo no Nexus. Issue [#66](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/66).
+    digitar nada de novo no Nexus. Issue #66.
     A referência completa de cada rota está em [Referência da API](api-referencia.md) e os
     exemplos prontos em [Receitas](api-receitas.md).
 
@@ -52,7 +52,7 @@ sequenceDiagram
 
 Por baixo, isso é um esquema de autenticação próprio (`ApiKey`), escrito no padrão
 `AuthenticationHandler` do ASP.NET Core
-([`ApiKeyAuthenticationHandler.cs`](https://github.com/gentilpedro/Nexus/blob/main/src/Nexus.Web/Api/ApiKeyAuthenticationHandler.cs)).
+(`ApiKeyAuthenticationHandler.cs`).
 Só as rotas de `/api/v1` pedem esse esquema. O restante do app continua no cookie do Identity, e
 a chave nunca serve para abrir uma tela.
 
@@ -120,5 +120,5 @@ O passo a passo com código em C#, Python e curl está em [Receitas](api-receita
 - Chat, docs e planilhas.
 
 A ordem de chegada dessas coisas segue as issues do projeto. Veja também o
-[servidor MCP (#67)](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/67),
+servidor MCP (#67),
 que reaproveita estas mesmas chaves.

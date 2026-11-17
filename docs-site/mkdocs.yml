@@ -6,9 +6,6 @@
 site_name: Nexus · Documentação
 site_url: https://docs-nexus.aamora.com.br/
 site_description: Guia do usuário, integrações, self-hosted e referência da API do Nexus.
-repo_url: https://github.com/gentilpedro/Nexus
-repo_name: gentilpedro/Nexus
-edit_uri: edit/main/docs-site/docs/
 copyright: Aamora · Nexus
 docs_dir: docs
 site_dir: site
@@ -21,8 +18,6 @@ theme:
   font: false
   logo: assets/images/logo.png
   favicon: assets/images/logo.png
-  icon:
-    repo: fontawesome/brands/github
   features:
     - navigation.tabs
     - navigation.sections
@@ -80,13 +75,6 @@ markdown_extensions:
 plugins:
   - search:
       lang: pt
-
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/gentilpedro/Nexus
-    - icon: fontawesome/brands/gitlab
-      link: https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus
 
 nav:
   - Início: index.md

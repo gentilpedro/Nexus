@@ -69,7 +69,6 @@ curl https://nexus.aamora.com.br/api/v1/workspace \
 | Aplicação | <https://nexus.aamora.com.br> |
 | API | `https://nexus.aamora.com.br/api/v1` |
 | Especificação OpenAPI | <https://nexus.aamora.com.br/openapi/v1.json> |
-| Código | [GitHub](https://github.com/gentilpedro/Nexus) · [GitLab](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus) |
 | Suporte | suportenexus@aamora.com.br |
 
 ## Versão

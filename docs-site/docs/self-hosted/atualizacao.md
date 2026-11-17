@@ -38,5 +38,4 @@ compartilhados. Sem o Redis, cada instância só enxerga as próprias mensagens.
 
 ## Notas de versão
 
-Cada versão publicada tem notas no GitHub:
-<https://github.com/gentilpedro/Nexus/releases>.
+Para receber as notas de cada versão, escreva para suportenexus@aamora.com.br.
