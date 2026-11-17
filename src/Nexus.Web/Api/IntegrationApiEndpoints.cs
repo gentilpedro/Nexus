@@ -73,6 +73,7 @@ public static class IntegrationApiEndpoints
             .WithDescription("Atualização parcial: campo ausente não muda. String vazia limpa description, assigneeId ou externalReference. Mudança de status respeita o fluxo de trabalho da lista.");
 
         api.MapCheckins();
+        api.MapTimeEntries();
 
         return app;
     }

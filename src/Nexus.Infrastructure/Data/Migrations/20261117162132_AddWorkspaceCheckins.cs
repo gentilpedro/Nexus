@@ -11,6 +11,26 @@ namespace Nexus.Infrastructure.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<DateTime>(
+                name: "CalendarFeedCreatedAtUtc",
+                table: "AspNetUsers",
+                type: "timestamp with time zone",
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "CalendarFeedTokenHash",
+                table: "AspNetUsers",
+                type: "character varying(64)",
+                maxLength: 64,
+                nullable: true);
+
+            migrationBuilder.AddColumn<string>(
+                name: "CalendarFeedTokenProtected",
+                table: "AspNetUsers",
+                type: "character varying(1024)",
+                maxLength: 1024,
+                nullable: true);
+
             migrationBuilder.CreateTable(
                 name: "WorkspaceCheckins",
                 columns: table => new
@@ -45,6 +65,13 @@ namespace Nexus.Infrastructure.Data.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_AspNetUsers_CalendarFeedTokenHash",
+                table: "AspNetUsers",
+                column: "CalendarFeedTokenHash",
+                unique: true,
+                filter: "\"CalendarFeedTokenHash\" IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_WorkspaceCheckins_AuthorId",
                 table: "WorkspaceCheckins",
                 column: "AuthorId");
@@ -61,6 +88,22 @@ namespace Nexus.Infrastructure.Data.Migrations
         {
             migrationBuilder.DropTable(
                 name: "WorkspaceCheckins");
+
+            migrationBuilder.DropIndex(
+                name: "IX_AspNetUsers_CalendarFeedTokenHash",
+                table: "AspNetUsers");
+
+            migrationBuilder.DropColumn(
+                name: "CalendarFeedCreatedAtUtc",
+                table: "AspNetUsers");
+
+            migrationBuilder.DropColumn(
+                name: "CalendarFeedTokenHash",
+                table: "AspNetUsers");
+
+            migrationBuilder.DropColumn(
+                name: "CalendarFeedTokenProtected",
+                table: "AspNetUsers");
         }
     }
 }
