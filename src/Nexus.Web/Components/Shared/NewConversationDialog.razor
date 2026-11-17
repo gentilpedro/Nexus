@@ -1,6 +1,7 @@
 @* Escolha de pessoas do workspace. Sem AddToConversationId: uma pessoa abre a conversa direta
    com ela, duas ou mais viram um grupo com nome. Com AddToConversationId: as escolhidas entram
-   no grupo informado. *@
+   no grupo informado. Com OpenAcrossWorkspacesAsync (#72): a pessoa é escolhida entre os membros
+   de todos os workspaces de quem abre, e a conversa direta nasce no workspace em comum. *@
 @using Nexus.Domain.Entities
 @using Nexus.Infrastructure.Data
 @using Microsoft.EntityFrameworkCore
@@ -23,7 +24,9 @@
                 <p class="dialog-message">
                     @(IsAddMode
                         ? "Quem entrar passa a ver todas as mensagens do grupo, inclusive as anteriores."
-                        : "Escolha uma pessoa para conversar em particular, ou várias para criar um grupo.")
+                        : acrossWorkspaces
+                            ? "Escolha uma pessoa de qualquer um dos seus workspaces. A conversa fica no workspace que vocês têm em comum."
+                            : "Escolha uma pessoa para conversar em particular, ou várias para criar um grupo.")
                 </p>
 
                 @if (!string.IsNullOrEmpty(error))
@@ -33,8 +36,8 @@
 
                 <div class="input-with-icon people-search">
                     <Icon Name="search" />
-                    <label for="@searchId" class="sr-only">Buscar membro do workspace</label>
-                    <input id="@searchId" type="search" placeholder="Buscar membro do workspace" @bind="filter" @bind:event="oninput" autocomplete="off" />
+                    <label for="@searchId" class="sr-only">@(acrossWorkspaces ? "Buscar pessoa" : "Buscar membro do workspace")</label>
+                    <input id="@searchId" type="search" placeholder="@(acrossWorkspaces ? "Buscar pessoa" : "Buscar membro do workspace")" @bind="filter" @bind:event="oninput" autocomplete="off" />
                 </div>
 
                 <ul class="people-list" aria-label="Membros do workspace">
@@ -43,13 +46,17 @@
                         var checkboxId = $"{searchId}-{person.UserId}";
                         <li>
                             <label class="people-option" for="@checkboxId">
-                                <input id="@checkboxId" type="checkbox" checked="@selected.Contains(person.UserId)" @onchange="e => Toggle(person.UserId, e)" />
+                                <input id="@checkboxId" type="@(acrossWorkspaces ? "radio" : "checkbox")" name="@(acrossWorkspaces ? searchId + "-person" : null)" checked="@selected.Contains(person.UserId)" @onchange="e => Toggle(person.UserId, e)" />
                                 <Avatar Name="@person.DisplayName" ImageUrl="@(person.AvatarPath is null ? null : AvatarUrl(person.UserId, person.AvatarPath))" Size="sm" />
                                 <span class="people-option-text">
                                     <span class="people-option-name">@person.DisplayName</span>
                                     @if (!string.Equals(person.Email, person.DisplayName, StringComparison.Ordinal))
                                     {
                                         <span class="people-option-email">@person.Email</span>
+                                    }
+                                    @if (acrossWorkspaces && person.Workspaces.Count > 0)
+                                    {
+                                        <span class="people-option-email">@string.Join(" · ", person.Workspaces.Select(w => w.Name))</span>
                                     }
                                 </span>
                             </label>
@@ -60,6 +67,19 @@
                         <li><EmptyState Compact="true" Title="@(candidates.Count == 0 ? "Ninguém mais para adicionar" : "Ninguém com esse nome")" /></li>
                     }
                 </ul>
+
+                @if (acrossWorkspaces && SelectedCandidate is { Workspaces.Count: > 1 } chosen)
+                {
+                    <div class="form-field people-group-name">
+                        <label for="@workspaceSelectId" class="required">Em qual workspace?</label>
+                        <select id="@workspaceSelectId" @bind="chosenWorkspaceId">
+                            @foreach (var ws in chosen.Workspaces)
+                            {
+                                <option value="@ws.Id">@ws.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
 
                 @if (!IsAddMode && selected.Count >= 2)
                 {
@@ -99,7 +119,9 @@
     [Parameter]
     public EventCallback<Guid> OnCompleted { get; set; }
 
-    private sealed record Candidate(string UserId, string DisplayName, string? Email, string? AvatarPath);
+    private sealed record WorkspaceRef(Guid Id, string Name);
+
+    private sealed record Candidate(string UserId, string DisplayName, string? Email, string? AvatarPath, IReadOnlyList<WorkspaceRef> Workspaces);
 
     private ElementReference dialog;
     private Guid activeWorkspaceId;
@@ -109,12 +131,15 @@
     private string? error;
     private string filter = "";
     private string groupName = "";
+    private bool acrossWorkspaces;
+    private Guid chosenWorkspaceId;
     private List<Candidate> candidates = [];
     private readonly HashSet<string> selected = [];
 
     private readonly string titleId = $"people-title-{Guid.NewGuid():N}";
     private readonly string searchId = $"people-search-{Guid.NewGuid():N}";
     private readonly string nameId = $"people-name-{Guid.NewGuid():N}";
+    private readonly string workspaceSelectId = $"people-workspace-{Guid.NewGuid():N}";
 
     private bool IsAddMode => AddToConversationId is not null;
 
@@ -124,7 +149,9 @@
             || (c.Email?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false));
 
     private bool CanSubmit =>
-        selected.Count > 0 && (IsAddMode || selected.Count == 1 || !string.IsNullOrWhiteSpace(groupName));
+        selected.Count > 0 && (IsAddMode || selected.Count == 1 || (!acrossWorkspaces && !string.IsNullOrWhiteSpace(groupName)));
+
+    private Candidate? SelectedCandidate => selected.Count == 1 ? candidates.FirstOrDefault(c => c.UserId == selected.Single()) : null;
 
     private string SubmitLabel => IsAddMode
         ? "Adicionar"
@@ -139,11 +166,61 @@
 
     public Task OpenAsync() => OpenAsync(WorkspaceId);
 
+    // Pelo botão Chats, fora de qualquer workspace (#72): lista cada pessoa uma vez, com os
+    // workspaces em que ela e quem abre estão juntos. Só conversa direta; grupo pede um workspace.
+    public async Task OpenAcrossWorkspacesAsync()
+    {
+        acrossWorkspaces = true;
+        activeWorkspaceId = Guid.Empty;
+        chosenWorkspaceId = Guid.Empty;
+        error = null;
+        filter = "";
+        groupName = "";
+        selected.Clear();
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            var me = CurrentUserId ?? "";
+            var myWorkspaceIds = await db.WorkspaceMembers
+                .Where(m => m.UserId == me && !m.Workspace.IsArchived)
+                .Select(m => m.WorkspaceId)
+                .ToListAsync();
+            var rows = await db.WorkspaceMembers
+                .Where(m => myWorkspaceIds.Contains(m.WorkspaceId) && m.UserId != me)
+                .Select(m => new
+                {
+                    m.UserId,
+                    m.User.DisplayName,
+                    m.User.Email,
+                    m.User.AvatarStoragePath,
+                    m.WorkspaceId,
+                    WorkspaceName = m.Workspace.Name,
+                })
+                .ToListAsync();
+            candidates = rows
+                .GroupBy(r => r.UserId)
+                .Select(g => new Candidate(
+                    g.Key,
+                    g.First().DisplayName != "" ? g.First().DisplayName : (g.First().Email ?? ""),
+                    g.First().Email,
+                    g.First().AvatarStoragePath,
+                    g.Select(r => new WorkspaceRef(r.WorkspaceId, r.WorkspaceName)).OrderBy(w => w.Name, StringComparer.CurrentCultureIgnoreCase).ToList()))
+                .ToList();
+        }
+
+        candidates = candidates.OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+        isOpen = true;
+        openRequested = true;
+        StateHasChanged();
+    }
+
     // Takes the workspace as an argument rather than relying on the parameter alone: a page that
     // lists several workspaces keeps one dialog and tells it which one each time, and a parameter
     // set right before the call would only reach the component on the parent's next render.
     public async Task OpenAsync(Guid workspaceId)
     {
+        acrossWorkspaces = false;
         activeWorkspaceId = workspaceId;
         error = null;
         filter = "";
@@ -159,7 +236,8 @@
                     m.UserId,
                     m.User.DisplayName != "" ? m.User.DisplayName : (m.User.Email ?? ""),
                     m.User.Email,
-                    m.User.AvatarStoragePath))
+                    m.User.AvatarStoragePath,
+                    Array.Empty<WorkspaceRef>()))
                 .ToListAsync();
         }
 
@@ -181,6 +259,16 @@
 
     private void Toggle(string userId, ChangeEventArgs e)
     {
+        if (acrossWorkspaces)
+        {
+            // Uma pessoa por vez: a conversa direta tem um workspace só, e é dela que ele vem.
+            selected.Clear();
+            selected.Add(userId);
+            var common = candidates.FirstOrDefault(c => c.UserId == userId)?.Workspaces;
+            chosenWorkspaceId = common is { Count: > 0 } ? common[0].Id : Guid.Empty;
+            return;
+        }
+
         if (e.Value is true)
         {
             selected.Add(userId);
@@ -210,7 +298,10 @@
             }
             else if (selected.Count == 1)
             {
-                result = await Conversations.GetOrCreateDirectAsync(activeWorkspaceId, CurrentUserId, selected.Single());
+                var workspaceId = acrossWorkspaces ? chosenWorkspaceId : activeWorkspaceId;
+                result = workspaceId == Guid.Empty
+                    ? null
+                    : await Conversations.GetOrCreateDirectAsync(workspaceId, CurrentUserId, selected.Single());
             }
             else
             {
