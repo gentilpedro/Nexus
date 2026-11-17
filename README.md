@@ -48,4 +48,5 @@ Notas de cada versão: [GitHub Releases](https://github.com/gentilpedro/Nexus/re
 
 ## Licença
 
-[Apache 2.0](LICENSE).
+Software proprietário. Todos os direitos reservados à Aamora e a Pedro Gentil Roodes Rodrigues.
+Usar, copiar ou distribuir depende de autorização por escrito. Os termos estão em [LICENSE](LICENSE).
