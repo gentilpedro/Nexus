@@ -96,10 +96,11 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     [SupplyParameterFromForm]
-    private InputModel Input { get; set; } = new();
+    private InputModel Input { get; set; } = default!;
 
     protected override void OnInitialized()
     {
+        Input ??= new();
         if (!License.IsAdministrator(HttpContext.User))
         {
             NavigationManager.NavigateTo("/not-found", replace: true);
