@@ -12,7 +12,7 @@ namespace Nexus.Infrastructure.Data.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
 
-migrationBuilder.CreateTable(
+            migrationBuilder.CreateTable(
                 name: "WorkspaceCheckins",
                 columns: table => new
                 {
@@ -44,14 +44,6 @@ migrationBuilder.CreateTable(
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AspNetUsers_CalendarFeedTokenHash",
-                table: "AspNetUsers",
-                column: "CalendarFeedTokenHash",
-                unique: true,
-                filter: "\"CalendarFeedTokenHash\" IS NOT NULL");
-
             migrationBuilder.CreateIndex(
                 name: "IX_WorkspaceCheckins_AuthorId",
                 table: "WorkspaceCheckins",
@@ -69,11 +61,6 @@ migrationBuilder.CreateTable(
         {
             migrationBuilder.DropTable(
                 name: "WorkspaceCheckins");
-
-            migrationBuilder.DropIndex(
-                name: "IX_AspNetUsers_CalendarFeedTokenHash",
-                table: "AspNetUsers");
-
-}
+        }
     }
 }
