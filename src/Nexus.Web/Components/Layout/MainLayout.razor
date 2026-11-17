@@ -9,6 +9,7 @@
 @inject NotificationBadgeService Badge
 @inject Nexus.Web.Services.SupportLinks Support
 @inject IConfiguration Configuration
+@inject Nexus.Web.Services.Licensing.LicenseService License
 @implements IDisposable
 
 <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
@@ -104,6 +105,13 @@
                                     Ajuda e suporte
                                 </a>
                             }
+                            @if (License.IsEnforced && License.IsAdministrator(context.User))
+                            {
+                                <a href="/admin/licenca" data-enhance-nav="false" role="menuitem">
+                                    <Icon Name="shield" />
+                                    Licença da instalação
+                                </a>
+                            }
                             <div class="menu-separator" role="separator"></div>
                             <form action="Account/Logout" method="post" data-enhance="false">
                                 <AntiforgeryToken />
@@ -142,6 +150,7 @@
         </Authorized>
     </AuthorizeView>
     <main id="conteudo" class="app-main" tabindex="-1">
+        <LicenseBanner />
         @Body
 
         <footer class="app-footer">

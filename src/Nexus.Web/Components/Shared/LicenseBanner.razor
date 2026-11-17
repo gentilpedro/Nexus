@@ -1,0 +1,34 @@
+@* Faixa de licença (#81), só para quem administra a instância: 30 dias antes do vencimento,
+   depois de vencida, na avaliação perto do fim, com chave inválida ou com a faixa de usuários
+   estourada. Quem não administra nunca vê nada. *@
+@using Nexus.Web.Services.Licensing
+@inject LicenseService License
+
+<AuthorizeView>
+    <Authorized>
+        @if (License.IsAdministrator(context.User) && License.Current is { NeedsAttention: true } s)
+        {
+            <div class="alert @(s.State is LicenseState.Expired or LicenseState.Invalid ? "alert-danger" : "alert-warning") license-banner" role="status">
+                <Icon Name="alert" />
+                <span>@Text(s) <a href="/admin/licenca" data-enhance-nav="false">Ver a licença</a></span>
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private static string Text(LicenseStatus s)
+    {
+        var days = s.DaysUntilExpiry ?? 0;
+        return s.State switch
+        {
+            LicenseState.Invalid => "A chave de licença instalada não é válida. A instalação continua, mas não vai receber atualizações.",
+            LicenseState.Expired when s.Claims is null => "O período de avaliação terminou. A instalação continua, mas não recebe atualizações até uma licença ser instalada.",
+            LicenseState.Expired => "Licença vencida: a instalação continua, mas não recebe atualizações.",
+            LicenseState.ExpiringSoon => days <= 1 ? "A licença vence hoje." : $"A licença vence em {days} dias.",
+            LicenseState.Trial => days <= 1 ? "A avaliação termina hoje." : $"A avaliação termina em {days} dias.",
+            _ when s.OverUserLimit => $"Esta instalação tem {s.ActiveUsers} usuários ativos e a licença cobre {s.MaxActiveUsers}. Contas novas estão bloqueadas.",
+            _ => "",
+        };
+    }
+}

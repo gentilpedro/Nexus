@@ -5,7 +5,7 @@ opcionalmente, Redis e um relay de e-mail. Os dados não saem da sua rede, e é 
 integrações como o login pelo Active Directory por LDAP.
 
 !!! warning "Em preparação"
-    A distribuição self-hosted está sendo finalizada (licença e canal de download). Esta seção
+    A distribuição self-hosted está sendo finalizada (canal de download da imagem). Esta seção
     descreve a instalação de referência, a mesma usada em produção pela Aamora, e vai sendo
     completada conforme a oferta fecha. Fale com comercialnexus@aamora.com.br.
 
@@ -37,3 +37,4 @@ flowchart LR
 - [Configuração](configuracao.md): todas as variáveis de ambiente.
 - [Backup e restauração](backup.md): o que guardar e como voltar.
 - [Atualização](atualizacao.md): trocar de versão e desfazer.
+- [Licença](licenca.md): a chave, a avaliação de 30 dias e o que acontece no vencimento.

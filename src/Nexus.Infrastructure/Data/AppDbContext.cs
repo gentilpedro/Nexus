@@ -48,6 +48,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<RunningTimer> RunningTimers => Set<RunningTimer>();
     public DbSet<CommercialContact> CommercialContacts => Set<CommercialContact>();
     public DbSet<StripeWebhookEvent> StripeWebhookEvents => Set<StripeWebhookEvent>();
+    public DbSet<InstanceSetting> InstanceSettings => Set<InstanceSetting>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

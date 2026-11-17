@@ -1,4 +1,4 @@
-# 🔌 Integrações do Nexus
+# Integrações do Nexus
 
 Esta seção da wiki é para **quem vai programar contra o Nexus** ou operar o que ele conecta: um
 ERP que cria tarefas, o Stripe que cobra os planos, o servidor de e-mail, o Redis, os monitores
