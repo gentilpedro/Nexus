@@ -1,4 +1,4 @@
-# 🧪 Receitas de Integração
+# Receitas de Integração
 
 !!! abstract ""
     Cenários completos com a [API de Integração](api.md). Troque `nxk_sua_chave` pela chave

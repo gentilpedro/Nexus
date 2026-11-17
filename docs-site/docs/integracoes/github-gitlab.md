@@ -1,4 +1,4 @@
-# 🔁 GitHub ↔ GitLab
+# GitHub ↔ GitLab
 
 !!! abstract ""
     O Nexus vive em dois repositórios: o [GitLab](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus),

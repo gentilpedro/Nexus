@@ -1,4 +1,4 @@
-# 📣 Webhooks de Saída
+# Webhooks de Saída
 
 !!! abstract ""
     O Nexus chama a URL do seu sistema quando uma tarefa é criada, muda, troca de status ou de

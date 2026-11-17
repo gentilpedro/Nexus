@@ -1,4 +1,4 @@
-# 💳 Stripe (cobrança do plano Pro)
+# Stripe (cobrança do plano Pro)
 
 !!! abstract ""
     A cobrança do plano Pro é feita pelo Stripe. O Nexus nunca vê cartão: ele manda a pessoa para o

@@ -16,6 +16,13 @@ site_dir: site
 theme:
   name: material
   language: pt-BR
+  # Identidade do Nexus (DESIGN.md): índigo, Inter hospedada aqui mesmo (font: false desliga o Google
+  # Fonts), logo do app. As cores ficam em assets/stylesheets/nexus.css, por isso "custom".
+  font: false
+  logo: assets/images/logo.png
+  favicon: assets/images/logo.png
+  icon:
+    repo: fontawesome/brands/github
   features:
     - navigation.tabs
     - navigation.sections
@@ -25,26 +32,38 @@ theme:
     - search.highlight
     - content.code.copy
     - content.tabs.link
+    - toc.follow
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Tema escuro
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Tema claro
+
+extra_css:
+  - assets/stylesheets/nexus.css
 
 markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
+  - def_list
+  # Ícones (:material-api:) nas páginas; sem esta extensão o texto aparece cru.
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
   - tables
   - toc:
       permalink: true
