@@ -60,7 +60,17 @@ sudo cp deploy/vps/docs-nexus.conf /etc/nginx/conf.d/docs-nexus.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-O DNS já está coberto pelo registro `*.aamora.com.br` do Cloudflare (proxy ligado). O Nexus libera CORS do `/openapi/v1.json` só para essa origem
+O DNS já está coberto pelo registro `*.aamora.com.br` do Cloudflare (proxy ligado). O certificado
+não é curinga: é o Let's Encrypt `aamora`, com os nomes listados um a um. Um subdomínio novo
+precisa responder o desafio HTTP-01 na porta 80 (`include snippets/acme-challenge.conf` antes do
+redirecionamento, como no `docs-nexus.conf`) e entrar no certificado:
+
+```bash
+sudo certbot certonly --webroot -w /var/www/letsencrypt --cert-name aamora --expand   -d aamora.com.br -d www.aamora.com.br -d nexus.aamora.com.br -d docs-nexus.aamora.com.br   <...os demais nomes já cobertos...>
+sudo systemctl reload nginx
+```
+
+Sem isso o Cloudflare responde 526 (certificado da origem não cobre o nome). O Nexus libera CORS do `/openapi/v1.json` só para essa origem
 (`Docs:SiteUrl` em `appsettings.Production.json`), para a página de referência da API carregar a
 especificação de produção.
 
