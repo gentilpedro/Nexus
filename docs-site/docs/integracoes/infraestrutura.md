@@ -1,4 +1,4 @@
-# 📨 E-mail, Redis e Monitoramento
+# E-mail, Redis e Monitoramento
 
 !!! abstract ""
     O que o Nexus usa por fora para funcionar em produção, e o que a infraestrutura usa para saber se

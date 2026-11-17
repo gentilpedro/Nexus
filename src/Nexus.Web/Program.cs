@@ -497,8 +497,6 @@ app.MapGet(CalendarFeedService.RoutePrefix + "{token}.ics", async (string token,
     return Results.Text(ics, "text/calendar; charset=utf-8");
 }).AllowAnonymous().RequireRateLimiting("calendar");
 
-app.MapOpenApi().AllowAnonymous();
-
 // /mcp exige a chave de API como /api/v1; o modelo nunca escolhe o workspace, a chave decide.
 app.MapMcp(Nexus.Web.Api.IntegrationApiRateLimiter.McpRoute)
     .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = ApiKeyAuthenticationHandler.SchemeName })

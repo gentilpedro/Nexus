@@ -1,4 +1,4 @@
-# 🧩 API de Integração
+# API de Integração
 
 !!! abstract ""
     Para um ERP, um script ou qualquer sistema criar e acompanhar tarefas de um workspace sem ninguém
@@ -15,7 +15,7 @@
 | Autenticação | `Authorization: Bearer nxk_...` (chave de API do workspace) |
 | Especificação | [`/openapi/v1.json`](https://nexus.aamora.com.br/openapi/v1.json), gerada pelo próprio app |
 | Limite | 120 chamadas por minuto por chave |
-| Escopo desta versão | workspace, listas e status, membros, tarefas (criar, listar, buscar, atualizar) |
+| Escopo desta versão | workspace, listas e status, membros, tarefas (criar, listar, buscar, atualizar), horas e check-in semanal |
 
 ## Chaves de API
 
@@ -27,7 +27,12 @@ Uma chave pertence a **um** workspace e só enxerga ele. Quem gera é Owner ou A
 2. Copie o valor completo (`nxk_` seguido de 43 caracteres). **Ele aparece uma única vez.** O Nexus
    guarda só o SHA-256; a lista mostra apenas o prefixo (`nxk_a1b2c3…`), a data de criação e o
    último uso.
-3. Revogar corta o acesso na hora. Cada workspace pode ter até 20 chaves ativas.
+3. Escolha o escopo: *leitura e escrita* (para um ERP) ou *só leitura* (para painéis e relatórios,
+   que não devem conseguir criar nada). Uma chave só de leitura recebe `403` em `POST` e `PATCH`.
+4. Revogar corta o acesso na hora. Cada workspace pode ter até 20 chaves ativas.
+
+A API faz parte dos planos **Pro e Business**. Um workspace que volta ao Starter recebe `403` em
+toda chamada e volta a funcionar ao assinar de novo, com as mesmas chaves.
 
 Criação e revogação vão para o log de auditoria, com quem fez e qual chave.
 
@@ -62,9 +67,14 @@ validação trazem ainda `errors`, um objeto com o nome do campo e a lista de me
 | `400` | Corpo inválido ou regra de negócio violada (`errors` diz o campo) | Corrigir e reenviar |
 | `401` | Sem chave, chave desconhecida ou revogada | Conferir o cabeçalho; gerar outra chave |
 | `403` | Workspace arquivado | Desarquivar nas configurações |
+| `403` | Chave só de leitura em `POST` ou `PATCH` | Gerar uma chave de leitura e escrita |
+| `403` | Plano do workspace sem a API (Starter) | Assinar o Pro ou o Business |
 | `404` | Tarefa não existe neste workspace | Conferir id ou código |
 | `409` | `externalReference` já usada **ou** tarefa alterada por outra pessoa durante o `PATCH` | Ver [Receitas](api-receitas.md#idempotencia) |
-| `429` | Mais de 120 chamadas no minuto | Esperar e repetir |
+| `429` | Mais de 120 chamadas no minuto | Esperar os segundos de `Retry-After` e repetir |
+
+Toda resposta traz `X-RateLimit-Limit` (120) e `X-RateLimit-Remaining` (quantas chamadas ainda
+cabem no minuto atual).
 
 Exemplo de `400`:
 
