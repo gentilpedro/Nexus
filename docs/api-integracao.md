@@ -148,6 +148,16 @@ avisam os administradores. As últimas 20 entregas ficam na tela, com "reenviar"
 Eventos, corpo completo, validação da assinatura em C# e Python e boas práticas do receptor:
 [Webhooks de Saída na Wiki](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/Webhooks-de-Saida).
 
+## Assistentes de IA (servidor MCP)
+
+O mesmo conjunto de operações está disponível como servidor MCP em `/mcp` (Streamable HTTP, sem
+sessão), com a mesma chave em `Authorization: Bearer`. Ferramentas: `get_workspace`,
+`list_lists`, `list_members`, `list_tasks`, `get_task`, `create_task` e `update_task` (as duas
+últimas exigem chave de leitura e escrita). O código fica em `src/Nexus.Web/Mcp/NexusTools.cs`
+e reaproveita o `WorkItemService`: o assistente nunca faz nada que a API não deixaria. Conexão do
+Claude Desktop e do Claude Code na
+[Wiki](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/Assistentes-de-IA-MCP).
+
 ## O que a API não faz (ainda)
 
 - Comentários, anexos, etiquetas e campos personalizados.
