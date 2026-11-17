@@ -61,5 +61,5 @@ flowchart LR
 
 | Issue | O quê | Depende de |
 |---|---|---|
-| [#67](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/67) | **Servidor MCP** para assistentes de IA (Claude, ChatGPT, Copilot) operarem tarefas do workspace, hospedado em `/mcp` com o SDK oficial em C# | chaves de API (#66) |
-| [#68](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/68) | **Feed iCal (.ics)** por usuário, para assinar as tarefas datadas no Google, Outlook e Apple Calendar | — |
+| #67 | **Servidor MCP** para assistentes de IA (Claude, ChatGPT, Copilot) operarem tarefas do workspace, hospedado em `/mcp` com o SDK oficial em C# | chaves de API (#66) |
+| #68 | **Feed iCal (.ics)** por usuário, para assinar as tarefas datadas no Google, Outlook e Apple Calendar | — |

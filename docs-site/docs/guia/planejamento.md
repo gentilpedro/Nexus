@@ -30,7 +30,7 @@ trazê-las para a linha.
 
 A visão **Calendário** mostra as tarefas pelo prazo, mês a mês. Para ver as tarefas no seu
 Google Calendar, Outlook ou Apple Calendar, o feed de calendário está planejado (acompanhe a
-[issue 68](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/68)).
+issue 68).
 
 ## Prazos
 
