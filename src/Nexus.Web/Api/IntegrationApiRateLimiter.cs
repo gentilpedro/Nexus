@@ -28,8 +28,13 @@ public sealed class IntegrationApiRateLimiter : IDisposable
     /// <summary>Quantas chamadas ainda cabem na janela atual desta chave, depois da chamada corrente.</summary>
     public long Remaining(HttpContext http) => Limiter.GetStatistics(http)?.CurrentAvailablePermits ?? PermitLimit;
 
+    public const string McpRoute = "/mcp";
+
+    // O servidor MCP (#67) usa a mesma chave e entra no mesmo limite: uma chamada de ferramenta
+    // custa o mesmo que uma chamada da API.
     public static bool IsIntegrationApi(HttpContext http) =>
-        http.Request.Path.StartsWithSegments(IntegrationApiEndpoints.RoutePrefix, StringComparison.OrdinalIgnoreCase);
+        http.Request.Path.StartsWithSegments(IntegrationApiEndpoints.RoutePrefix, StringComparison.OrdinalIgnoreCase)
+        || http.Request.Path.StartsWithSegments(McpRoute, StringComparison.OrdinalIgnoreCase);
 
     private static string PartitionKey(HttpContext http)
     {
