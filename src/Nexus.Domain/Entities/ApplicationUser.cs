@@ -19,4 +19,8 @@ public class ApplicationUser : IdentityUser
     public string? CalendarFeedTokenHash { get; set; }
     public string? CalendarFeedTokenProtected { get; set; }
     public DateTime? CalendarFeedCreatedAtUtc { get; set; }
+
+    // Último login (#81). Conta os usuários ativos da licença self-hosted: ativo = entrou nos últimos
+    // 30 dias. Gravado pelo SignInManager em qualquer forma de entrada (senha, 2FA, passkey, externo).
+    public DateTime? LastLoginAtUtc { get; set; }
 }

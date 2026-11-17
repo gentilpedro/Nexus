@@ -683,3 +683,10 @@ button.settings-nav-link:not(.active) {
         align-self: flex-start;
     }
 }
+
+/* Licença da instalação (#81) */
+.license-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; margin: 0 0 16px; }
+.license-facts dt { color: var(--color-text-muted); font-size: 0.9rem; }
+.license-facts dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.license-banner { margin-bottom: 16px; }
+@media (max-width: 640px) { .license-facts { grid-template-columns: 1fr; gap: 2px 0; } .license-facts dd { margin-bottom: 8px; } }

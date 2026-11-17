@@ -204,6 +204,16 @@ if (string.IsNullOrWhiteSpace(connectionString))
         "(see CONTRIBUTING.md, \"Rodando localmente\").");
 }
 builder.Services.AddInfrastructure(connectionString, builder.Configuration);
+
+// Licença da instalação self-hosted (#81). Registrado depois do AddInfrastructure de propósito: o
+// SignInManager daqui substitui o padrão (última registração vence) para carimbar o último login,
+// e o validador entra ao lado do UserValidator do Identity para barrar contas novas com a faixa
+// cheia. A avaliação inicial acontece antes das migrations, mais abaixo.
+builder.Services.Configure<Nexus.Web.Services.Licensing.LicenseOptions>(builder.Configuration.GetSection("License"));
+builder.Services.AddSingleton<Nexus.Web.Services.Licensing.LicenseService>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Identity.IUserValidator<ApplicationUser>, Nexus.Web.Services.Licensing.LicenseUserValidator>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Identity.SignInManager<ApplicationUser>, Nexus.Web.Services.Licensing.LicenseAwareSignInManager>();
+builder.Services.AddHostedService<Nexus.Web.BackgroundServices.LicenseRefreshHostedService>();
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 // Health checks. There was no way to ask this app whether it was actually working — a monitor
@@ -296,7 +306,19 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-if (builder.Configuration.GetValue<bool>("APPLY_MIGRATIONS_ON_STARTUP"))
+// Licença (#81) antes das migrations: uma imagem construída depois da data de atualizações da
+// licença sobe só com a página de bloqueio (LicenseGateMiddleware) e não toca no banco, para a
+// volta à versão anterior ser limpa.
+var license = app.Services.GetRequiredService<Nexus.Web.Services.Licensing.LicenseService>();
+var licenseStatus = await license.RefreshAsync();
+if (licenseStatus.BlocksThisBuild)
+{
+    app.Logger.LogCritical(
+        "Esta build ({Version}, {BuiltAt}) é posterior à data de atualizações da licença ({UpdatesUntil}). Subindo só com a página de bloqueio; migrations não aplicadas.",
+        AppVersion.Current.Version, AppVersion.Current.BuiltAt, licenseStatus.UpdatesUntil);
+}
+
+if (builder.Configuration.GetValue<bool>("APPLY_MIGRATIONS_ON_STARTUP") && !licenseStatus.BlocksThisBuild)
 {
     using var scope = app.Services.CreateScope();
     var migrationLogger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -389,6 +411,7 @@ else
     app.UseForwardedHeaders(forwardedHeaders);
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseMiddleware<Nexus.Web.Services.Licensing.LicenseGateMiddleware>();
 
 // Baseline security headers — not a substitute for the framework protections already in
 // place (antiforgery, HttpOnly/Secure auth cookie), but cheap defense-in-depth against
@@ -465,11 +488,14 @@ app.MapPost("/stripe/webhook", async (HttpRequest request, Nexus.Web.Services.Bi
     };
 }).AllowAnonymous().DisableAntiforgery();
 
-app.MapGet("/version", () => Results.Json(new
+app.MapGet("/version", (Nexus.Web.Services.Licensing.LicenseService licenses) => Results.Json(new
 {
     version = AppVersion.Current.Version,
     commit = AppVersion.Current.Commit,
-    builtAt = AppVersion.Current.BuiltAt
+    builtAt = AppVersion.Current.BuiltAt,
+    // Só o estado (#81), nunca o cliente nem a chave: diz se a instalação está licenciada sem
+    // expor com quem é o contrato.
+    license = licenses.Current.State.ToString()
 })).AllowAnonymous();
 
 // Add additional endpoints required by the Identity /Account Razor components.
