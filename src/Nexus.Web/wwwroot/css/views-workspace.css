@@ -1613,6 +1613,15 @@
     gap: var(--space-3);
 }
 
+.chats-sidebar-new {
+    padding: 0 0.25rem 0.5rem;
+}
+
+.chats-sidebar-new .btn {
+    width: 100%;
+    justify-content: center;
+}
+
 .chats-sidebar-group-header {
     display: flex;
     align-items: center;
