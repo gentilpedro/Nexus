@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using ModelContextProtocol.AspNetCore;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -122,6 +123,17 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 // Especificação OpenAPI da API de integração, servida em /openapi/v1.json. Só as rotas de /api/v1
 // entram: os downloads e o webhook do Stripe não são parte do contrato com quem integra.
+// Servidor MCP (#67): as ferramentas em Mcp/NexusTools.cs, pela mesma chave de API dos endpoints
+// de /api/v1. Sem sessão (stateless): cada chamada é uma requisição HTTP autenticada por conta
+// própria, o que dispensa afinidade de instância e deixa o limite de chamadas por chave valer.
+builder.Services.AddMcpServer(options =>
+    {
+        options.ServerInfo = new() { Name = "Nexus", Version = AppVersion.Current.Version };
+        options.ServerInstructions = "Ferramentas para operar as tarefas de um workspace do Nexus. Comece por list_lists para obter os ids de lista e status; use list_members para o id do responsável. Códigos de tarefa têm a forma TASK-12.";
+    })
+    .WithHttpTransport(options => options.SessionMode = HttpServerSessionMode.Stateless)
+    .WithTools<Nexus.Web.Mcp.NexusTools>();
+
 builder.Services.AddOpenApi("v1", options =>
 {
     options.ShouldInclude = description => description.RelativePath?.StartsWith("api/v1", StringComparison.OrdinalIgnoreCase) == true;
@@ -431,6 +443,11 @@ app.MapGet("/version", () => Results.Json(new
 app.MapAdditionalIdentityEndpoints();
 
 app.MapOpenApi().AllowAnonymous();
+
+// /mcp exige a chave de API como /api/v1; o modelo nunca escolhe o workspace, a chave decide.
+app.MapMcp(Nexus.Web.Api.IntegrationApiRateLimiter.McpRoute)
+    .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = ApiKeyAuthenticationHandler.SchemeName })
+    .DisableAntiforgery();
 app.MapIntegrationApi();
 
 app.MapGet("/attachments/{id:guid}/download", async (
