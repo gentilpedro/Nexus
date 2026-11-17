@@ -124,6 +124,18 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 // Especificação OpenAPI da API de integração, servida em /openapi/v1.json. Só as rotas de /api/v1
 // entram: os downloads e o webhook do Stripe não são parte do contrato com quem integra.
+// O site de documentação (docs-nexus.aamora.com.br, #73) lê /openapi/v1.json pelo navegador para
+// renderizar a referência da API. CORS liberado só para essa origem e só nessa rota; o resto do
+// app continua sem CORS. Docs:SiteUrl vazio = nenhuma origem liberada.
+const string DocsSiteCorsPolicy = "docs-site";
+var docsSiteUrl = builder.Configuration["Docs:SiteUrl"];
+builder.Services.AddCors(options => options.AddPolicy(DocsSiteCorsPolicy, policy =>
+{
+    if (!string.IsNullOrWhiteSpace(docsSiteUrl))
+    {
+        policy.WithOrigins(docsSiteUrl.TrimEnd('/')).WithMethods("GET");
+    }
+}));
 // Servidor MCP (#67): as ferramentas em Mcp/NexusTools.cs, pela mesma chave de API dos endpoints
 // de /api/v1. Sem sessão (stateless): cada chamada é uma requisição HTTP autenticada por conta
 // própria, o que dispensa afinidade de instância e deixa o limite de chamadas por chave valer.
@@ -395,6 +407,7 @@ app.Use(async (context, next) =>
 
 app.UseAntiforgery();
 app.UseRateLimiter();
+app.UseCors();
 
 // AllowAnonymous is required here despite MapStaticAssets serving public files: without it,
 // the global FallbackPolicy (RequireAuthenticatedUser) applies to these endpoints too, and an
@@ -454,6 +467,7 @@ app.MapGet("/version", () => Results.Json(new
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
 
+app.MapOpenApi().AllowAnonymous().RequireCors(DocsSiteCorsPolicy);
 // Feed iCalendar (#68). Anônimo de propósito: Google, Outlook e Apple buscam a URL sem login; o
 // token na URL é a credencial, e um token desconhecido responde 404 sem dizer mais nada.
 app.MapGet(CalendarFeedService.RoutePrefix + "{token}.ics", async (string token, CalendarFeedService feeds, IConfiguration configuration, HttpContext http, CancellationToken ct) =>

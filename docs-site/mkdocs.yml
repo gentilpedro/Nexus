@@ -1,0 +1,98 @@
+# Site público de documentação do Nexus (docs-nexus.aamora.com.br), issue #73.
+# Fonte em docs-site/docs; build no workflow .github/workflows/docs-site.yml; servido pelo Nginx
+# da VPS como arquivos estáticos (deploy/vps/docs-nexus.conf). Rodar local:
+#   python -m venv .venv && .venv/bin/pip install -r docs-site/requirements.txt
+#   .venv/bin/mkdocs serve -f docs-site/mkdocs.yml
+site_name: Nexus · Documentação
+site_url: https://docs-nexus.aamora.com.br/
+site_description: Guia do usuário, integrações, self-hosted e referência da API do Nexus.
+repo_url: https://github.com/gentilpedro/Nexus
+repo_name: gentilpedro/Nexus
+edit_uri: edit/main/docs-site/docs/
+copyright: Aamora · Nexus
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: pt-BR
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Tema escuro
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Tema claro
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search:
+      lang: pt
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/gentilpedro/Nexus
+    - icon: fontawesome/brands/gitlab
+      link: https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus
+
+nav:
+  - Início: index.md
+  - Guia do usuário:
+      - Visão geral: guia/index.md
+      - Workspaces, spaces e listas: guia/workspaces.md
+      - Tarefas, quadro e backlog: guia/tarefas.md
+      - Sprints, Gantt e calendário: guia/planejamento.md
+      - Docs e planilhas: guia/docs-e-planilhas.md
+      - Chat e notificações: guia/chat.md
+      - Conta e segurança: guia/conta.md
+      - Planos: guia/planos.md
+  - Integrações:
+      - Visão geral: integracoes/index.md
+      - API de integração: integracoes/api.md
+      - Referência da API: integracoes/api-referencia.md
+      - Receitas: integracoes/api-receitas.md
+      - Webhooks de saída: integracoes/webhooks.md
+      - Stripe (cobrança): integracoes/stripe.md
+      - E-mail, Redis e monitoramento: integracoes/infraestrutura.md
+      - GitHub e GitLab: integracoes/github-gitlab.md
+  - Self-hosted:
+      - Visão geral: self-hosted/index.md
+      - Instalação: self-hosted/instalacao.md
+      - Configuração: self-hosted/configuracao.md
+      - Backup e restauração: self-hosted/backup.md
+      - Atualização: self-hosted/atualizacao.md
+  - API (OpenAPI): api/index.md

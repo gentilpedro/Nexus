@@ -192,7 +192,7 @@
                         <p class="form-section-description">
                             Uma chave deixa um sistema externo, como um ERP, criar e acompanhar as tarefas deste workspace pela API.
                             Ela aparece uma única vez, na criação: guarde-a no sistema que vai usá-la.
-                            A documentação está em <a href="/openapi/v1.json" target="_blank" rel="noopener">/openapi/v1.json</a>.
+                            A documentação está em <a href="https://docs-nexus.aamora.com.br/integracoes/api/" target="_blank" rel="noopener">docs-nexus.aamora.com.br</a>; a especificação, em <a href="/openapi/v1.json" target="_blank" rel="noopener">/openapi/v1.json</a>.
                         </p>
 
                         @if (newApiKeySecret is not null)
@@ -296,7 +296,7 @@
                         <p class="form-section-description">
                             O Nexus chama a URL do seu sistema quando uma tarefa é criada, muda, troca de status ou de responsável, ou recebe um comentário.
                             Cada chamada vai assinada com o segredo do webhook, que aparece uma única vez.
-                            Formato dos eventos e validação da assinatura na <a href="https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/Webhooks-de-Saida" target="_blank" rel="noopener">documentação</a>.
+                            Formato dos eventos e validação da assinatura na <a href="https://docs-nexus.aamora.com.br/integracoes/webhooks/" target="_blank" rel="noopener">documentação</a>.
                         </p>
 
                         @if (newWebhookSecret is not null)
