@@ -37,6 +37,13 @@ as outras duas.
 Quem administra a instância é quem está em `License__Administrators` (lista de e-mails) ou, se
 vazio, em `Plans__UnlimitedAccounts`.
 
+## Token do registro de imagens
+
+Junto com a chave vem um **token de leitura** do registro de imagens (`ghcr.io`), próprio da sua
+empresa. É com ele que o `docker pull` baixa as versões; ele vale pelo mesmo período da licença e
+é revogado se ela não for renovada. Guarde-o com o `.env`. Rede fechada: peça o `.tar.gz` da
+versão e carregue com `docker load`.
+
 ## Renovar
 
 Peça a renovação para comercialnexus@aamora.com.br informando o identificador da licença (está na

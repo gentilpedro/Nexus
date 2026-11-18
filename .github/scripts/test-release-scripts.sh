@@ -171,7 +171,7 @@ printf '\nrelease-notes.sh\n'
 
 Co-Authored-By: Alguem <a@b.c>"
   commit "fix: corrige overflow do menu no mobile"
-  notes="$(bash "$RELEASE_NOTES" v1.4.2 1.5.0 gentilpedro/Nexus)"
+  notes="$(bash "$RELEASE_NOTES" v1.4.2 1.5.0 Aamora-Tec/Nexus)"
 
   assert_contains "$notes" "## Nexus 1.5.0" "tem o título com a versão"
   assert_contains "$notes" "Mudanças desde **v1.4.2**" "cita a versão anterior"
@@ -203,7 +203,7 @@ Co-Authored-By: Alguem <a@b.c>"
   new_repo
   git tag v2.0.0
   commit "feat!: remove o endpoint legado" "BREAKING CHANGE: integrações antigas param de funcionar."
-  notes="$(bash "$RELEASE_NOTES" v2.0.0 3.0.0 gentilpedro/Nexus)"
+  notes="$(bash "$RELEASE_NOTES" v2.0.0 3.0.0 Aamora-Tec/Nexus)"
   assert_contains "$notes" "MUDANÇA INCOMPATÍVEL" "destaca a mudança incompatível"
 )
 
@@ -217,7 +217,7 @@ Co-Authored-By: Alguem <a@b.c>"
   git commit --quiet --allow-empty \
     -m "$(printf 'fix: corrige o filtro\r')" \
     -m "$(printf 'Primeira linha do corpo.\r\nSegunda linha do corpo.\r')"
-  notes="$(bash "$RELEASE_NOTES" v1.0.0 1.0.1 gentilpedro/Nexus)"
+  notes="$(bash "$RELEASE_NOTES" v1.0.0 1.0.1 Aamora-Tec/Nexus)"
 
   record_check
   if [[ "$notes" == *$'\r'* ]]; then
@@ -231,7 +231,7 @@ Co-Authored-By: Alguem <a@b.c>"
 (
   new_repo
   commit "feat: primeira funcionalidade" "Explicação detalhada que não deve aparecer na linha de base."
-  notes="$(bash "$RELEASE_NOTES" "" 1.0.0 gentilpedro/Nexus)"
+  notes="$(bash "$RELEASE_NOTES" "" 1.0.0 Aamora-Tec/Nexus)"
   assert_contains "$notes" "Primeira release versionada" "trata a primeira release sem tag anterior"
 
   # A linha de base cobre todo o histórico do repositório: detalhar cada commit ali produz um
@@ -249,7 +249,7 @@ Co-Authored-By: Alguem <a@b.c>"
   git tag v1.0.0
   commit "feat: recurso" "Corpo longo o suficiente para estourar o teto artificial deste teste."
   # Teto minúsculo força o caminho de fallback sem precisar forjar centenas de commits.
-  notes="$(NEXUS_RELEASE_NOTES_MAX_CHARS=200 bash "$RELEASE_NOTES" v1.0.0 1.1.0 gentilpedro/Nexus)"
+  notes="$(NEXUS_RELEASE_NOTES_MAX_CHARS=200 bash "$RELEASE_NOTES" v1.0.0 1.1.0 Aamora-Tec/Nexus)"
 
   assert_contains "$notes" "Notas condensadas" "avisa quando precisa condensar por tamanho"
   record_check
@@ -264,7 +264,7 @@ Co-Authored-By: Alguem <a@b.c>"
   new_repo
   git tag v1.0.0
   commit "feat: recurso" "Corpo que cabe folgado no teto padrão."
-  notes="$(bash "$RELEASE_NOTES" v1.0.0 1.1.0 gentilpedro/Nexus)"
+  notes="$(bash "$RELEASE_NOTES" v1.0.0 1.1.0 Aamora-Tec/Nexus)"
 
   assert_contains "$notes" "Corpo que cabe folgado" "mantém o corpo quando cabe no teto"
   record_check

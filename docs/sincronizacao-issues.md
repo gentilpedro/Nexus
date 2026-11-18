@@ -40,7 +40,7 @@ descobrisse o endereço e forjasse um evento, no máximo, provocaria uma sincron
 | Onde | O quê |
 |---|---|
 | GitHub → Settings → Secrets → Actions | `GITLAB_READ_TOKEN`: token pessoal do GitLab **só com `read_api`**. Opcional — sem ele as issues são espelhadas, mas os comentários não, porque a API do GitLab exige autenticação para lê-los mesmo em projeto público. |
-| GitLab → Settings → Webhooks | URL `https://api.github.com/repos/gentilpedro/Nexus/dispatches`, eventos **Issues** e **Comments**, cabeçalhos `Authorization: Bearer <token>` e `Accept: application/vnd.github+json`, e o corpo personalizado abaixo. |
+| GitLab → Settings → Webhooks | URL `https://api.github.com/repos/Aamora-Tec/Nexus/dispatches`, eventos **Issues** e **Comments**, cabeçalhos `Authorization: Bearer <token>` e `Accept: application/vnd.github+json`, e o corpo personalizado abaixo. |
 | GitHub → Settings → Developer settings → Fine-grained tokens | O `<token>` do webhook: acesso só ao repositório Nexus, permissão **Contents: Read and write** (é o que a API de `repository_dispatch` exige). |
 
 Corpo personalizado do webhook (*Custom webhook template*):
