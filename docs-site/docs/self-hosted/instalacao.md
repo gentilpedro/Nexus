@@ -15,6 +15,12 @@ POSTGRES_PASSWORD=$(openssl rand -base64 32)
 DP_CERT_PASSWORD=$(openssl rand -base64 32)
 NEXUS_LICENSE_KEY=NXL-...   # a chave recebida da Aamora; vazio = 30 dias de avaliação
 NEXUS_REGISTRY_TOKEN=ghp_...  # o token de leitura do registro de imagens, recebido com a chave
+SMTP_HOST=smtp.suaempresa.com.br   # o seu servidor de e-mail; ver a página E-mail
+SMTP_PORT=587
+SMTP_USER=nexus@suaempresa.com.br
+SMTP_PASSWORD=...
+SMTP_SENDER_EMAIL=nexus@suaempresa.com.br
+SMTP_SENDER_NAME=Nexus
 EOF
 chmod 600 .env
 ```
@@ -68,13 +74,17 @@ services:
       KNOWN_PROXIES: 172.30.0.1
       DataProtection__CertificatePath: /app/dp/dataprotection.pfx
       DataProtection__CertificatePassword: ${DP_CERT_PASSWORD}
-      Smtp__Host: smtp.suaempresa.com.br
-      Smtp__Port: "587"
-      Smtp__UserName: nexus
+      Smtp__Host: ${SMTP_HOST}
+      Smtp__Port: ${SMTP_PORT}
+      Smtp__UserName: ${SMTP_USER}
       Smtp__Password: ${SMTP_PASSWORD}
-      Smtp__SenderEmail: nexus@suaempresa.com.br
+      Smtp__SenderEmail: ${SMTP_SENDER_EMAIL}
+      Smtp__SenderName: ${SMTP_SENDER_NAME}
       License__Key: ${NEXUS_LICENSE_KEY}
+      # Quem administra a instalação (licença e Active Directory): crie a primeira conta com este e-mail.
       License__Administrators__0: ti@suaempresa.com.br
+      # Business: nada é limitado por plano.
+      Plans__EnforceLimits: "false"
     volumes:
       - uploads:/app/App_Data/uploads
       - ./dataprotection.pfx:/app/dp/dataprotection.pfx:ro
@@ -94,6 +104,9 @@ networks:
         - subnet: 172.30.0.0/24
           gateway: 172.30.0.1
 ```
+
+Este é o mínimo; o compose com **todas** as variáveis, comentado, está em
+[Configuração](configuracao.md#compose-completo).
 
 `KNOWN_PROXIES` é o gateway da rede Docker: é dele que o app aceita o cabeçalho
 `X-Forwarded-For` do proxy. O app expõe só `127.0.0.1:5100`; quem fala com a internet é o proxy.
@@ -130,17 +143,33 @@ server {
 ## 5. Subir
 
 ```bash
+source .env
 echo "$NEXUS_REGISTRY_TOKEN" | docker login ghcr.io -u nexus --password-stdin   # o token que você recebeu com a licença
-docker pull ghcr.io/aamora-tec/nexus-web:1.23.0
-NEXUS_VERSION=1.17.0 docker compose up -d --wait
+export NEXUS_VERSION=1.24.0                  # a versão que a Aamora indicou
+docker pull ghcr.io/aamora-tec/nexus-web:$NEXUS_VERSION
+docker compose up -d --wait
 curl -s http://127.0.0.1:5100/health/ready   # Healthy
 ```
 
-O app aplica as migrations do banco sozinho ao subir (`APPLY_MIGRATIONS_ON_STARTUP`). A primeira
-conta criada pela tela de registro é uma conta comum; crie o workspace e convide a equipe.
+O usuário do `docker login` pode ser qualquer texto; o registro só olha o token. Rede fechada:
+peça o `.tar.gz` da versão e carregue com `docker load < nexus-web-1.24.0.tar.gz` no lugar do
+`pull`.
 
-## 6. Conferir
+O app aplica as migrations do banco sozinho ao subir (`APPLY_MIGRATIONS_ON_STARTUP`).
+
+## 6. Primeira conta
+
+1. Abra `https://nexus.suaempresa.com.br` e crie a conta com o e-mail que está em
+   `License__Administrators` (`ti@suaempresa.com.br` no exemplo). É ela que vê **Licença da
+   instalação** e **Active Directory** no menu da conta; as demais contas são comuns.
+2. Confirme pelo link que chega por e-mail. Se o SMTP ainda não estiver configurado, confirme no
+   banco como descrito em [E-mail → Sem SMTP](email.md#sem-smtp).
+3. Entre, crie o workspace e convide a equipe. Com o [Active Directory](active-directory.md)
+   configurado, a equipe entra com a senha da rede e as contas nascem no primeiro login.
+
+## 7. Conferir
 
 - `https://nexus.suaempresa.com.br/version` mostra a versão.
 - `/health/live` e `/health/ready` servem para o seu monitoramento, sem autenticação.
-- Mande um convite para si mesmo: se o e-mail chegar, o SMTP está certo.
+- Mande um convite para si mesmo: se o e-mail chegar, o SMTP está certo ([E-mail](email.md)).
+- `/admin/licenca` mostra cliente, validade e usuários ativos ([Licença](licenca.md)).
