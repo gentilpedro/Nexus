@@ -110,7 +110,7 @@ Para ver as notas que sairiam agora, sem publicar nada:
 
 ```bash
 .github/scripts/release-notes.sh "$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)" \
-  "$(.github/scripts/next-version.sh | sed -n 's/^version=//p')" gentilpedro/Nexus
+  "$(.github/scripts/next-version.sh | sed -n 's/^version=//p')" Aamora-Tec/Nexus
 ```
 
 ## Situações incomuns

@@ -77,6 +77,7 @@ static int Issue(string[] args)
     var claims = new LicenseClaims(licenseId, customer, plan, maxUsers, now, expires, expires.AddDays(graceDays));
     Console.WriteLine(LicenseKeyCodec.Encode(claims, privateKey));
     Console.Error.WriteLine("emitida: " + LicenseKeyCodec.Describe(claims));
+    Console.Error.WriteLine("lembrete: emita também o token de leitura do registro de imagens para este cliente (docs/canal-business.md).");
     return 0;
 }
 

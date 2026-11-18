@@ -7,7 +7,7 @@ pelo pipeline de CI/CD a cada deploy bem-sucedido na `main`, a partir dos commit
 [CI/CD e Deploy](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/CI-CD-e-Deploy)
 da wiki para como isso funciona.
 
-- **Notas de cada versão:** [GitHub Releases](https://github.com/gentilpedro/Nexus/releases)
+- **Notas de cada versão:** [GitHub Releases](https://github.com/Aamora-Tec/Nexus/releases)
 - **Versão em produção agora:** `GET /version` (ver detalhes na wiki)
 
 Este arquivo existe só para quem espera encontrar um `CHANGELOG.md` na raiz do repositório — a fonte de

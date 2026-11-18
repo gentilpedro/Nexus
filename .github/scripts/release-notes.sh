@@ -7,7 +7,7 @@
 # lista e o corpo vira a explicação logo abaixo, agrupado pelo tipo do Conventional Commit.
 #
 # Uso: .github/scripts/release-notes.sh <tag_anterior> <versao> <owner/repo>
-#      .github/scripts/release-notes.sh "" 1.0.0 gentilpedro/Nexus   # primeira release
+#      .github/scripts/release-notes.sh "" 1.0.0 Aamora-Tec/Nexus   # primeira release
 #
 # Escreve Markdown em stdout.
 

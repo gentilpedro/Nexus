@@ -44,7 +44,7 @@ Detalhes, incluindo o que fazer se a porta 5432 já estiver ocupada, em
 ## Contribuindo
 
 Convenção de commits, fluxo de branch e MR/PR, testes e migrations: [CONTRIBUTING.md](CONTRIBUTING.md).
-Notas de cada versão: [GitHub Releases](https://github.com/gentilpedro/Nexus/releases).
+Notas de cada versão: [GitHub Releases](https://github.com/Aamora-Tec/Nexus/releases).
 
 ## Licença
 

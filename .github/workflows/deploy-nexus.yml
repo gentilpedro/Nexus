@@ -235,6 +235,42 @@ jobs:
           echo "::error::https://nexus.aamora.com.br/health/live não respondeu depois do deploy."
           exit 1
 
+  # Canal do plano Business (#86): a mesma imagem que vai para a VPS, publicada no GitHub
+  # Container Registry para o cliente self-hosted puxar com o token de leitura dele. Roda em
+  # paralelo ao deploy-vps e não o bloqueia: um registro fora do ar não pode segurar a produção.
+  # O pacote é privado; ver docs/canal-business.md.
+  publish-image:
+    needs: [version, verify]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      IMAGE: ghcr.io/${{ github.repository_owner }}/nexus-web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download publish artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: publish
+          path: ./publish
+
+      - name: Entrar no registro
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Montar e publicar a imagem
+        run: |
+          image="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
+          docker build -f deploy/vps/Dockerfile -t "${image}:${VERSION}" -t "${image}:latest" publish/
+          docker push "${image}:${VERSION}"
+          docker push "${image}:latest"
+          echo "Publicada ${image}:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+
   # Cria a tag e a GitHub Release com as notas do que mudou.
   #
   # Depois do deploy, de propósito: a tag passa a significar "esta versão está no ar", não "esta

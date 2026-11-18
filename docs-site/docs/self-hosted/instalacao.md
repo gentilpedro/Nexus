@@ -14,6 +14,7 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=$(openssl rand -base64 32)
 DP_CERT_PASSWORD=$(openssl rand -base64 32)
 NEXUS_LICENSE_KEY=NXL-...   # a chave recebida da Aamora; vazio = 30 dias de avaliação
+NEXUS_REGISTRY_TOKEN=ghp_...  # o token de leitura do registro de imagens, recebido com a chave
 EOF
 chmod 600 .env
 ```
@@ -54,7 +55,7 @@ services:
       retries: 5
 
   web:
-    image: nexus-web:${NEXUS_VERSION:?defina NEXUS_VERSION}
+    image: ghcr.io/aamora-tec/nexus-web:${NEXUS_VERSION:?defina NEXUS_VERSION}
     restart: unless-stopped
     ports: ["127.0.0.1:5100:8080"]
     env_file: .env
@@ -129,7 +130,8 @@ server {
 ## 5. Subir
 
 ```bash
-docker load < nexus-web-1.17.0.tar.gz        # a imagem que você recebeu
+echo "$NEXUS_REGISTRY_TOKEN" | docker login ghcr.io -u nexus --password-stdin   # o token que você recebeu com a licença
+docker pull ghcr.io/aamora-tec/nexus-web:1.23.0
 NEXUS_VERSION=1.17.0 docker compose up -d --wait
 curl -s http://127.0.0.1:5100/health/ready   # Healthy
 ```
