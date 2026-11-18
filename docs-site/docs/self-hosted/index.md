@@ -2,7 +2,7 @@
 
 No plano Business o Nexus roda **na sua infraestrutura**: uma imagem Docker, um banco PostgreSQL e,
 opcionalmente, Redis e um relay de e-mail. Os dados não saem da sua rede, e é isso que permite
-integrações como o login pelo Active Directory por LDAP.
+integrações como o [login pelo Active Directory](active-directory.md) por LDAP.
 
 !!! warning "Em preparação"
     A distribuição self-hosted está sendo finalizada (canal de download da imagem). Esta seção
@@ -38,3 +38,4 @@ flowchart LR
 - [Backup e restauração](backup.md): o que guardar e como voltar.
 - [Atualização](atualizacao.md): trocar de versão e desfazer.
 - [Licença](licenca.md): a chave, a avaliação de 30 dias e o que acontece no vencimento.
+- [Active Directory](active-directory.md): login com a senha da rede, por LDAP.

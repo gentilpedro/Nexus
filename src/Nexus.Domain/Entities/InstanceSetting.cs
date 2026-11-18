@@ -22,4 +22,7 @@ public static class InstanceSettingKeys
 
     /// <summary>A chave de licença colada na tela; tem precedência sobre License:Key.</summary>
     public const string LicenseKey = "license.key";
+
+    /// <summary>Configuração do login pelo Active Directory (JSON de DirectorySettings).</summary>
+    public const string DirectoryLdap = "directory.ldap";
 }

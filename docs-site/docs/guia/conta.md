@@ -9,6 +9,10 @@ manda em seu nome.
 
 ## Senha
 
+!!! note "Conta da empresa (Active Directory)"
+    Numa instalação self-hosted com [Active Directory](../self-hosted/active-directory.md), quem entra com o
+    e-mail da empresa usa a senha da rede: senha e e-mail são trocados lá, não aqui.
+
 Mínimo de 10 caracteres, com maiúscula, minúscula, número e símbolo. Depois de cinco tentativas
 erradas a conta fica bloqueada por 15 minutos.
 

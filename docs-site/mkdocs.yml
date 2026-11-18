@@ -107,4 +107,5 @@ nav:
       - Backup e restauração: self-hosted/backup.md
       - Atualização: self-hosted/atualizacao.md
       - Licença: self-hosted/licenca.md
+      - Active Directory: self-hosted/active-directory.md
   - API (OpenAPI): api/index.md

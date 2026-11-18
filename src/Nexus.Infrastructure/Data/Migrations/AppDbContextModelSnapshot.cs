@@ -226,6 +226,15 @@ namespace Nexus.Infrastructure.Data.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("text");
 
+                    b.Property<string>("DirectoryIdentifier")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("DirectoryLastSyncAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("DirectoryManaged")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(200)

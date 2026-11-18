@@ -214,6 +214,12 @@ builder.Services.AddSingleton<Nexus.Web.Services.Licensing.LicenseService>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Identity.IUserValidator<ApplicationUser>, Nexus.Web.Services.Licensing.LicenseUserValidator>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Identity.SignInManager<ApplicationUser>, Nexus.Web.Services.Licensing.LicenseAwareSignInManager>();
 builder.Services.AddHostedService<Nexus.Web.BackgroundServices.LicenseRefreshHostedService>();
+
+// Login pelo Active Directory (#70, fase 1): configuração por instância em InstanceSettings, LDAP
+// de verdade por System.DirectoryServices.Protocols e a regra de criar ou vincular a conta.
+builder.Services.AddSingleton<Nexus.Web.Services.ActiveDirectory.DirectorySettingsStore>();
+builder.Services.AddSingleton<Nexus.Web.Services.ActiveDirectory.ILdapDirectory, Nexus.Web.Services.ActiveDirectory.LdapDirectory>();
+builder.Services.AddScoped<Nexus.Web.Services.ActiveDirectory.DirectoryLoginService>();
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 // Health checks. There was no way to ask this app whether it was actually working — a monitor

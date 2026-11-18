@@ -19,6 +19,7 @@
 @inject Nexus.Web.Services.PublicUrlBuilder PublicUrl
 @inject Nexus.Web.Services.WorkspaceInviteService InviteService
 @inject IdentityRedirectManager RedirectManager
+@inject Nexus.Web.Services.ActiveDirectory.DirectoryLoginService DirectoryLogin
 
 <PageTitle>Criar conta · Nexus</PageTitle>
 
@@ -131,6 +132,14 @@
         if (invitedEmail is not null)
         {
             Input.Email = invitedEmail;
+        }
+
+        // E-mail de um domínio do Active Directory (#70) entra pela tela de login, com a senha da
+        // rede; a conta nasce lá, gerenciada pelo diretório.
+        if (await DirectoryLogin.HandlesAsync(Input.Email))
+        {
+            identityErrors = [new IdentityError { Code = "DirectoryDomain", Description = "Esse e-mail entra pelo Active Directory da sua empresa. Vá em Entrar e use a senha da rede; a conta é criada no primeiro acesso." }];
+            return;
         }
 
         var user = CreateUser();
