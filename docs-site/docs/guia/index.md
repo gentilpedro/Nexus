@@ -36,6 +36,9 @@ flowchart LR
 | [Docs e planilhas](docs-e-planilhas.md) | Documentos e planilhas colaborativos do workspace |
 | [Chat e notificações](chat.md) | Chat do workspace, grupos, conversas diretas, menções e notificações |
 | [Conta e segurança](conta.md) | Perfil, senha, verificação em duas etapas, passkeys e seus dados |
+| [Calendário (feed iCal)](calendario.md) | Suas tarefas com prazo no Google Calendar, Outlook ou Apple Calendar |
+| [Horas e contratos](horas-e-contratos.md) | Timer, lançamento de horas, contratos com o cliente, relatório e planilha |
+| [Check-in semanal](check-in.md) | O resumo semanal do workspace: percepção e quatro campos |
 | [Planos](planos.md) | O que cada plano inclui |
 
 !!! note "Guia em construção"
