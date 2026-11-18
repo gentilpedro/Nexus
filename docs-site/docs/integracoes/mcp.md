@@ -10,7 +10,7 @@
 
 | | |
 |---|---|
-| Endereço | `https://nexus.aamora.com.br/mcp` (transporte Streamable HTTP, sem sessão) |
+| Endereço | `https://nexus.aamora.com.br/mcp` (transporte Streamable HTTP, sem sessão); self-hosted: `https://<seu-nexus>/mcp`, ver [Integrações na sua instalação](../self-hosted/integracoes.md) |
 | Autenticação | A mesma chave da [API de Integração](api.md): `Authorization: Bearer nxk_...` |
 | Escopo | O workspace da chave. Chave só de leitura: só as ferramentas de consulta |
 | Limite | O mesmo da API: 120 chamadas por minuto por chave, contando ferramentas e rotas juntas |

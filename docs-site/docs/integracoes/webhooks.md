@@ -138,7 +138,8 @@ def nexus_webhook():
   guarde o `id` do evento e ignore repetidos.
 - **Não confie na ordem.** Dois eventos próximos podem chegar trocados; use `occurredAtUtc`
   quando a ordem importar.
-- **URL pública e `https`.** O Nexus recusa `http`, `localhost` e endereços de rede interna. Em
+- **URL pública e `https`.** O Nexus recusa `http`, `localhost` e endereços de rede interna (numa
+  instalação self-hosted também; ver [Integrações na sua instalação](../self-hosted/integracoes.md)). Em
   desenvolvimento, o [webhook.site](https://webhook.site) serve para ver o que chega; para testar o
   seu próprio código local, use um túnel (ngrok, Cloudflare Tunnel).
 - **Trocar o segredo**: exclua o webhook e cadastre de novo. O novo segredo aparece uma vez.
