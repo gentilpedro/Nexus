@@ -3,8 +3,8 @@
 !!! abstract ""
     Para quem vende horas: cada workspace tem contratos com o cliente, e cada pessoa aponta o tempo
     trabalhado, por timer ou à mão, numa tarefa ou avulso. O saldo do contrato é o contratado menos o
-    apontado. Issues [#77](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/77)
-    e [#78](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/78).
+    apontado. Issues #77
+    e #78.
 
 ## Em um minuto
 

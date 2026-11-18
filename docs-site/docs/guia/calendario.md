@@ -3,7 +3,7 @@
 !!! abstract ""
     As tarefas com prazo aparecem no Google Calendar, no Outlook ou no Apple Calendar como um
     **calendário de assinatura**, que se atualiza sozinho. Sem OAuth, sem instalar nada: é uma URL
-    no formato iCalendar (`.ics`). Issue [#68](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/68).
+    no formato iCalendar (`.ics`). Issue #68.
 
 ## Em um minuto
 
@@ -42,7 +42,7 @@ sequenceDiagram
 
 - O token é `nxc_` + 43 caracteres aleatórios. O banco guarda o **hash** (para achar a conta) e
   uma cópia **cifrada** pelo Data Protection (para a tela mostrar a URL de novo). Código em
-  [`CalendarFeedService`](https://github.com/gentilpedro/Nexus/blob/main/src/Nexus.Web/Services/CalendarFeedService.cs).
+  `CalendarFeedService`.
 - Rota anônima de propósito (os calendários não fazem login), com limite de 60 chamadas por
   minuto por IP, só para conter varredura de tokens. Token desconhecido: `404`, sem detalhe.
 - Cada evento leva `UID` estável (o id da tarefa), `URL` para a lista no Nexus, `CATEGORIES` com

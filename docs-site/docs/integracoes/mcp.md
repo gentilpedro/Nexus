@@ -4,7 +4,7 @@
     O Nexus expõe um servidor **MCP** (Model Context Protocol) em `https://nexus.aamora.com.br/mcp`.
     Com ele, o Claude, o ChatGPT, o Copilot ou qualquer cliente MCP opera as tarefas de um workspace:
     "cria uma tarefa na lista Pedidos com prazo sexta", "o que está atrasado?", "move a TASK-12 para
-    Feito". Issue [#67](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/67).
+    Feito". Issue #67.
 
 ## Em um minuto
 

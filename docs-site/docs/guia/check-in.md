@@ -2,7 +2,7 @@
 
 !!! abstract ""
     Uma vez por semana, um resumo por workspace que a gestão e o cliente leem sem abrir o quadro:
-    uma percepção entre quatro e quatro textos curtos. Issue [#79](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/79).
+    uma percepção entre quatro e quatro textos curtos. Issue #79.
 
 ## Em um minuto
 
