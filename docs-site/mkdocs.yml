@@ -104,8 +104,10 @@ nav:
       - Visão geral: self-hosted/index.md
       - Instalação: self-hosted/instalacao.md
       - Configuração: self-hosted/configuracao.md
+      - E-mail (SMTP): self-hosted/email.md
       - Backup e restauração: self-hosted/backup.md
       - Atualização: self-hosted/atualizacao.md
       - Licença: self-hosted/licenca.md
       - Active Directory: self-hosted/active-directory.md
+      - Integrações na sua instalação: self-hosted/integracoes.md
   - API (OpenAPI): api/index.md

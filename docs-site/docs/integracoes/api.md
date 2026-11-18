@@ -10,7 +10,7 @@
 
 | | |
 |---|---|
-| Base | `https://nexus.aamora.com.br/api/v1` |
+| Base | `https://nexus.aamora.com.br/api/v1` (self-hosted: o endereço da sua instalação, ver [Integrações na sua instalação](../self-hosted/integracoes.md)) |
 | Formato | JSON em UTF-8, nos dois sentidos |
 | Autenticação | `Authorization: Bearer nxk_...` (chave de API do workspace) |
 | Especificação | [`/openapi/v1.json`](https://nexus.aamora.com.br/openapi/v1.json), gerada pelo próprio app |
