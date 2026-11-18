@@ -1,0 +1,245 @@
+@page "/admin/diretorio"
+@attribute [ExcludeFromInteractiveRouting]
+
+@using System.ComponentModel.DataAnnotations
+@using Nexus.Web.Components.Account
+@using Nexus.Web.Components.Account.Shared
+@using Nexus.Web.Services.ActiveDirectory
+@using Nexus.Web.Services.Licensing
+
+@inject LicenseService License
+@inject DirectorySettingsStore Store
+@inject ILdapDirectory Ldap
+@inject DirectoryLoginService DirectoryLogin
+@inject AuditLogService Audit
+@inject NavigationManager NavigationManager
+@inject IdentityRedirectManager RedirectManager
+
+<PageTitle>Active Directory · Nexus</PageTitle>
+
+<div class="page-container page-container--wide">
+    <PageHeader Title="Active Directory" Description="Quem tem e-mail de um dos domínios abaixo entra no Nexus com a senha da rede, por LDAP. A conta nasce no primeiro login e fica gerenciada pelo diretório." />
+    <div class="account-content">
+        <StatusMessage Message="@message" />
+
+        <EditForm Model="Input" FormName="directory-settings" OnValidSubmit="SaveAsync" method="post" class="card form-card">
+            <DataAnnotationsValidator />
+            <h2 class="form-section-title">
+                Conexão
+                <span class="badge @(Input.Enabled ? "badge-status-done" : "badge-status-todo")">@(Input.Enabled ? "ligado" : "desligado")</span>
+            </h2>
+            <label class="checkbox-field">
+                <InputCheckbox @bind-Value="Input.Enabled" />
+                Ativar o login pelo Active Directory
+            </label>
+            <div class="form-grid form-grid--2">
+                <div class="form-field">
+                    <label for="dir-host">Servidor</label>
+                    <InputText id="dir-host" @bind-Value="Input.Host" placeholder="dc01.acme.local" autocomplete="off" />
+                    <ValidationMessage For="() => Input.Host" />
+                </div>
+                <div class="form-field">
+                    <label for="dir-port">Porta</label>
+                    <InputNumber id="dir-port" @bind-Value="Input.Port" />
+                    <span class="field-hint">636 para LDAPS, 389 sem TLS (só em laboratório).</span>
+                </div>
+            </div>
+            <label class="checkbox-field">
+                <InputCheckbox @bind-Value="Input.UseSsl" />
+                Usar LDAPS (TLS)
+            </label>
+            <label class="checkbox-field">
+                <InputCheckbox @bind-Value="Input.AllowSelfSignedCertificate" />
+                Aceitar certificado autoassinado do controlador de domínio
+            </label>
+            <div class="form-field">
+                <label for="dir-base">DN base da busca</label>
+                <InputText id="dir-base" @bind-Value="Input.BaseDn" placeholder="DC=acme,DC=local" autocomplete="off" />
+                <ValidationMessage For="() => Input.BaseDn" />
+            </div>
+            <div class="form-grid form-grid--2">
+                <div class="form-field">
+                    <label for="dir-bind">Conta de serviço (DN ou UPN)</label>
+                    <InputText id="dir-bind" @bind-Value="Input.BindDn" placeholder="svc-nexus@acme.local" autocomplete="off" />
+                    <ValidationMessage For="() => Input.BindDn" />
+                    <span class="field-hint">Só precisa ler usuários. Nunca uma conta de administrador.</span>
+                </div>
+                <div class="form-field">
+                    <label for="dir-bind-password">Senha da conta de serviço</label>
+                    <InputText id="dir-bind-password" type="password" @bind-Value="Input.BindPassword" autocomplete="new-password" placeholder="@(hasPassword ? "guardada; deixe em branco para manter" : "")" />
+                    <span class="field-hint">Guardada cifrada. Não volta para esta tela.</span>
+                </div>
+            </div>
+
+            <h2 class="form-section-title">Quem entra pelo AD</h2>
+            <div class="form-field">
+                <label for="dir-domains">Domínios de e-mail</label>
+                <InputText id="dir-domains" @bind-Value="Input.EmailDomains" placeholder="acme.com.br, acme.local" autocomplete="off" />
+                <ValidationMessage For="() => Input.EmailDomains" />
+                <span class="field-hint">Separados por vírgula. Quem tem e-mail fora deles continua entrando com senha do Nexus.</span>
+            </div>
+            <div class="form-field">
+                <label for="dir-filter">Filtro de usuário</label>
+                <InputText id="dir-filter" @bind-Value="Input.UserFilter" autocomplete="off" />
+                <span class="field-hint"><code>{0}</code> recebe o e-mail digitado. O padrão acha pelo atributo mail ou pelo userPrincipalName.</span>
+            </div>
+            <div class="form-grid form-grid--3">
+                <div class="form-field">
+                    <label for="dir-attr-name">Atributo do nome</label>
+                    <InputText id="dir-attr-name" @bind-Value="Input.DisplayNameAttribute" autocomplete="off" />
+                </div>
+                <div class="form-field">
+                    <label for="dir-attr-mail">Atributo do e-mail</label>
+                    <InputText id="dir-attr-mail" @bind-Value="Input.EmailAttribute" autocomplete="off" />
+                </div>
+                <div class="form-field">
+                    <label for="dir-attr-user">Atributo do usuário</label>
+                    <InputText id="dir-attr-user" @bind-Value="Input.UserNameAttribute" autocomplete="off" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn"><Icon Name="save" /> Salvar</button>
+            </div>
+        </EditForm>
+
+        <div class="card form-card">
+            <h2 class="form-section-title">Testar</h2>
+            <p class="form-section-description">Os testes usam a configuração salva. Salve antes de testar.</p>
+            <div class="form-actions">
+                <form @formname="directory-test" @onsubmit="TestConnectionAsync" method="post">
+                    <AntiforgeryToken />
+                    <button type="submit" class="btn btn-secondary"><Icon Name="zap" /> Testar conexão</button>
+                </form>
+            </div>
+            <EditForm Model="TestInput" FormName="directory-test-login" OnValidSubmit="TestLoginAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="form-grid form-grid--2">
+                    <div class="form-field">
+                        <label for="dir-test-email">E-mail de uma pessoa do AD</label>
+                        <InputText id="dir-test-email" @bind-Value="TestInput.Email" type="email" autocomplete="off" />
+                    </div>
+                    <div class="form-field">
+                        <label for="dir-test-password">Senha dela</label>
+                        <InputText id="dir-test-password" type="password" @bind-Value="TestInput.Password" autocomplete="off" />
+                        <span class="field-hint">Só confere no AD; não cria conta nem entra.</span>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-secondary"><Icon Name="user" /> Testar um login</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? message;
+    private bool hasPassword;
+
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "directory-settings")]
+    private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "directory-test-login")]
+    private TestLoginModel TestInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!License.IsAdministrator(HttpContext.User))
+        {
+            NavigationManager.NavigateTo("/not-found", replace: true);
+            return;
+        }
+
+        TestInput ??= new();
+        var saved = await Store.GetAsync(HttpContext.RequestAborted);
+        hasPassword = saved.HasBindPassword;
+        Input ??= InputModel.From(saved);
+    }
+
+    private async Task SaveAsync()
+    {
+        var settings = Input.ToSettings();
+        var saved = await Store.SaveAsync(settings, Input.BindPassword, HttpContext.RequestAborted);
+        await Audit.LogAsync(HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, Nexus.Domain.Entities.AuditAction.DirectorySettingsUpdated, null,
+            $"{(saved.Enabled ? "ligado" : "desligado")}, {saved.Host}:{saved.Port}, domínios {string.Join(", ", saved.EmailDomains)}", HttpContext.RequestAborted);
+        var problem = saved.Enabled ? saved.Validate() : null;
+        RedirectManager.RedirectToCurrentPageWithStatus(problem is null ? "Configuração salva." : $"Erro: salvo, mas o login pelo AD não vai funcionar: {problem}", HttpContext);
+    }
+
+    private async Task TestConnectionAsync()
+    {
+        var settings = await Store.GetAsync(HttpContext.RequestAborted);
+        var password = Store.UnprotectBindPassword(settings);
+        var problem = settings.Validate();
+        if (problem is not null || password is null)
+        {
+            message = "Erro: " + (problem ?? "Informe a senha da conta de serviço.");
+            return;
+        }
+
+        var result = await Ldap.TestAsync(settings, password, HttpContext.RequestAborted);
+        message = (result.Ok ? "" : "Erro: ") + result.Message;
+    }
+
+    private async Task TestLoginAsync()
+    {
+        var result = await DirectoryLogin.ProbeAsync(TestInput.Email, TestInput.Password, HttpContext.RequestAborted);
+        message = result.Status switch
+        {
+            DirectoryLoginStatus.Success => $"O AD aceitou {TestInput.Email}: {result.Detail}",
+            DirectoryLoginStatus.NotHandled => "Erro: esse e-mail não é de um domínio configurado (ou o AD está desligado).",
+            DirectoryLoginStatus.Disabled => "Erro: a conta existe no AD, mas está desabilitada.",
+            DirectoryLoginStatus.InvalidCredentials => "Erro: pessoa não encontrada pelo filtro ou senha errada.",
+            _ => "Erro: " + (result.Detail ?? "o servidor não respondeu."),
+        };
+    }
+
+    private sealed class InputModel
+    {
+        public bool Enabled { get; set; }
+        [Required(ErrorMessage = "Informe o servidor.")]
+        public string Host { get; set; } = "";
+        [Range(1, 65535, ErrorMessage = "Porta entre 1 e 65535.")]
+        public int Port { get; set; } = 636;
+        public bool UseSsl { get; set; } = true;
+        public bool AllowSelfSignedCertificate { get; set; }
+        [Required(ErrorMessage = "Informe o DN base.")]
+        public string BaseDn { get; set; } = "";
+        [Required(ErrorMessage = "Informe a conta de serviço.")]
+        public string BindDn { get; set; } = "";
+        public string? BindPassword { get; set; }
+        public string UserFilter { get; set; } = DirectorySettings.DefaultUserFilter;
+        public string DisplayNameAttribute { get; set; } = "displayName";
+        public string EmailAttribute { get; set; } = "mail";
+        public string UserNameAttribute { get; set; } = "sAMAccountName";
+        [Required(ErrorMessage = "Informe ao menos um domínio.")]
+        public string EmailDomains { get; set; } = "";
+
+        public static InputModel From(DirectorySettings s) => new()
+        {
+            Enabled = s.Enabled, Host = s.Host, Port = s.Port, UseSsl = s.UseSsl, AllowSelfSignedCertificate = s.AllowSelfSignedCertificate,
+            BaseDn = s.BaseDn, BindDn = s.BindDn, UserFilter = s.UserFilter, DisplayNameAttribute = s.DisplayNameAttribute,
+            EmailAttribute = s.EmailAttribute, UserNameAttribute = s.UserNameAttribute, EmailDomains = string.Join(", ", s.EmailDomains),
+        };
+
+        public DirectorySettings ToSettings() => new()
+        {
+            Enabled = Enabled, Host = Host, Port = Port, UseSsl = UseSsl, AllowSelfSignedCertificate = AllowSelfSignedCertificate,
+            BaseDn = BaseDn, BindDn = BindDn, UserFilter = UserFilter, DisplayNameAttribute = DisplayNameAttribute,
+            EmailAttribute = EmailAttribute, UserNameAttribute = UserNameAttribute,
+            EmailDomains = EmailDomains.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+        };
+    }
+
+    private sealed class TestLoginModel
+    {
+        [Required(ErrorMessage = "Informe o e-mail.")]
+        [EmailAddress(ErrorMessage = "E-mail inválido.")]
+        public string Email { get; set; } = "";
+        [Required(ErrorMessage = "Informe a senha.")]
+        public string Password { get; set; } = "";
+    }
+}

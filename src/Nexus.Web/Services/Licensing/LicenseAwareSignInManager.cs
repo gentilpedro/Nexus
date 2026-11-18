@@ -22,6 +22,13 @@ public sealed class LicenseAwareSignInManager(
     LicenseService license)
     : SignInManager<ApplicationUser>(userManager, contextAccessor, claimsFactory, optionsAccessor, logger, schemes, confirmation)
 {
+    /// <summary>
+    /// Entrada de quem o Active Directory já autenticou (#70): o mesmo caminho do login por senha
+    /// depois da senha conferida, então o 2FA do Nexus continua valendo se a pessoa o ativou.
+    /// </summary>
+    public Task<SignInResult> DirectorySignInAsync(ApplicationUser user, bool isPersistent) =>
+        SignInOrTwoFactorAsync(user, isPersistent, loginProvider: null, bypassTwoFactor: false);
+
     public override async Task SignInWithClaimsAsync(ApplicationUser user, AuthenticationProperties? authenticationProperties, IEnumerable<Claim> additionalClaims)
     {
         await base.SignInWithClaimsAsync(user, authenticationProperties, additionalClaims);

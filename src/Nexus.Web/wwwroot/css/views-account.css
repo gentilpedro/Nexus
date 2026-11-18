@@ -690,3 +690,9 @@ button.settings-nav-link:not(.active) {
 .license-facts dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .license-banner { margin-bottom: 16px; }
 @media (max-width: 640px) { .license-facts { grid-template-columns: 1fr; gap: 2px 0; } .license-facts dd { margin-bottom: 8px; } }
+
+/* Active Directory (#70): campos lado a lado na tela de configuração */
+.form-grid { display: grid; gap: var(--space-3) var(--space-4); }
+.form-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.form-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 640px) { .form-grid--2, .form-grid--3 { grid-template-columns: 1fr; } }

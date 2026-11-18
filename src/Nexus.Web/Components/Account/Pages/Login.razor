@@ -13,6 +13,7 @@
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+@inject Nexus.Web.Services.ActiveDirectory.DirectoryLoginService DirectoryLogin
 
 <PageTitle>Entrar · Nexus</PageTitle>
 
@@ -83,6 +84,14 @@
             return;
         }
 
+        // Login pelo Active Directory (#70): e-mail de um domínio configurado é conferido por bind
+        // LDAP, e a senha do Nexus nem é consultada. O bloqueio por tentativas vale igual.
+        if (await DirectoryLogin.HandlesAsync(Input.Email, HttpContext.RequestAborted))
+        {
+            await LoginWithDirectoryAsync();
+            return;
+        }
+
         // lockoutOnFailure: true — Identity's lockout (5 tentativas, ~5min por padrão) só conta
         // tentativas quando esse flag está ligado. Com false, um ataque de força bruta contra
         // uma conta nunca era bloqueado; a UI de "Account/Lockout" abaixo já existia e nunca era
@@ -116,6 +125,63 @@
         {
             errorMessage = "Erro: e-mail ou senha incorretos.";
         }
+    }
+
+    private async Task LoginWithDirectoryAsync()
+    {
+        var existing = await UserManager.FindByEmailAsync(Input.Email);
+        if (existing is not null && await UserManager.IsLockedOutAsync(existing))
+        {
+            await RedirectToLockoutAsync(existing);
+            return;
+        }
+
+        var outcome = await DirectoryLogin.LoginAsync(Input.Email, Input.Password, HttpContext.RequestAborted);
+        switch (outcome.Status)
+        {
+            case Nexus.Web.Services.ActiveDirectory.DirectoryLoginStatus.Success:
+                await UserManager.ResetAccessFailedCountAsync(outcome.User!);
+                var signIn = await ((Nexus.Web.Services.Licensing.LicenseAwareSignInManager)SignInManager).DirectorySignInAsync(outcome.User!, Input.RememberMe);
+                if (signIn.RequiresTwoFactor)
+                {
+                    RedirectManager.RedirectTo("Account/LoginWith2fa", new() { ["returnUrl"] = ReturnUrl, ["rememberMe"] = Input.RememberMe });
+                    return;
+                }
+
+                Logger.LogInformation("User logged in through the directory{Created}.", outcome.Created ? " (account created)" : "");
+                RedirectManager.RedirectTo(ReturnUrl);
+                return;
+            case Nexus.Web.Services.ActiveDirectory.DirectoryLoginStatus.Disabled:
+                errorMessage = "Erro: esta conta está desabilitada no Active Directory. Fale com a TI da sua empresa.";
+                return;
+            case Nexus.Web.Services.ActiveDirectory.DirectoryLoginStatus.AccountRefused:
+                errorMessage = "Erro: o Active Directory aceitou, mas o Nexus não pôde criar a sua conta. " + outcome.Detail;
+                return;
+            case Nexus.Web.Services.ActiveDirectory.DirectoryLoginStatus.Unavailable:
+                errorMessage = "Erro: o servidor da sua empresa não respondeu. Tente de novo em instantes ou avise a TI.";
+                return;
+            default:
+                if (existing is not null)
+                {
+                    await UserManager.AccessFailedAsync(existing);
+                    if (await UserManager.IsLockedOutAsync(existing))
+                    {
+                        await RedirectToLockoutAsync(existing);
+                        return;
+                    }
+                }
+
+                errorMessage = "Erro: e-mail ou senha incorretos.";
+                return;
+        }
+    }
+
+    private async Task RedirectToLockoutAsync(ApplicationUser user)
+    {
+        Logger.LogWarning("User account locked out.");
+        var lockoutEnd = await UserManager.GetLockoutEndDateAsync(user);
+        var minutesRemaining = lockoutEnd is null ? (int?)null : Math.Max(1, (int)Math.Ceiling((lockoutEnd.Value - DateTimeOffset.UtcNow).TotalMinutes));
+        RedirectManager.RedirectTo("Account/Lockout", new() { ["minutes"] = minutesRemaining });
     }
 
     private sealed class InputModel

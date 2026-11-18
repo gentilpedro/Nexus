@@ -10,6 +10,10 @@ COPY . .
 # Mesmo motivo do Dockerfile da raiz: o usuário não-root precisa escrever os anexos.
 RUN mkdir -p /app/App_Data/uploads && chown -R $APP_UID:$APP_UID /app
 
+# Login pelo Active Directory (#70): System.DirectoryServices.Protocols carrega a libldap do
+# sistema no Linux. O nome do pacote muda entre as versões do Debian; tenta os dois.
+RUN apt-get update     && (apt-get install -y --no-install-recommends libldap2 || apt-get install -y --no-install-recommends libldap-2.5-0)     && rm -rf /var/lib/apt/lists/*
+
 USER $APP_UID
 
 ENV ASPNETCORE_URLS=http://+:8080

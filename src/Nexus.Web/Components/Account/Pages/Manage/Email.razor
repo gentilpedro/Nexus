@@ -77,6 +77,13 @@
             return;
         }
 
+        if (user.DirectoryManaged)
+        {
+            // Conta do Active Directory (#70): senha e e-mail vêm de lá.
+            RedirectManager.RedirectToWithStatus("Account/Manage", "Esta conta é gerenciada pelo Active Directory da sua empresa: senha e e-mail são alterados lá, não no Nexus.", HttpContext);
+            return;
+        }
+
         email = await UserManager.GetEmailAsync(user);
         isEmailConfirmed = await UserManager.IsEmailConfirmedAsync(user);
 
