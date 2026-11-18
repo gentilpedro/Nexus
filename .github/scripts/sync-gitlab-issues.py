@@ -32,7 +32,7 @@ from datetime import datetime, timedelta, timezone
 GITLAB_PROJECT = os.environ.get("GITLAB_PROJECT", "senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus")
 GITLAB_API = f"https://gitlab.com/api/v4/projects/{urllib.parse.quote(GITLAB_PROJECT, safe='')}"
 GITLAB_WEB = f"https://gitlab.com/{GITLAB_PROJECT}"
-GITHUB_API = f"https://api.github.com/repos/{os.environ.get('GITHUB_REPOSITORY', 'gentilpedro/Nexus')}"
+GITHUB_API = f"https://api.github.com/repos/{os.environ.get('GITHUB_REPOSITORY', 'Aamora-Tec/Nexus')}"
 DRY_RUN = os.environ.get("SYNC_DRY_RUN") == "1"
 GITLAB_TOKEN = os.environ.get("GITLAB_READ_TOKEN") or None
 

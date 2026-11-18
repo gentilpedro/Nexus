@@ -55,7 +55,7 @@ services:
       retries: 5
 
   web:
-    image: ghcr.io/gentilpedro/nexus-web:${NEXUS_VERSION:?defina NEXUS_VERSION}
+    image: ghcr.io/aamora-tec/nexus-web:${NEXUS_VERSION:?defina NEXUS_VERSION}
     restart: unless-stopped
     ports: ["127.0.0.1:5100:8080"]
     env_file: .env
@@ -131,7 +131,7 @@ server {
 
 ```bash
 echo "$NEXUS_REGISTRY_TOKEN" | docker login ghcr.io -u nexus --password-stdin   # o token que você recebeu com a licença
-docker pull ghcr.io/gentilpedro/nexus-web:1.23.0
+docker pull ghcr.io/aamora-tec/nexus-web:1.23.0
 NEXUS_VERSION=1.17.0 docker compose up -d --wait
 curl -s http://127.0.0.1:5100/health/ready   # Healthy
 ```

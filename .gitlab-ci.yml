@@ -26,7 +26,7 @@ variables:
   GIT_DEPTH: 0
   DOTNET_IMAGE: "mcr.microsoft.com/dotnet/sdk:10.0"
   # Repositorio espelho no GitHub (owner/nome) e branch usada para levar commits daqui para la.
-  GITHUB_PROJECT: "gentilpedro/Nexus"
+  GITHUB_PROJECT: "Aamora-Tec/Nexus"
   GITHUB_SYNC_BRANCH: "sync/gitlab"
 
 # Decide o numero da proxima versao a partir dos commits desde a ultima tag (Conventional

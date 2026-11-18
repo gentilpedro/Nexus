@@ -32,7 +32,7 @@ da wiki.
 
 ## Dois repositórios, um histórico
 
-O projeto vive no [GitHub](https://github.com/gentilpedro/Nexus) (de onde sai o deploy) e no
+O projeto vive no [GitHub](https://github.com/Aamora-Tec/Nexus) (de onde sai o deploy) e no
 [GitLab](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus) (repositório do
 TCC). Os dois são sincronizados automaticamente e **compartilham o mesmo histórico de commits** — o que
 impõe duas regras:

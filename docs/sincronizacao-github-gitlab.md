@@ -4,7 +4,7 @@ O Nexus vive em dois repositórios ao mesmo tempo:
 
 | | |
 |---|---|
-| [GitHub](https://github.com/gentilpedro/Nexus) | De onde sai o deploy para produção (VPS) e onde as tags/releases são criadas. |
+| [GitHub](https://github.com/Aamora-Tec/Nexus) | De onde sai o deploy para produção (VPS) e onde as tags/releases são criadas. |
 | [GitLab](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus) | Repositório exigido pelo TCC — precisa refletir o mesmo código e o mesmo histórico. |
 
 Manter os dois iguais "na mão" não sobrevive a um dia corrido: basta esquecer um `git push` para o
@@ -116,7 +116,7 @@ Serve para a workflow de espelhamento empurrar commits e tags no GitLab.
    - Validade: obrigatória, no máximo 1 ano — anote a data, quando vencer a sincronização para
    - Escopo: **apenas `write_repository`**. Nada de `api`: o job só faz `git push`.
 2. Copie o token (ele só aparece uma vez).
-3. No GitHub, em `gentilpedro/Nexus` → **Settings → Secrets and variables → Actions → New
+3. No GitHub, em `Aamora-Tec/Nexus` → **Settings → Secrets and variables → Actions → New
    repository secret**:
    - Nome: `GITLAB_SYNC_TOKEN`
    - Valor: o token gerado.
@@ -134,7 +134,8 @@ Serve para o job `sync-github` empurrar a branch `sync/gitlab` e abrir o Pull Re
 
 1. No GitHub, em **Settings → Developer settings → Personal access tokens → Fine-grained tokens**
    → **Generate new token**:
-   - Resource owner: `gentilpedro`
+   - Resource owner: `Aamora-Tec` (a organização dona do repositório desde 18/11/2026; um token com
+     resource owner pessoal deixa de alcançar o repositório)
    - Repository access: **Only select repositories** → `Nexus`
    - Repository permissions:
      - `Contents`: **Read and write** (empurrar a branch `sync/gitlab`)
@@ -177,7 +178,7 @@ Na mesma passada a autoria foi normalizada — 72 dos commits estavam assinados 
 `--local`, resultado de um `git config user.name --local` em que a flag virou o valor.
 
 ```bash
-git clone --bare https://github.com/gentilpedro/Nexus.git nexus.git
+git clone --bare https://github.com/Aamora-Tec/Nexus.git nexus.git
 cd nexus.git
 git bundle create ../backup.bundle --all   # antes de qualquer coisa
 
