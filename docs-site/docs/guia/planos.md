@@ -12,7 +12,7 @@
 | Horas, contratos e check-in semanal | sim | sim | sim |
 | Suporte prioritário | não | sim | sim |
 | Instalação na sua rede (self-hosted) | não | não | sim |
-| Login pelo Active Directory | não | não | em breve |
+| Login pelo Active Directory | não | não | sim |
 
 O plano é do **workspace**, não da conta: dois workspaces seus podem estar em planos diferentes.
 

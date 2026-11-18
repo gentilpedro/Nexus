@@ -112,6 +112,13 @@
                                     Licença da instalação
                                 </a>
                             }
+                            @if (License.IsAdministrator(context.User))
+                            {
+                                <a href="/admin/diretorio" data-enhance-nav="false" role="menuitem">
+                                    <Icon Name="team" />
+                                    Active Directory
+                                </a>
+                            }
                             <div class="menu-separator" role="separator"></div>
                             <form action="Account/Logout" method="post" data-enhance="false">
                                 <AntiforgeryToken />

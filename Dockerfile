@@ -22,6 +22,10 @@ COPY --from=build /app/publish .
 # upload fails with an access error that only appears in the container, never in local dev.
 RUN mkdir -p /app/App_Data/uploads && chown -R $APP_UID:$APP_UID /app
 
+# Login pelo Active Directory (#70): System.DirectoryServices.Protocols carrega a libldap do
+# sistema no Linux. O nome do pacote muda entre as versões do Debian; tenta os dois.
+RUN apt-get update     && (apt-get install -y --no-install-recommends libldap2 || apt-get install -y --no-install-recommends libldap-2.5-0)     && rm -rf /var/lib/apt/lists/*
+
 # Drop root. The .NET base images ship a non-root user (APP_UID=1654) but still default to
 # root, so without this line the whole application — including anything that manages to execute
 # through it — runs with full container privileges for no reason.

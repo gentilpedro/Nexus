@@ -16,4 +16,6 @@ public enum AuditAction
     ContractUpdated,
     ContractDeleted,
     TimeEntryDeletedByAdmin,
+    DirectorySettingsUpdated,
+    DirectoryAccountProvisioned,
 }
