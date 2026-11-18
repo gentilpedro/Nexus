@@ -8,7 +8,7 @@ acrescenta; `2.0.0` muda algo que pede atenção na atualização (as notas da v
 ```bash
 cd /opt/nexus
 sudo nexus-backup                                   # 1. dump antes
-docker load < nexus-web-1.18.0.tar.gz                # 2. a imagem nova
+docker pull ghcr.io/gentilpedro/nexus-web:1.18.0     # 2. a imagem nova (login feito na instalação)
 NEXUS_VERSION=1.18.0 docker compose up -d --wait web # 3. troca; as migrations rodam sozinhas
 curl -s https://nexus.suaempresa.com.br/version     # 4. confere
 ```
