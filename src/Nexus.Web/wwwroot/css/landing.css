@@ -719,6 +719,164 @@
     font-size: var(--text-small);
 }
 
+/* Faixas do Business (#85): <dialog> aberto por data-nexus-action */
+.dialog--pricing {
+    width: min(36rem, calc(100vw - 2rem));
+}
+
+.pricing-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-6) var(--space-6) 0;
+}
+
+.pricing-dialog .dialog-actions {
+    margin: 0 calc(-1 * var(--space-6));
+}
+
+.pricing-dialog-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.pricing-tiers {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.pricing-tiers th,
+.pricing-tiers td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--color-divider);
+    text-align: left;
+}
+
+.pricing-tiers th {
+    font-size: var(--text-caption);
+    font-weight: var(--weight-semibold);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.pricing-tiers td:nth-child(2) {
+    font-weight: var(--weight-semibold);
+}
+
+.pricing-tiers td:nth-child(3) {
+    color: var(--color-text-muted);
+}
+
+.pricing-dialog-features {
+    margin: 0;
+}
+
+.pricing-dialog .pricing-note {
+    margin: 0;
+}
+
+/* Comparativo dos planos (#85) */
+.pricing-compare {
+    margin-top: var(--space-10);
+}
+
+.pricing-compare-title {
+    margin: 0 0 var(--space-4);
+    font-size: var(--text-h3);
+    text-align: center;
+}
+
+.pricing-compare-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-raised);
+    overflow: hidden;
+}
+
+.pricing-compare-table th,
+.pricing-compare-table td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-divider);
+    text-align: center;
+    vertical-align: middle;
+}
+
+.pricing-compare-table tbody th {
+    text-align: left;
+    font-weight: var(--weight-regular);
+    color: var(--color-text-secondary);
+}
+
+.pricing-compare-table thead th {
+    font-size: var(--text-h3);
+    font-weight: var(--weight-semibold);
+    padding-top: var(--space-5);
+    padding-bottom: var(--space-4);
+}
+
+.pricing-compare-table thead th.is-featured {
+    color: var(--color-accent-text);
+    box-shadow: inset 0 3px 0 var(--color-accent);
+}
+
+.pricing-compare-table td.is-featured {
+    background: var(--color-accent-soft);
+}
+
+.pricing-compare-table .icon.is-yes {
+    color: var(--color-success-text);
+}
+
+.pricing-compare-table .icon.is-no {
+    color: var(--color-danger-text);
+    opacity: 0.7;
+}
+
+.pricing-compare-price td {
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+.pricing-compare-price td span {
+    color: var(--color-text-muted);
+    font-size: var(--text-body);
+    letter-spacing: 0;
+}
+
+.pricing-compare-actions td,
+.pricing-compare-actions th {
+    border-bottom: 0;
+    padding-bottom: var(--space-5);
+}
+
+@media (max-width: 640px) {
+    .pricing-compare-table th,
+    .pricing-compare-table td {
+        padding: var(--space-2) var(--space-2);
+        font-size: var(--text-small);
+    }
+
+    .pricing-compare-table thead th {
+        font-size: var(--text-body);
+    }
+
+    .pricing-compare-price td {
+        font-size: 1.1rem;
+    }
+
+    .pricing-compare-actions .btn {
+        padding-inline: var(--space-2);
+    }
+}
+
 /* ---------------------------------------------------------------- Fechamento e rodapé */
 .landing-close {
     padding: 0 var(--space-6) var(--space-16);

@@ -77,6 +77,22 @@
             case 'history-back':
                 history.back();
                 break;
+            // Janelas estáticas (ex.: faixas do plano Business na landing, #85): o alvo é o id
+            // do <dialog>, aberto como modal para o foco ficar preso e Esc fechar.
+            case 'open-dialog': {
+                var dialog = document.getElementById(trigger.getAttribute('data-nexus-target'));
+                if (dialog && typeof dialog.showModal === 'function' && !dialog.open) {
+                    dialog.showModal();
+                }
+                break;
+            }
+            case 'close-dialog': {
+                var open = trigger.closest('dialog');
+                if (open) {
+                    open.close();
+                }
+                break;
+            }
         }
     });
 

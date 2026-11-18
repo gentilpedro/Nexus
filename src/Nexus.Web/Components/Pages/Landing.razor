@@ -124,15 +124,94 @@
             <div class="pricing-card">
                 <span class="pricing-flag">Em breve</span>
                 <h3>Business</h3>
-                <p class="pricing-price">Sob consulta</p>
-                <p class="pricing-desc">Para empresas com necessidades de contrato ou volume.</p>
+                <p class="pricing-price">R$ 5.900<span>/ano</span></p>
+                <p class="pricing-desc">Na sua infraestrutura, por faixa de usuários ativos. A partir de 25 pessoas; faixas maiores na tabela.</p>
                 <ul class="pricing-features">
                     <li><Icon Name="check" Class="icon--sm" /> Tudo do plano Pro</li>
-                    <li><Icon Name="check" Class="icon--sm" /> Onboarding dedicado</li>
-                    <li><Icon Name="check" Class="icon--sm" /> Contrato e nota fiscal personalizados</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Imagem Docker na sua rede, licença sem internet</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Onboarding dedicado, contrato e nota fiscal personalizados</li>
                 </ul>
-                <a class="btn btn-secondary btn-block" href="contato-comercial" data-enhance-nav="false">Falar com a gente</a>
+                @* A landing não tem circuito Blazor: o <dialog> abre pelo handler de data-nexus-action
+                   (theme-interop.js), que respeita a CSP. *@
+                <button type="button" class="btn btn-secondary btn-block" data-nexus-action="open-dialog" data-nexus-target="business-pricing">Saiba mais</button>
             </div>
+        </div>
+
+        <dialog id="business-pricing" class="dialog dialog--pricing" aria-labelledby="business-pricing-title">
+            <div class="pricing-dialog">
+                <div class="pricing-dialog-head">
+                    <div>
+                        <h3 id="business-pricing-title" class="dialog-title">Business: faixas e preços</h3>
+                        <p class="dialog-message">Assinatura anual, pré-paga, por faixa de usuários ativos (quem entrou no Nexus nos últimos 30 dias).</p>
+                    </div>
+                    <button type="button" class="icon-btn" data-nexus-action="close-dialog"><Icon Name="x" Label="Fechar" /></button>
+                </div>
+                <table class="pricing-tiers">
+                    <thead>
+                        <tr><th scope="col">Usuários ativos</th><th scope="col">Por ano</th><th scope="col">Por pessoa/mês</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Até 25</td><td>R$ 5.900</td><td>R$ 19,70</td></tr>
+                        <tr><td>Até 50</td><td>R$ 9.900</td><td>R$ 16,50</td></tr>
+                        <tr><td>Até 100</td><td>R$ 16.900</td><td>R$ 14,10</td></tr>
+                        <tr><td>Até 250</td><td>R$ 34.900</td><td>R$ 11,60</td></tr>
+                        <tr><td>Ilimitado</td><td>R$ 59.900</td><td></td></tr>
+                    </tbody>
+                </table>
+                <ul class="pricing-features pricing-dialog-features">
+                    <li><Icon Name="check" Class="icon--sm" /> Tudo do plano Pro, sem limite de workspaces</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Imagem Docker na sua rede; os dados não saem dela</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Licença verificada sem internet; 30 dias de avaliação sem chave</li>
+                    <li><Icon Name="check" Class="icon--sm" /> Login pelo Active Directory <span class="pricing-soon">em breve</span></li>
+                    <li><Icon Name="check" Class="icon--sm" /> Onboarding dedicado, contrato e nota fiscal personalizados</li>
+                </ul>
+                <p class="pricing-note">Passou da faixa? A instalação continua; só contas novas esperam a faixa seguinte. Licença vencida continua funcionando, só não recebe atualizações. Implantação (AD, migração de dados) é cobrada à parte, por hora.</p>
+                <div class="dialog-actions">
+                    <button type="button" class="btn btn-secondary" data-nexus-action="close-dialog">Fechar</button>
+                    <a class="btn" href="contato-comercial" data-enhance-nav="false">Falar com a gente</a>
+                </div>
+            </div>
+        </dialog>
+
+        <div class="pricing-compare">
+            <h3 class="pricing-compare-title">Compare os planos</h3>
+            <table class="pricing-compare-table">
+                <thead>
+                    <tr>
+                        <th scope="col"><span class="sr-only">Recurso</span></th>
+                        <th scope="col">Starter</th>
+                        <th scope="col" class="is-featured">Pro</th>
+                        <th scope="col">Business</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><th scope="row">Membros por workspace</th><td>até 5</td><td class="is-featured">sem limite</td><td>sem limite</td></tr>
+                    <tr><th scope="row">Workspaces próprios</th><td>1</td><td class="is-featured">sem limite</td><td>sem limite</td></tr>
+                    <tr><th scope="row">Quadro, lista, backlog e calendário</th><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td class="is-featured"><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td></tr>
+                    <tr><th scope="row">Docs, planilhas e chat</th><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td class="is-featured"><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td></tr>
+                    <tr><th scope="row">Horas, contratos e check-in semanal</th><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td class="is-featured"><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td></tr>
+                    <tr><th scope="row">Sprints, burndown e Gantt</th><td><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td class="is-featured"><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td></tr>
+                    <tr><th scope="row">API, webhooks e assistentes de IA (MCP)</th><td><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td class="is-featured"><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td></tr>
+                    <tr><th scope="row">Suporte prioritário</th><td><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td class="is-featured"><Icon Name="check" Label="Incluído" Class="is-yes" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td></tr>
+                    <tr><th scope="row">Instalação na sua rede (self-hosted)</th><td><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td class="is-featured"><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td></tr>
+                    <tr><th scope="row">Login pelo Active Directory</th><td><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td class="is-featured"><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /> <span class="pricing-soon">em breve</span></td></tr>
+                    <tr><th scope="row">Contrato e nota fiscal personalizados</th><td><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td class="is-featured"><Icon Name="x" Label="Não incluído" Class="is-no" /></td><td><Icon Name="check" Label="Incluído" Class="is-yes" /></td></tr>
+                </tbody>
+                <tfoot>
+                    <tr class="pricing-compare-price">
+                        <th scope="row"><span class="sr-only">Preço</span></th>
+                        <td><b>Grátis</b></td>
+                        <td class="is-featured"><b>R$ 149</b><span>/mês</span></td>
+                        <td><b>R$ 5.900</b><span>/ano</span></td>
+                    </tr>
+                    <tr class="pricing-compare-actions">
+                        <th scope="row"><span class="sr-only">Ação</span></th>
+                        <td><a class="btn btn-secondary btn-sm" href="Account/Register" data-enhance-nav="false">Criar conta grátis</a></td>
+                        <td class="is-featured"><a class="btn btn-sm" href="Account/Register" data-enhance-nav="false">Usar grátis no lançamento</a></td>
+                        <td><button type="button" class="btn btn-secondary btn-sm" data-nexus-action="open-dialog" data-nexus-target="business-pricing">Saiba mais</button></td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
         <p class="pricing-note">Preços de referência, sujeitos a alteração. A cobrança ainda não está ativa: ninguém paga nada até os planos pagos serem lançados.</p>
     </section>
