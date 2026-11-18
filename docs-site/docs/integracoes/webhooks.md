@@ -1,10 +1,10 @@
-# 📣 Webhooks de Saída
+# Webhooks de Saída
 
 !!! abstract ""
     O Nexus chama a URL do seu sistema quando uma tarefa é criada, muda, troca de status ou de
     responsável, ou recebe um comentário. É o caminho de volta da [API de Integração](api.md):
     o ERP cria a tarefa pela API e fica sabendo pelo webhook quando a equipe a conclui, sem perguntar
-    de tempos em tempos. Issue [#75](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/issues/75).
+    de tempos em tempos. Issue #75.
 
 ## Em um minuto
 

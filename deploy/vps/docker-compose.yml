@@ -37,6 +37,9 @@ services:
       KNOWN_PROXIES: 172.30.0.1
       DataProtection__CertificatePath: /app/dp/dataprotection.pfx
       DataProtection__CertificatePassword: ${DP_CERT_PASSWORD}
+      # A oferta em nuvem não tem licença de instalação (#81); a mesma imagem, vendida como
+      # Business self-hosted, exige por padrão.
+      License__Enforce: "false"
     volumes:
       - uploads:/app/App_Data/uploads
       - ./dataprotection.pfx:/app/dp/dataprotection.pfx:ro,z

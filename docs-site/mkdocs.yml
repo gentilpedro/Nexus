@@ -6,9 +6,6 @@
 site_name: Nexus · Documentação
 site_url: https://docs-nexus.aamora.com.br/
 site_description: Guia do usuário, integrações, self-hosted e referência da API do Nexus.
-repo_url: https://github.com/gentilpedro/Nexus
-repo_name: gentilpedro/Nexus
-edit_uri: edit/main/docs-site/docs/
 copyright: Aamora · Nexus
 docs_dir: docs
 site_dir: site
@@ -16,6 +13,11 @@ site_dir: site
 theme:
   name: material
   language: pt-BR
+  # Identidade do Nexus (DESIGN.md): índigo, Inter hospedada aqui mesmo (font: false desliga o Google
+  # Fonts), logo do app. As cores ficam em assets/stylesheets/nexus.css, por isso "custom".
+  font: false
+  logo: assets/images/logo.png
+  favicon: assets/images/logo.png
   features:
     - navigation.tabs
     - navigation.sections
@@ -25,26 +27,38 @@ theme:
     - search.highlight
     - content.code.copy
     - content.tabs.link
+    - toc.follow
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Tema escuro
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Tema claro
+
+extra_css:
+  - assets/stylesheets/nexus.css
 
 markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
+  - def_list
+  # Ícones (:material-api:) nas páginas; sem esta extensão o texto aparece cru.
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
   - tables
   - toc:
       permalink: true
@@ -61,13 +75,6 @@ markdown_extensions:
 plugins:
   - search:
       lang: pt
-
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/gentilpedro/Nexus
-    - icon: fontawesome/brands/gitlab
-      link: https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus
 
 nav:
   - Início: index.md
@@ -99,4 +106,5 @@ nav:
       - Configuração: self-hosted/configuracao.md
       - Backup e restauração: self-hosted/backup.md
       - Atualização: self-hosted/atualizacao.md
+      - Licença: self-hosted/licenca.md
   - API (OpenAPI): api/index.md

@@ -1,4 +1,4 @@
-# 🧪 Receitas de Integração
+# Receitas de Integração
 
 !!! abstract ""
     Cenários completos com a [API de Integração](api.md). Troque `nxk_sua_chave` pela chave
@@ -236,6 +236,6 @@ entrou.
 
 ## Testar sem produção
 
-Rode o Nexus localmente ([Como Rodar Localmente](https://gitlab.com/senac-projetos-de-desenvolvimento/2025-pedro-gentil/tcc_2/nexus/-/wikis/Como-Rodar-Localmente)), crie um workspace, gere uma
+Rode o Nexus localmente, crie um workspace, gere uma
 chave e aponte o script para `http://localhost:5289/api/v1`. A especificação local fica em
 `http://localhost:5289/openapi/v1.json` e pode ser importada no Postman, no Insomnia ou no Bruno.

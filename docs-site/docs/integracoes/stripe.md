@@ -1,10 +1,8 @@
-# 💳 Stripe (cobrança do plano Pro)
+# Stripe (cobrança do plano Pro)
 
 !!! abstract ""
     A cobrança do plano Pro é feita pelo Stripe. O Nexus nunca vê cartão: ele manda a pessoa para o
-    Stripe Checkout e recebe de volta, por webhook, o que aconteceu. O guia completo de configuração,
-    com os passos no painel do Stripe, está em
-    [`docs/cobranca-stripe.md`](https://github.com/gentilpedro/Nexus/blob/main/docs/cobranca-stripe.md).
+    Stripe Checkout e recebe de volta, por webhook, o que aconteceu.
 
 ## Como se encaixa
 
@@ -34,7 +32,7 @@ sequenceDiagram
 | Ordem | Um evento mais antigo que o último aplicado é ignorado (o Stripe não garante ordem de entrega) |
 | Respostas | `200` aplicado ou ignorado; `400` assinatura inválida (o Stripe tenta de novo); `404` enquanto a cobrança está desligada |
 
-Código: [`StripeWebhookHandler`](https://github.com/gentilpedro/Nexus/blob/main/src/Nexus.Web/Services/Billing/) e
+Código: `StripeWebhookHandler` e
 `BillingService`, em `src/Nexus.Web/Services/Billing/`.
 
 ## Ligar e desligar
@@ -62,7 +60,7 @@ preço cadastrado lá.
 | Sprints, Gantt e burndown | não | sim |
 | Suporte prioritário | não | sim |
 
-Definido em [`PlanCapabilities`](https://github.com/gentilpedro/Nexus/blob/main/src/Nexus.Domain/Entities/PlanCapabilities.cs).
+Definido em `PlanCapabilities`.
 `Plans:EnforceLimits` liga a aplicação dos limites; `Plans:UnlimitedAccounts` lista contas que não
 têm limite nenhum (uso interno).
 

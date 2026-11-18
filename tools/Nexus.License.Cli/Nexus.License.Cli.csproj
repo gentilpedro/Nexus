@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- nexus-license: a ferramenta da Aamora para emitir e ler chaves de licença (#81). Não entra na
+       imagem Docker (o Dockerfile só copia src/). A chave privada nunca sai da máquina de quem emite:
+       o programa só a lê de um arquivo ou de uma variável de ambiente. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>nexus-license</AssemblyName>
+    <RootNamespace>Nexus.License.Cli</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Nexus.Licensing\Nexus.Licensing.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Formato e verificação da chave de licença do plano Business self-hosted (#81). Fica num
+       projeto à parte porque dois programas precisam do mesmo código: o Nexus.Web, que só
+       verifica, e a ferramenta nexus-license (tools/), que assina com a chave privada da Aamora.
+       Sem dependência do ASP.NET nem do EF de propósito. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Ed25519: o .NET 10 ainda não traz a curva na BCL; o BouncyCastle é gerenciado e roda
+         igual no container Linux e no Windows. -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+  </ItemGroup>
+
+</Project>
