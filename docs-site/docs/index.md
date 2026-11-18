@@ -38,12 +38,13 @@ curl https://nexus.aamora.com.br/api/v1/workspace \
 
 -   :material-book-open-variant: [Guia do usuário](guia/index.md)
 
-    Como usar o Nexus no dia a dia: workspaces, tarefas, quadro, sprints, docs, chat, conta e planos.
+    Como usar o Nexus no dia a dia: workspaces, tarefas, quadro, sprints, docs, chat, horas e contratos, check-in semanal, calendário, conta e planos.
 
 -   :material-api: [Integrações](integracoes/index.md)
 
-    Para programadores: chaves de API, rotas de tarefas, webhooks de saída, receitas em C#, Python
-    e curl, e o que o Nexus conecta (Stripe, e-mail, Redis, GitHub e GitLab).
+    Para programadores: chaves de API, rotas de tarefas, horas e check-ins, webhooks de saída,
+    assistentes de IA pelo servidor MCP, receitas em C#, Python e curl, e o que o Nexus conecta
+    (Stripe, e-mail, Redis, GitHub e GitLab).
 
 -   :material-format-list-bulleted-type: [Referência da API](integracoes/api-referencia.md)
 
