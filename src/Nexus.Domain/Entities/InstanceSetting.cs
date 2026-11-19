@@ -25,4 +25,10 @@ public static class InstanceSettingKeys
 
     /// <summary>Configuração do login pelo Active Directory (JSON de DirectorySettings).</summary>
     public const string DirectoryLdap = "directory.ldap";
+
+    /// <summary>
+    /// E-mails que administram a instalação, definidos pela tela (JSON de lista). Somam-se aos de
+    /// License:Administrators; sem nenhum dos dois, a primeira conta que entra é gravada aqui.
+    /// </summary>
+    public const string Administrators = "instance.administrators";
 }

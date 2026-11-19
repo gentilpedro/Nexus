@@ -69,3 +69,6 @@ logs/
 # Build local do site de documentação (docs-site/)
 docs-site/site/
 docs-site/.venv/
+
+# Python (hooks do site de docs)
+__pycache__/

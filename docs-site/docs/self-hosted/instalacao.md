@@ -58,9 +58,9 @@ vazios ficam com o exemplo. Nada sai do seu navegador, e nenhuma senha é digita
 </div>
 </section>
 <section class="nx-instalador__cartao">
-<h3>Administração e licença<small>A instalação sobe vazia; a conta criada com este e-mail é a administradora.</small></h3>
+<h3>Administração e licença<small>A instalação sobe vazia. Vazio: a primeira pessoa que entrar administra; preenchido: só a conta com este e-mail.</small></h3>
 <div class="nx-instalador__campos">
-<label class="nx-instalador__campo"><span>E-mail de quem administra a instalação</span><input type="email" name="admin" placeholder="ti@suaempresa.com.br"><small>Vê Licença da instalação e Active Directory no menu da conta.</small></label>
+<label class="nx-instalador__campo"><span>E-mail de quem administra a instalação (opcional)</span><input type="email" name="admin" placeholder="ti@suaempresa.com.br"><small>Quem administra vê Licença da instalação e Active Directory no menu da conta e pode promover outras contas.</small></label>
 <label class="nx-instalador__caixa"><input type="checkbox" name="temChave" checked><span>Tenho a chave de licença (<code>NXL-...</code>) <small>(desmarcada: 30 dias de avaliação)</small></span></label>
 </div>
 </section>
@@ -279,21 +279,23 @@ sozinho; no Nginx, aponte `ssl_certificate` para ele.
 
 ## 4. Primeira conta
 
-A instalação sobe sem nenhuma conta. Quem administra a instalação (vê as telas **Licença da
-instalação** e **Active Directory**) é a conta cujo e-mail você respondeu em "quem administra a
-instalação", gravado em `License__Administrators__0` no compose. Então:
+A instalação sobe sem nenhuma conta. **A primeira pessoa que entrar passa a administrar a
+instalação**: vê as telas **Licença da instalação** e **Active Directory** no menu da conta e
+pode promover outras contas por lá. Então:
 
-1. Abra o endereço do seu Nexus e clique em **Criar conta**, usando exatamente esse e-mail.
+1. Abra o endereço do seu Nexus e clique em **Criar conta**.
 2. Confirme a conta pelo link que chega por e-mail. Sem SMTP configurado, confirme no banco
    ([E-mail → Sem SMTP](email.md#sem-smtp)).
 3. Entre. No menu da conta, no canto superior direito, aparecem **Licença da instalação** e
-   **Active Directory**. Contas criadas com outros e-mails não têm esses itens.
+   **Active Directory**. Em *Licença da instalação → Administradores* você promove outras
+   contas (elas precisam existir) e remove, sem nunca ficar ninguém.
 4. Crie o workspace e convide a equipe. Com o [Active Directory](active-directory.md)
    configurado, a equipe entra com a senha da rede e as contas nascem sozinhas no primeiro login.
 
-Para mais de um administrador, marque `License__Administrators__1` nas variáveis opcionais (ou
-acrescente no compose) e recrie o container (`docker compose up -d --wait web`). Se a primeira
-conta foi criada com outro e-mail, faça o mesmo com o e-mail certo.
+Se você preencheu "e-mail de quem administra a instalação" no montador, a regra da primeira
+pessoa não vale: só a conta com aquele e-mail (`License__Administrators__0` no compose)
+administra, e ela pode promover outras pela tela. Serve para quem quer fixar isso por
+configuração.
 
 ## 5. Conferir
 
