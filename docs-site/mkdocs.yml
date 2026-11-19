@@ -76,6 +76,10 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
 
+# Versão no endereço do CSS e do JS (#92): o cache do Nginx/Cloudflare não segura mudança.
+hooks:
+  - hooks/cachebust.py
+
 plugins:
   - search:
       lang: pt

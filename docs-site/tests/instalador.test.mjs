@@ -1,10 +1,10 @@
-// Testes do montador de instalação (docs/assets/javascripts/instalador.js), issue #90.
+// Testes do montador de instalação (docs/assets/javascripts/instalador.js), issues #90 e #92.
 //
 //   node --test "docs-site/tests/*.test.mjs"
 //
 // 1. Cada combinação de respostas gera um docker-compose.yml que o `docker compose config` aceita.
 // 2. O exemplo estático da página Instalação (o que aparece sem JavaScript) é exatamente o que o
-//    montador gera com as respostas padrão, então os dois nunca divergem.
+//    montador gera com o EXEMPLO, então os dois nunca divergem.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const aqui = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const { gerar, PADRAO } = require('../docs/assets/javascripts/instalador.js');
+const { gerar, EXEMPLO, VARIAVEIS } = require('../docs/assets/javascripts/instalador.js');
 
 // O .env que os comandos criam, com os $(...) trocados por valores fixos: o compose config só
 // precisa que as variáveis existam.
@@ -46,23 +46,26 @@ function composeConfig(resultado) {
   }
 }
 
+const todasVars = {};
+for (const g of VARIAVEIS) for (const v of g.itens) todasVars[v.nome] = '';
+
 const combinacoes = {
-  padrao: {},
+  'vazio (tudo no exemplo)': {},
+  exemplo: EXEMPLO,
   'sem proxy': { proxy: 'nenhum' },
   caddy: { proxy: 'caddy' },
   'outro proxy': { proxy: 'outro' },
-  'banco externo': { banco: 'externo', dbHost: 'pg.acme.local', dbPorta: '5433', dbNome: 'nexus', dbUsuario: 'nexus' },
-  avaliacao: { licenca: 'avaliacao' },
-  'rede fechada': { registro: 'arquivo' },
-  google: { smtp: 'google' },
-  brevo: { smtp: 'brevo' },
-  ses: { smtp: 'ses', sesRegiao: 'us-east-1' },
-  resend: { smtp: 'resend' },
-  relay: { smtp: 'relay', smtpHost: 'smtp.acme.local', smtpPorta: '25' },
-  'sem e-mail': { smtp: 'nenhum' },
-  redis: { redis: true },
-  'ca interna': { ca: true },
-  tudo: { proxy: 'caddy', banco: 'externo', licenca: 'avaliacao', registro: 'arquivo', smtp: 'relay', redis: true, ca: true },
+  'porta diferente': { porta: '8090' },
+  'banco externo': { dbContainer: false, dbHost: 'pg.acme.local', dbPorta: '5433', dbNome: 'nexus', dbUsuario: 'nexus' },
+  avaliacao: { temChave: false },
+  'rede fechada': { redeFechada: true },
+  'smtp com usuário': { smtpHost: 'smtp.office365.com', smtpPorta: '587', smtpUsuario: 'nexus@acme.com' },
+  'smtp relay sem usuário': { smtpHost: 'smtp.acme.local', smtpPorta: '25' },
+  'redis no compose': { redisContainer: true },
+  'redis externo': { redisEndereco: 'redis.acme.local:6379' },
+  'ca interna': { ca: '/etc/ssl/certs/acme-ca.pem' },
+  'todas as variáveis opcionais': { vars: todasVars },
+  tudo: { proxy: 'caddy', dbContainer: false, temChave: false, redeFechada: true, smtpHost: 'smtp.acme.local', redisContainer: true, ca: '/tmp/ca.pem', vars: { Logging__LogLevel__Default: 'Information', Support__WhatsAppNumber: '+55 11 99999-0000' } },
 };
 
 for (const [nome, opcoes] of Object.entries(combinacoes)) {
@@ -74,33 +77,61 @@ for (const [nome, opcoes] of Object.entries(combinacoes)) {
   });
 }
 
+test('vazio: obrigatórios caem no exemplo, opcionais ficam de fora', () => {
+  const r = gerar({});
+  assert.equal(r.opcoes.endereco, 'nexus.suaempresa.com.br');
+  assert.equal(r.opcoes.admin, 'ti@suaempresa.com.br');
+  assert.doesNotMatch(r.compose, /Smtp__Host/);
+  assert.doesNotMatch(r.compose, /Redis__ConnectionString|LDAPTLS_CACERT|# Opcionais/);
+  assert.doesNotMatch(r.env, /SMTP_/);
+});
+
 test('sem proxy: http direto, porta aberta, sem KNOWN_PROXIES', () => {
-  const r = gerar({ proxy: 'nenhum' });
-  assert.match(r.compose, /PUBLIC_BASE_URL: http:\/\/nexus\.suaempresa\.com\.br:5100/);
-  assert.match(r.compose, /ports: \["5100:8080"\]/);
+  const r = gerar({ proxy: 'nenhum', porta: '8090' });
+  assert.match(r.compose, /PUBLIC_BASE_URL: http:\/\/nexus\.suaempresa\.com\.br:8090/);
+  assert.match(r.compose, /ports: \["8090:8080"\]/);
   assert.doesNotMatch(r.compose, /KNOWN_PROXIES/);
+  assert.match(r.proxy.texto, /:8090/);
 });
 
 test('banco externo: sem serviço db, senha em DB_PASSWORD', () => {
-  const r = gerar({ banco: 'externo', dbHost: 'pg.acme.local' });
+  const r = gerar({ dbContainer: false, dbHost: 'pg.acme.local' });
   assert.doesNotMatch(r.compose, /^\s+db:$/m);
   assert.match(r.compose, /Host=pg\.acme\.local;Port=5432;Database=Nexus;Username=nexus;Password=\$\{DB_PASSWORD\}/);
   assert.match(r.env, /^DB_PASSWORD=/m);
   assert.doesNotMatch(r.env, /POSTGRES_/);
 });
 
-test('SES monta o host pela região; Resend fixa o usuário; relay sem credenciais', () => {
-  assert.match(gerar({ smtp: 'ses', sesRegiao: 'us-east-1' }).env, /SMTP_HOST=email-smtp\.us-east-1\.amazonaws\.com/);
-  assert.match(gerar({ smtp: 'resend' }).env, /SMTP_USER=resend/);
-  const relay = gerar({ smtp: 'relay', smtpHost: 'smtp.acme.local', smtpPorta: '25' });
-  assert.match(relay.env, /SMTP_HOST=smtp\.acme\.local\nSMTP_PORT=25/);
-  assert.doesNotMatch(relay.compose, /Smtp__UserName/);
+test('SMTP: com usuário leva credenciais; sem usuário, não; remetente segue o endereço', () => {
+  const com = gerar({ smtpHost: 'smtp.office365.com', smtpUsuario: 'nexus@acme.com', endereco: 'nexus.acme.com.br' });
+  assert.match(com.compose, /Smtp__UserName/);
+  assert.match(com.env, /SMTP_SENDER_EMAIL=nexus@acme\.com\.br/);
+  const sem = gerar({ smtpHost: 'smtp.acme.local', smtpPorta: '25' });
+  assert.doesNotMatch(sem.compose, /Smtp__UserName/);
+  assert.match(sem.env, /SMTP_HOST=smtp\.acme\.local\nSMTP_PORT=25/);
 });
 
-test('sem e-mail: nada de Smtp no compose nem no .env', () => {
-  const r = gerar({ smtp: 'nenhum' });
-  assert.doesNotMatch(r.compose, /Smtp__Host/);
-  assert.doesNotMatch(r.env, /SMTP_/);
+test('Redis: no compose sobe o serviço; externo só a connection string', () => {
+  const c = gerar({ redisContainer: true });
+  assert.match(c.compose, /^\s+redis:$/m);
+  assert.match(c.compose, /Redis__ConnectionString: "redis:6379"/);
+  const e = gerar({ redisEndereco: 'redis.acme.local:6379' });
+  assert.doesNotMatch(e.compose, /^\s+redis:$/m);
+  assert.match(e.compose, /Redis__ConnectionString: "redis\.acme\.local:6379"/);
+});
+
+test('CA interna: variável, volume e cópia nos comandos', () => {
+  const r = gerar({ ca: '/etc/ssl/certs/acme-ca.pem' });
+  assert.match(r.compose, /LDAPTLS_CACERT: \/app\/ca\/empresa-ca\.pem/);
+  assert.match(r.compose, /\.\/empresa-ca\.pem:\/app\/ca\/empresa-ca\.pem:ro/);
+  assert.match(r.comandos, /cp \/etc\/ssl\/certs\/acme-ca\.pem empresa-ca\.pem/);
+});
+
+test('variáveis opcionais: marcada entra com o valor ou com o padrão; desconhecida é ignorada', () => {
+  const r = gerar({ vars: { Logging__LogLevel__Default: 'Information', AUDIT_LOG_RETENTION_DAYS: '', INVENTADA: 'x' } });
+  assert.match(r.compose, /Logging__LogLevel__Default: "Information"/);
+  assert.match(r.compose, /AUDIT_LOG_RETENTION_DAYS: "730"/);
+  assert.doesNotMatch(r.compose, /INVENTADA/);
 });
 
 test('endereço aceita URL colada e limpa', () => {
@@ -110,7 +141,7 @@ test('endereço aceita URL colada e limpa', () => {
 });
 
 test('rede fechada: docker load no lugar do pull, sem token no .env', () => {
-  const r = gerar({ registro: 'arquivo' });
+  const r = gerar({ redeFechada: true });
   assert.match(r.comandos, /docker load < nexus-web-1\.24\.0\.tar\.gz/);
   assert.doesNotMatch(r.comandos, /docker login/);
   assert.doesNotMatch(r.env, /NEXUS_REGISTRY_TOKEN/);
@@ -128,10 +159,17 @@ function blocosEstaticos() {
   return blocos;
 }
 
-test('o exemplo estático da página é o que o montador gera por padrão', () => {
-  const r = gerar(PADRAO);
+test('o exemplo estático da página é o que o montador gera com o EXEMPLO', () => {
+  const r = gerar(EXEMPLO);
   const blocos = blocosEstaticos();
   assert.equal(blocos.yaml, r.compose, 'docker-compose.yml estático difere do gerado');
   assert.equal(blocos.bash, r.comandos, 'comandos estáticos diferem dos gerados');
   assert.equal(blocos.nginx, r.proxy.texto, 'bloco do Nginx estático difere do gerado');
+});
+
+test('todo campo do formulário da página existe no montador', () => {
+  const md = readFileSync(join(aqui, '..', 'docs', 'self-hosted', 'instalacao.md'), 'utf8');
+  const nomes = new Set([...md.matchAll(/name="([a-zA-Z]+)"/g)].map(m => m[1]));
+  const conhecidos = new Set(Object.keys(EXEMPLO));
+  for (const n of nomes) assert.ok(conhecidos.has(n), `campo ${n} do formulário não existe no montador`);
 });
