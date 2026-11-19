@@ -203,6 +203,105 @@ public class LicenseServiceTests
         Assert.False(fromPlans.IsAdministrator(null));
     }
 
+    // --- Administradores pela tela e a primeira conta que entra (#91).
+
+    private static LicenseService ServiceWithoutConfiguredAdministrators(IDbContextFactory<AppDbContext> factory) =>
+        new(factory, Microsoft.Extensions.Options.Options.Create(new LicenseOptions { PublicKey = Keys.Public }), timeProvider: new FakeTimeProvider(Now), build: BuildToday);
+
+    private static async Task AddUsersAsync(IDbContextFactory<AppDbContext> factory, CancellationToken ct, params (string Id, string Email)[] users)
+    {
+        await using var db = factory.CreateDbContext();
+        db.Users.AddRange(users.Select(u => new ApplicationUser { Id = u.Id, UserName = u.Email, Email = u.Email, NormalizedEmail = u.Email.ToUpperInvariant() }));
+        await db.SaveChangesAsync(ct);
+    }
+
+    [Fact]
+    public async Task FirstLogin_BecomesAdministrator_WhenNobodyIsConfigured()
+    {
+        var factory = TestDb.CreateFactory();
+        var ct = TestContext.Current.CancellationToken;
+        await AddUsersAsync(factory, ct, ("ana", "ana@acme.com.br"), ("bia", "bia@acme.com.br"));
+        var service = ServiceWithoutConfiguredAdministrators(factory);
+        await service.RefreshAsync(ct);
+        Assert.False(service.HasAdministrators);
+
+        await service.RecordLoginAsync("ana", ct);
+        await service.RecordLoginAsync("bia", ct);
+
+        Assert.True(service.IsAdministrator(Principal("Ana@acme.com.br")));
+        Assert.False(service.IsAdministrator(Principal("bia@acme.com.br")));
+        var admins = await service.GetAdministratorsAsync(ct);
+        Assert.Equal([new LicenseService.Administrator("ana@acme.com.br", false)], admins);
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(1, await db.AuditLogEntries.CountAsync(a => a.Action == AuditAction.InstanceAdministratorAdded && a.TargetId == "ana@acme.com.br", ct));
+
+        // Outro processo (ou a subida seguinte) relê o banco e enxerga a mesma pessoa.
+        var again = ServiceWithoutConfiguredAdministrators(factory);
+        await again.RefreshAsync(ct);
+        Assert.True(again.IsAdministrator(Principal("ana@acme.com.br")));
+    }
+
+    [Fact]
+    public async Task FirstLogin_DoesNotClaim_WhenAdministratorsAreConfigured()
+    {
+        var factory = TestDb.CreateFactory();
+        var ct = TestContext.Current.CancellationToken;
+        await AddUsersAsync(factory, ct, ("ana", "ana@acme.com.br"));
+        var service = Service(factory);
+
+        await service.RecordLoginAsync("ana", ct);
+
+        Assert.False(service.IsAdministrator(Principal("ana@acme.com.br")));
+        Assert.True(service.IsAdministrator(Principal("admin@acme.com.br")));
+        Assert.Equal([new LicenseService.Administrator("admin@acme.com.br", true)], await service.GetAdministratorsAsync(ct));
+    }
+
+    [Fact]
+    public async Task Administrators_CanBePromotedAndRemoved_ButNeverLeaveNobody()
+    {
+        var factory = TestDb.CreateFactory();
+        var ct = TestContext.Current.CancellationToken;
+        await AddUsersAsync(factory, ct, ("ana", "ana@acme.com.br"), ("bia", "bia@acme.com.br"));
+        var service = ServiceWithoutConfiguredAdministrators(factory);
+        await service.RecordLoginAsync("ana", ct);
+
+        var unknown = await service.AddAdministratorAsync("ninguem@acme.com.br", "ana", ct);
+        var twice = await service.AddAdministratorAsync("ANA@acme.com.br", "ana", ct);
+        var promoted = await service.AddAdministratorAsync(" bia@acme.com.br ", "ana", ct);
+
+        Assert.False(unknown.Ok);
+        Assert.Contains("precisa criar a conta", unknown.Message);
+        Assert.False(twice.Ok);
+        Assert.True(promoted.Ok, promoted.Message);
+        Assert.True(service.IsAdministrator(Principal("bia@acme.com.br")));
+        Assert.Equal(2, (await service.GetAdministratorsAsync(ct)).Count);
+
+        var removedAna = await service.RemoveAdministratorAsync("ana@acme.com.br", "bia", ct);
+        var last = await service.RemoveAdministratorAsync("bia@acme.com.br", "bia", ct);
+
+        Assert.True(removedAna.Ok, removedAna.Message);
+        Assert.False(service.IsAdministrator(Principal("ana@acme.com.br")));
+        Assert.False(last.Ok);
+        Assert.Contains("pelo menos um administrador", last.Message);
+        Assert.True(service.IsAdministrator(Principal("bia@acme.com.br")));
+        await using var db = factory.CreateDbContext();
+        Assert.Equal(1, await db.AuditLogEntries.CountAsync(a => a.Action == AuditAction.InstanceAdministratorRemoved, ct));
+    }
+
+    [Fact]
+    public async Task ConfiguredAdministrators_CannotBeRemovedFromTheScreen()
+    {
+        var factory = TestDb.CreateFactory();
+        var ct = TestContext.Current.CancellationToken;
+        var service = Service(factory);
+
+        var result = await service.RemoveAdministratorAsync("admin@acme.com.br", null, ct);
+
+        Assert.False(result.Ok);
+        Assert.Contains("License__Administrators", result.Message);
+        Assert.True(service.IsAdministrator(Principal("admin@acme.com.br")));
+    }
+
     private static System.Security.Claims.ClaimsPrincipal Principal(string email) =>
         new(new System.Security.Claims.ClaimsIdentity([new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, email)], "test"));
 }

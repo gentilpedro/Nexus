@@ -73,14 +73,16 @@ for (const [nome, opcoes] of Object.entries(combinacoes)) {
     const r = gerar(opcoes);
     const saida = composeConfig(r);
     assert.match(saida, /ghcr\.io\/aamora-tec\/nexus-web:1\.24\.0/);
-    assert.match(saida, /License__Administrators__0: ti@suaempresa\.com\.br/);
+    if (r.opcoes.admin) assert.match(saida, /License__Administrators__0: ti@suaempresa\.com\.br/);
   });
 }
 
 test('vazio: obrigatórios caem no exemplo, opcionais ficam de fora', () => {
   const r = gerar({});
   assert.equal(r.opcoes.endereco, 'nexus.suaempresa.com.br');
-  assert.equal(r.opcoes.admin, 'ti@suaempresa.com.br');
+  assert.equal(r.opcoes.admin, '', 'administrador é opcional: vazio, a primeira pessoa que entra administra');
+  assert.doesNotMatch(r.compose, /License__Administrators__0/);
+  assert.match(r.compose, /primeira pessoa que entrar/);
   assert.doesNotMatch(r.compose, /Smtp__Host/);
   assert.doesNotMatch(r.compose, /Redis__ConnectionString|LDAPTLS_CACERT|# Opcionais/);
   assert.doesNotMatch(r.env, /SMTP_/);

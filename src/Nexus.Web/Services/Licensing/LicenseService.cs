@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Nexus.Domain.Entities;
@@ -108,12 +109,17 @@ public sealed class LicenseService(
     private readonly LicenseOptions opt = options.Value;
     private readonly TimeProvider clock = timeProvider ?? TimeProvider.System;
     private readonly AppVersionInfo buildInfo = build ?? AppVersion.Current;
-    private readonly HashSet<string> administrators = (options.Value.Administrators.Count > 0
+    // Administradores fixados por configuração (License:Administrators ou, vazio, Plans:UnlimitedAccounts).
+    private readonly HashSet<string> configuredAdministrators = (options.Value.Administrators.Count > 0
             ? options.Value.Administrators
             : planOptions?.Value.UnlimitedAccounts ?? [])
         .Where(e => !string.IsNullOrWhiteSpace(e))
         .Select(e => e.Trim())
         .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    // Administradores definidos pela tela (#91), guardados em InstanceSettings. Lidos na subida e a
+    // cada refresh; trocados por inteiro a cada mudança, nunca editados no lugar.
+    private volatile HashSet<string> storedAdministrators = new(StringComparer.OrdinalIgnoreCase);
 
     private volatile LicenseStatus current = options.Value.Enforce
         ? new LicenseStatus(LicenseState.Trial, null, null, null, null, false, 0, null, DateTimeOffset.MinValue, "nenhuma")
@@ -131,7 +137,139 @@ public sealed class LicenseService(
         }
 
         var email = user.FindFirstValue(ClaimTypes.Email) ?? user.Identity.Name;
-        return email is not null && administrators.Contains(email);
+        return email is not null && (configuredAdministrators.Contains(email) || storedAdministrators.Contains(email));
+    }
+
+    /// <summary>Há algum administrador, por configuração ou pela tela.</summary>
+    public bool HasAdministrators => configuredAdministrators.Count > 0 || storedAdministrators.Count > 0;
+
+    /// <summary>Um administrador da instalação e de onde ele veio.</summary>
+    public sealed record Administrator(string Email, bool FromConfiguration);
+
+    /// <summary>Todos os administradores, os da configuração primeiro. Lê o banco para a tela estar sempre atual.</summary>
+    public async Task<IReadOnlyList<Administrator>> GetAdministratorsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        storedAdministrators = await ReadStoredAdministratorsAsync(db, ct);
+        return configuredAdministrators.OrderBy(e => e, StringComparer.OrdinalIgnoreCase).Select(e => new Administrator(e, true))
+            .Concat(storedAdministrators.Where(e => !configuredAdministrators.Contains(e)).OrderBy(e => e, StringComparer.OrdinalIgnoreCase).Select(e => new Administrator(e, false)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Promove uma conta existente a administradora da instalação. Só contas que já existem: um
+    /// e-mail digitado errado não pode virar uma porta aberta para quem se cadastrar com ele depois.
+    /// </summary>
+    public async Task<(bool Ok, string Message)> AddAdministratorAsync(string? email, string? actorUserId, CancellationToken ct = default)
+    {
+        var address = (email ?? "").Trim();
+        if (address.Length == 0)
+        {
+            return (false, "Informe o e-mail.");
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var normalized = address.ToUpperInvariant();
+        var user = await db.Users.FirstOrDefaultAsync(u => u.NormalizedEmail == normalized, ct);
+        if (user is null)
+        {
+            return (false, $"Não existe conta com o e-mail {address}. A pessoa precisa criar a conta antes.");
+        }
+
+        var stored = await ReadStoredAdministratorsAsync(db, ct);
+        if (configuredAdministrators.Contains(address) || stored.Contains(address))
+        {
+            return (false, $"{address} já administra a instalação.");
+        }
+
+        stored.Add(user.Email ?? address);
+        await WriteStoredAdministratorsAsync(db, stored, actorUserId, AuditAction.InstanceAdministratorAdded, user.Email ?? address, ct);
+        return (true, $"{user.Email} agora administra a instalação.");
+    }
+
+    /// <summary>Remove um administrador definido pela tela. Os da configuração só saem do compose; e nunca fica ninguém.</summary>
+    public async Task<(bool Ok, string Message)> RemoveAdministratorAsync(string? email, string? actorUserId, CancellationToken ct = default)
+    {
+        var address = (email ?? "").Trim();
+        if (configuredAdministrators.Contains(address))
+        {
+            return (false, $"{address} vem de License__Administrators no compose; tire de lá e recrie o container.");
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var stored = await ReadStoredAdministratorsAsync(db, ct);
+        if (!stored.Remove(address))
+        {
+            return (false, $"{address} não administra a instalação.");
+        }
+
+        if (stored.Count == 0 && configuredAdministrators.Count == 0)
+        {
+            return (false, "A instalação precisa de pelo menos um administrador. Promova outra conta antes de remover esta.");
+        }
+
+        await WriteStoredAdministratorsAsync(db, stored, actorUserId, AuditAction.InstanceAdministratorRemoved, address, ct);
+        return (true, $"{address} deixou de administrar a instalação.");
+    }
+
+    private static async Task<HashSet<string>> ReadStoredAdministratorsAsync(AppDbContext db, CancellationToken ct)
+    {
+        var setting = await db.InstanceSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == InstanceSettingKeys.Administrators, ct);
+        return ParseAdministrators(setting?.Value);
+    }
+
+    private static HashSet<string> ParseAdministrators(string? json)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return set;
+        }
+
+        try
+        {
+            foreach (var e in JsonSerializer.Deserialize<List<string>>(json) ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(e))
+                {
+                    set.Add(e.Trim());
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Valor corrompido à mão no banco: vale como vazio; a tela e o primeiro login reconstroem.
+        }
+
+        return set;
+    }
+
+    private async Task WriteStoredAdministratorsAsync(AppDbContext db, HashSet<string> stored, string? actorUserId, AuditAction action, string target, CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var json = JsonSerializer.Serialize(stored.OrderBy(e => e, StringComparer.OrdinalIgnoreCase).ToList());
+        var setting = await db.InstanceSettings.FirstOrDefaultAsync(s => s.Key == InstanceSettingKeys.Administrators, ct);
+        if (setting is null)
+        {
+            db.InstanceSettings.Add(new InstanceSetting { Key = InstanceSettingKeys.Administrators, Value = json, UpdatedAtUtc = now });
+        }
+        else
+        {
+            setting.Value = json;
+            setting.UpdatedAtUtc = now;
+        }
+
+        db.AuditLogEntries.Add(new AuditLogEntry
+        {
+            Id = Guid.NewGuid(),
+            ActorUserId = actorUserId,
+            Action = action,
+            TargetId = target,
+            Detail = action is AuditAction.InstanceAdministratorAdded ? "administrador da instalação" : "deixou de administrar a instalação",
+            CreatedAtUtc = now,
+        });
+        await db.SaveChangesAsync(ct);
+        storedAdministrators = stored;
     }
 
     /// <summary>Contas novas só são bloqueadas com a faixa cheia; quem já existe continua entrando.</summary>
@@ -162,9 +300,10 @@ public sealed class LicenseService(
         {
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var settings = await db.InstanceSettings
-                .Where(s => s.Key == InstanceSettingKeys.LicenseKey || s.Key == InstanceSettingKeys.FirstStartedAtUtc)
+                .Where(s => s.Key == InstanceSettingKeys.LicenseKey || s.Key == InstanceSettingKeys.FirstStartedAtUtc || s.Key == InstanceSettingKeys.Administrators)
                 .ToListAsync(ct);
             databaseReady = true;
+            storedAdministrators = ParseAdministrators(settings.FirstOrDefault(s => s.Key == InstanceSettingKeys.Administrators)?.Value);
 
             var stored = settings.FirstOrDefault(s => s.Key == InstanceSettingKeys.LicenseKey)?.Value;
             if (!string.IsNullOrWhiteSpace(stored))
@@ -298,7 +437,8 @@ public sealed class LicenseService(
 
     /// <summary>
     /// Carimba o último login. Só grava quando o carimbo anterior tem mais de uma hora, para um
-    /// usuário que entra e sai o dia inteiro não virar uma escrita por login.
+    /// usuário que entra e sai o dia inteiro não virar uma escrita por login. E, numa instalação
+    /// sem nenhum administrador (#91), a primeira pessoa que entra passa a administrar.
     /// </summary>
     public async Task RecordLoginAsync(string userId, CancellationToken ct = default)
     {
@@ -309,14 +449,43 @@ public sealed class LicenseService(
         if (db.Database.IsRelational())
         {
             await stale.ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAtUtc, now), ct);
+        }
+        else
+        {
+            var user = await stale.FirstOrDefaultAsync(ct);
+            if (user is not null)
+            {
+                user.LastLoginAtUtc = now;
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
+        if (!HasAdministrators)
+        {
+            await ClaimFirstAdministratorAsync(db, userId, ct);
+        }
+    }
+
+    // A instalação subiu sem License:Administrators e ninguém foi promovido pela tela: quem entra
+    // primeiro administra, como no GitLab e no Grafana. Relê o banco antes de gravar, para duas
+    // primeiras entradas quase simultâneas não se atropelarem.
+    private async Task ClaimFirstAdministratorAsync(AppDbContext db, string userId, CancellationToken ct)
+    {
+        var stored = await ReadStoredAdministratorsAsync(db, ct);
+        if (stored.Count > 0)
+        {
+            storedAdministrators = stored;
             return;
         }
 
-        var user = await stale.FirstOrDefaultAsync(ct);
-        if (user is not null)
+        var email = await db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync(ct);
+        if (string.IsNullOrWhiteSpace(email))
         {
-            user.LastLoginAtUtc = now;
-            await db.SaveChangesAsync(ct);
+            return;
         }
+
+        stored.Add(email);
+        await WriteStoredAdministratorsAsync(db, stored, userId, AuditAction.InstanceAdministratorAdded, email, ct);
+        logger?.LogInformation("Instalação sem administrador: {Email} entrou primeiro e passa a administrar.", email);
     }
 }

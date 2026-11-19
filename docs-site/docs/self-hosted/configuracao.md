@@ -32,7 +32,7 @@ Provedores, teste e o que fazer sem SMTP: [E-mail (SMTP)](email.md).
 |---|---|---|
 | `License__Key` | vazio | A chave `NXL-...` recebida da Aamora; vazio = 30 dias de avaliação |
 | `License__KeyFile` | vazio | Alternativa: caminho de um arquivo montado no container com a chave |
-| `License__Administrators__0`, `__1`... | vazio | E-mails que administram a instalação (telas de licença e Active Directory); vazio = `Plans__UnlimitedAccounts` |
+| `License__Administrators__0`, `__1`... | vazio | Fixa quem administra a instalação (telas de licença e Active Directory). Vazio: a primeira pessoa que entra administra e promove outras pela tela |
 | `License__Enforce` | `true` | Exige licença. Só a oferta em nuvem da Aamora desliga |
 
 Detalhes, avaliação e vencimento: [Licença](licenca.md).
@@ -137,7 +137,8 @@ services:
       License__Key: ${NEXUS_LICENSE_KEY}
       # Alternativa à chave inline: arquivo montado no container.
       # License__KeyFile: /app/license/nexus.key
-      # Quem administra a instalação (telas de licença e Active Directory). Mais de um: __1, __2...
+      # Fixa quem administra a instalação (telas de licença e Active Directory). Mais de um: __1, __2...
+      # Vazio ou ausente: a primeira pessoa que entrar administra e promove outras pela tela.
       License__Administrators__0: ti@suaempresa.com.br
       # Padrão true: sem chave válida, 30 dias de avaliação e depois bloqueio de atualização.
       # License__Enforce: "true"

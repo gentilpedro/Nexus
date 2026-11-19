@@ -689,6 +689,10 @@ button.settings-nav-link:not(.active) {
 .license-facts dt { color: var(--color-text-muted); font-size: 0.9rem; }
 .license-facts dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .license-banner { margin-bottom: 16px; }
+/* Administradores da instalação (#91): uma linha por e-mail, origem ao lado */
+.license-admins { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 6px; }
+.license-admins li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: 8px; }
+.license-admins li > span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .license-facts { grid-template-columns: 1fr; gap: 2px 0; } .license-facts dd { margin-bottom: 8px; } }
 
 /* Active Directory (#70): campos lado a lado na tela de configuração */

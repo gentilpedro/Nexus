@@ -34,8 +34,9 @@ sequenceDiagram
 
 ## Configurar
 
-Entre com uma conta administradora da instância (`License__Administrators` ou
-`Plans__UnlimitedAccounts`), abra o menu da conta → **Active Directory** (`/admin/diretorio`).
+Entre com uma conta administradora da instalação (a primeira que entrou, uma promovida pela tela
+ou a de `License__Administrators`; ver [Licença](licenca.md#administradores-da-instalacao)), abra o
+menu da conta → **Active Directory** (`/admin/diretorio`).
 
 | Campo | O quê | Exemplo |
 |---|---|---|
