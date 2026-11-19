@@ -37,13 +37,13 @@ flowchart LR
 
 1. **Receba a chave e o token.** Com o contrato vêm a chave de licença (`NXL-...`) e o token de
    leitura do registro de imagens `ghcr.io`. Guarde os dois com o `.env`.
-2. **[Instale](instalacao.md)**: pasta, segredos, certificado de Data Protection, `docker login`,
-   `docker pull`, compose e proxy reverso.
+2. **[Instale](instalacao.md)**: responda às perguntas do montador e ele gera o compose, os
+   comandos (segredos, certificado, `docker login`, `docker pull`) e o bloco do proxy.
 3. **[Configure](configuracao.md)**: endereço público, nomes aceitos, proxy e as demais variáveis;
    a página traz o compose completo comentado.
 4. **[E-mail](email.md)**: aponte para o seu SMTP e mande um convite para si mesmo.
 5. **Primeira conta**: crie a conta com o e-mail que está em `License__Administrators`; é ela que
-   administra a instalação ([Instalação → Primeira conta](instalacao.md#6-primeira-conta)).
+   administra a instalação ([Instalação → Primeira conta](instalacao.md#4-primeira-conta)).
 6. **[Licença](licenca.md)**: confira em `/admin/licenca` cliente, validade e faixa de usuários.
 7. **[Active Directory](active-directory.md)**, se a empresa usa: login com a senha da rede.
 8. **[Integrações](integracoes.md)**: API, assistentes de IA (MCP), webhooks, feed iCal e
@@ -52,7 +52,7 @@ flowchart LR
 
 ## Páginas
 
-- [Instalação](instalacao.md): compose de referência, certificado de Data Protection, proxy, primeira conta.
+- [Instalação](instalacao.md): montador que gera o compose, os comandos e o proxy; primeira conta.
 - [Configuração](configuracao.md): todas as variáveis de ambiente e o compose completo comentado.
 - [E-mail (SMTP)](email.md): o que o Nexus envia, exemplos por provedor, como testar.
 - [Backup e restauração](backup.md): o que guardar e como voltar.
