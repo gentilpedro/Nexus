@@ -762,72 +762,117 @@ html { scrollbar-color: var(--nx-border-strong) transparent; accent-color: var(-
   .md-typeset .nx-paths > ul > li:hover::after { transform: none; }
 }
 
-/* Montador de instalação (Self-hosted → Instalação, #90): formulário à esquerda, saída com abas
-   à direita; empilha no celular. Campos no desenho do app: 36px, canto 8px, borda de 1px. */
-.md-typeset .nx-instalador { margin: 1em 0 1.5em; }
-.md-typeset .nx-instalador__grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-@media (max-width: 960px) { .md-typeset .nx-instalador__grid { grid-template-columns: minmax(0, 1fr); } }
-
-.md-typeset .nx-instalador form {
-  display: grid;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid var(--nx-border);
-  border-radius: 10px;
-  background-color: var(--nx-surface);
-}
-.md-typeset .nx-instalador fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; }
-.md-typeset .nx-instalador legend {
-  font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--nx-text-muted); padding: 0; margin-bottom: 2px;
-}
-.md-typeset .nx-instalador label { display: grid; gap: 4px; font-size: 13.5px; color: var(--nx-text-secondary); }
-.md-typeset .nx-instalador label.nx-instalador__linha { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
-.md-typeset .nx-instalador input[type="text"],
-.md-typeset .nx-instalador input[type="email"],
-.md-typeset .nx-instalador select {
-  height: 36px; padding: 0 10px; font: inherit; font-size: 14px; color: var(--nx-text);
-  background-color: var(--nx-surface); border: 1px solid var(--nx-border-strong); border-radius: 8px;
-}
-.md-typeset .nx-instalador input:focus-visible,
-.md-typeset .nx-instalador select:focus-visible { outline: 2px solid var(--nx-focus); outline-offset: 1px; }
-.md-typeset .nx-instalador input[type="checkbox"],
-.md-typeset .nx-instalador input[type="radio"] { accent-color: var(--nx-accent); width: 16px; height: 16px; margin: 0; }
-.md-typeset .nx-instalador small { font-size: 12.5px; color: var(--nx-text-muted); }
+/* Montador de instalação (Self-hosted → Instalação, #90/#92): saída no topo, cartões empilhados
+   com os campos abaixo. Campos no desenho do app: 36px, canto 8px, borda de 1px, claro e escuro. */
+.md-typeset .nx-instalador { margin: 1em 0 2em; }
 .md-typeset .nx-instalador [hidden] { display: none !important; }
 
-.md-typeset .nx-instalador__saida { border: 1px solid var(--nx-border); border-radius: 10px; overflow: hidden; background-color: var(--nx-surface-sunken); }
+.md-typeset .nx-instalador__saida {
+  border: 1px solid var(--nx-border); border-radius: 10px; overflow: hidden;
+  background-color: var(--nx-surface); box-shadow: 0 1px 2px var(--nx-shadow);
+}
 .md-typeset .nx-instalador__abas {
-  display: flex; gap: 2px; padding: 6px 8px 0; background-color: var(--nx-surface);
+  display: flex; align-items: center; gap: 2px; padding: 6px 8px 0;
   box-shadow: inset 0 -1px 0 var(--nx-border);
 }
-.md-typeset .nx-instalador__abas button {
-  font: inherit; font-size: 13.5px; font-weight: 500; color: var(--nx-text-muted);
-  background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; cursor: pointer;
+.md-typeset .nx-instalador__abas button[data-aba] {
+  font: inherit; font-size: 13.5px; font-weight: 500; color: var(--nx-text-muted); cursor: pointer;
+  background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; margin-bottom: -1px;
 }
-.md-typeset .nx-instalador__abas button:hover { color: var(--nx-text); }
-.md-typeset .nx-instalador__abas button[aria-selected="true"] { color: var(--nx-text); border-bottom-color: var(--nx-accent); }
-.md-typeset .nx-instalador__painel { position: relative; }
-.md-typeset .nx-instalador__painel pre { margin: 0; border: 0; border-radius: 0; }
-.md-typeset .nx-instalador__painel pre > code { display: block; white-space: pre; overflow-x: auto; min-height: 320px; }
-.md-typeset .nx-instalador__painel-titulo {
-  font-size: 13px; color: var(--nx-text-secondary); padding: 10px 16px 0; margin: 0;
-}
-.md-typeset .nx-instalador__copiar {
-  position: absolute; top: 8px; right: 8px; height: 30px; padding: 0 12px;
-  font: inherit; font-size: 12.5px; font-weight: 500; color: var(--nx-text); cursor: pointer;
+.md-typeset .nx-instalador__abas button[data-aba]:hover { color: var(--nx-text); }
+.md-typeset .nx-instalador__abas button[data-aba][aria-selected="true"] { color: var(--nx-text); border-bottom-color: var(--nx-accent); }
+.md-typeset .nx-instalador__ferramentas { margin-left: auto; display: flex; gap: 6px; padding-bottom: 6px; }
+.md-typeset .nx-instalador__ferramentas button {
+  height: 30px; padding: 0 12px; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--nx-text); cursor: pointer;
   background-color: var(--nx-surface); border: 1px solid var(--nx-border-strong); border-radius: 6px;
 }
-.md-typeset .nx-instalador__copiar:hover { background-color: var(--nx-hover); }
+.md-typeset .nx-instalador__ferramentas button:hover { background-color: var(--nx-hover); }
+.md-typeset .nx-instalador__painel pre { margin: 0; border: 0; border-radius: 0; background-color: var(--nx-surface-sunken); }
+.md-typeset .nx-instalador__painel pre > code { display: block; white-space: pre; overflow-x: auto; max-height: 460px; overflow-y: auto; }
+.md-typeset .nx-instalador__painel .md-clipboard { display: none; }
+.md-typeset .nx-instalador__painel-titulo { font-size: 13px; color: var(--nx-text-secondary); padding: 10px 16px 0; margin: 0; }
+
+.md-typeset .nx-instalador form { display: grid; gap: 14px; margin-top: 16px; }
+.md-typeset .nx-instalador__cartao {
+  border: 1px solid var(--nx-border); border-radius: 10px; background-color: var(--nx-surface);
+  padding: 16px 18px 18px; display: grid; gap: 12px; box-shadow: 0 1px 2px var(--nx-shadow);
+}
+.md-typeset .nx-instalador__cartao > h3 {
+  margin: 0; padding: 0; border: 0; font-size: 15px; font-weight: 600; color: var(--nx-text);
+}
+.md-typeset .nx-instalador__cartao > h3 small { display: block; font-size: 13px; font-weight: 400; color: var(--nx-text-muted); margin-top: 2px; }
+.md-typeset .nx-instalador__campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.md-typeset .nx-instalador__campos--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.md-typeset .nx-instalador__campos--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 720px) {
+  .md-typeset .nx-instalador__campos,
+  .md-typeset .nx-instalador__campos--3,
+  .md-typeset .nx-instalador__campos--4 { grid-template-columns: minmax(0, 1fr); }
+}
+.md-typeset .nx-instalador__campo { display: grid; gap: 5px; min-width: 0; align-content: start; }
+.md-typeset .nx-instalador__campo > span { font-size: 13px; font-weight: 500; color: var(--nx-text-secondary); }
+.md-typeset .nx-instalador__campo small { font-size: 12px; color: var(--nx-text-muted); }
+.md-typeset .nx-instalador input[type="text"],
+.md-typeset .nx-instalador input[type="email"] {
+  width: 100%; height: 36px; padding: 0 10px; font: inherit; font-size: 14px; color: var(--nx-text);
+  background-color: var(--nx-surface); border: 1px solid var(--nx-border-strong); border-radius: 8px;
+  box-sizing: border-box; transition: border-color 120ms var(--nx-ease), box-shadow 120ms var(--nx-ease);
+}
+.md-typeset .nx-instalador input[type="text"]::placeholder,
+.md-typeset .nx-instalador input[type="email"]::placeholder { color: var(--nx-text-muted); opacity: 0.8; }
+.md-typeset .nx-instalador input[type="text"]:focus-visible,
+.md-typeset .nx-instalador input[type="email"]:focus-visible {
+  outline: 0; border-color: var(--nx-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nx-focus) 22%, transparent);
+}
+.md-typeset .nx-instalador input[type="text"]:disabled { background-color: var(--nx-surface-sunken); color: var(--nx-text-muted); }
+.md-typeset .nx-instalador input[type="checkbox"],
+.md-typeset .nx-instalador input[type="radio"] { accent-color: var(--nx-accent); width: 16px; height: 16px; margin: 0; flex: none; }
+.md-typeset .nx-instalador__caixa { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--nx-text); cursor: pointer; }
+.md-typeset .nx-instalador__caixa > span { min-width: 0; }
+.md-typeset .nx-instalador__caixa code { font-size: 12.5px; }
+.md-typeset .nx-instalador__caixa small { color: var(--nx-text-muted); }
+
+/* Opções de um grupo (proxy): botões lado a lado, o marcado em destaque. */
+.md-typeset .nx-instalador__opcoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.md-typeset .nx-instalador__opcoes label {
+  position: relative; display: inline-flex; align-items: center; height: 34px; padding: 0 14px; cursor: pointer;
+  font-size: 13.5px; font-weight: 500; color: var(--nx-text-secondary);
+  border: 1px solid var(--nx-border-strong); border-radius: 8px; background-color: var(--nx-surface);
+}
+.md-typeset .nx-instalador__opcoes label:hover { background-color: var(--nx-hover); }
+.md-typeset .nx-instalador__opcoes input { position: absolute; opacity: 0; width: 0; height: 0; }
+.md-typeset .nx-instalador__opcoes label:has(input:checked) {
+  color: var(--nx-accent-text); border-color: var(--nx-accent); background-color: var(--nx-accent-soft);
+}
+.md-typeset .nx-instalador__opcoes label:has(input:focus-visible) { outline: 2px solid var(--nx-focus); outline-offset: 1px; }
+
+/* Variáveis opcionais: grupos recolhíveis, uma linha por variável. */
+.md-typeset .nx-instalador__grupo { border: 1px solid var(--nx-border); border-radius: 8px; background-color: var(--nx-surface); margin: 0; }
+.md-typeset .nx-instalador__grupo > summary {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; list-style: none;
+  font-size: 14px; font-weight: 500; color: var(--nx-text);
+}
+.md-typeset .nx-instalador__grupo > summary::-webkit-details-marker { display: none; }
+/* O tema desenha um ícone em ::before (posição absoluta) e o chevron em ::after; fica só o chevron. */
+.md-typeset .nx-instalador__grupo > summary::before { display: none; }
+.md-typeset .nx-instalador__grupo > summary::after { position: static; margin-left: 8px; }
+.md-typeset .nx-instalador__grupo-n { margin-left: auto; font-size: 12.5px; font-weight: 400; color: var(--nx-text-muted); }
+.md-typeset .nx-instalador__vars { display: grid; border-top: 1px solid var(--nx-border); }
+.md-typeset .nx-instalador__var {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: "nome valor" "desc valor";
+  gap: 2px 16px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--nx-divider);
+}
+.md-typeset .nx-instalador__var:first-child { border-top: 0; }
+.md-typeset .nx-instalador__var-nome { grid-area: nome; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.md-typeset .nx-instalador__var-nome code { font-size: 12.5px; }
+.md-typeset .nx-instalador__var-desc { grid-area: desc; font-size: 12.5px; color: var(--nx-text-muted); padding-left: 24px; }
+.md-typeset .nx-instalador__var > input[type="text"] { grid-area: valor; height: 34px; font-size: 13.5px; }
+@media (max-width: 720px) {
+  .md-typeset .nx-instalador__var { grid-template-columns: minmax(0, 1fr); grid-template-areas: "nome" "desc" "valor"; }
+}
+
 .md-typeset .nx-instalador__acoes { display: flex; justify-content: flex-end; }
 .md-typeset .nx-instalador__acoes button {
   font: inherit; font-size: 13px; color: var(--nx-text-muted); background: none; border: 0; cursor: pointer; padding: 4px 0;
 }
 .md-typeset .nx-instalador__acoes button:hover { color: var(--nx-accent-text); }
-/* O Material também põe um botão de copiar em todo <pre>; nos painéis do montador fica só o nosso. */
-.md-typeset .nx-instalador__painel .md-clipboard { display: none; }
