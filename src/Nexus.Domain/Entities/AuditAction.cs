@@ -18,4 +18,6 @@ public enum AuditAction
     TimeEntryDeletedByAdmin,
     DirectorySettingsUpdated,
     DirectoryAccountProvisioned,
+    InstanceAdministratorAdded,
+    InstanceAdministratorRemoved,
 }

@@ -5,6 +5,7 @@
  * ganha as seções do que foi preenchido (e-mail, banco próprio, Redis, CA interna, variáveis
  * opcionais). Tudo acontece no navegador: nada sai da página, e senha nenhuma é digitada aqui
  * (as geradas saem como $(openssl rand ...); as do cliente, como "...").
+ * O e-mail do administrador é opcional (#91): vazio, a primeira pessoa que entra administra.
  *
  * O mesmo arquivo roda em Node (docs-site/tests/instalador.test.mjs): cada combinação gera um
  * compose que o docker compose aceita, e o exemplo estático da página é o que o montador gera
@@ -82,7 +83,7 @@
     o.dbPorta = texto(e.dbPorta) || EXEMPLO.dbPorta;
     o.dbNome = texto(e.dbNome) || EXEMPLO.dbNome;
     o.dbUsuario = texto(e.dbUsuario) || EXEMPLO.dbUsuario;
-    o.admin = texto(e.admin) || EXEMPLO.admin;
+    o.admin = texto(e.admin);
     o.temChave = e.temChave === undefined ? EXEMPLO.temChave : bool(e.temChave);
     o.smtpHost = texto(e.smtpHost);
     o.smtpPorta = texto(e.smtpPorta) || EXEMPLO.smtpPorta;
@@ -178,8 +179,12 @@
     } else {
       l.push('      # Sem chave: 30 dias de avaliação. Depois, cole a chave em /admin/licenca ou em License__Key.');
     }
-    l.push('      # Quem administra a instalação (licença e Active Directory): crie a primeira conta com este e-mail.');
-    l.push('      License__Administrators__0: ' + o.admin);
+    if (o.admin) {
+      l.push('      # Quem administra a instalação (licença e Active Directory): crie a primeira conta com este e-mail.');
+      l.push('      License__Administrators__0: ' + o.admin);
+    } else {
+      l.push('      # Sem License__Administrators: a primeira pessoa que entrar passa a administrar a instalação.');
+    }
     l.push('      # Business: nada é limitado por plano.');
     l.push('      Plans__EnforceLimits: "false"');
     if (comRedis) {

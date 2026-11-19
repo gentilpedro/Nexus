@@ -42,8 +42,8 @@ flowchart LR
 3. **[Configure](configuracao.md)**: endereço público, nomes aceitos, proxy e as demais variáveis;
    a página traz o compose completo comentado.
 4. **[E-mail](email.md)**: aponte para o seu SMTP e mande um convite para si mesmo.
-5. **Primeira conta**: crie a conta com o e-mail que está em `License__Administrators`; é ela que
-   administra a instalação ([Instalação → Primeira conta](instalacao.md#4-primeira-conta)).
+5. **Primeira conta**: crie a sua conta e entre; a primeira pessoa que entra administra a
+   instalação ([Instalação → Primeira conta](instalacao.md#4-primeira-conta)).
 6. **[Licença](licenca.md)**: confira em `/admin/licenca` cliente, validade e faixa de usuários.
 7. **[Active Directory](active-directory.md)**, se a empresa usa: login com a senha da rede.
 8. **[Integrações](integracoes.md)**: API, assistentes de IA (MCP), webhooks, feed iCal e

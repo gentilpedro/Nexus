@@ -34,8 +34,21 @@ as outras duas.
 2. **Variável de ambiente** `License__Key` no compose.
 3. **Arquivo** montado no container e apontado por `License__KeyFile` (para quem usa secrets).
 
-Quem administra a instância é quem está em `License__Administrators` (lista de e-mails) ou, se
-vazio, em `Plans__UnlimitedAccounts`.
+## Administradores da instalação
+
+Quem administra a instalação vê esta tela e a do [Active Directory](active-directory.md). Há
+duas origens, e as duas valem juntas:
+
+- **Primeira pessoa que entra.** Numa instalação sem `License__Administrators`, a primeira conta
+  que faz login passa a administrar, sozinha. É a regra padrão; o montador da
+  [Instalação](instalacao.md) deixa o e-mail do administrador em branco de propósito.
+- **Configuração.** `License__Administrators__0`, `__1`... no compose fixa quem administra; com
+  isso definido, a regra da primeira pessoa não se aplica. Esses só saem do compose, não da tela.
+
+Em **Licença da instalação → Administradores** o administrador promove outras contas (a conta
+precisa existir; um e-mail errado não vira porta aberta) e remove as promovidas pela tela. Nunca
+fica ninguém: o último administrador não pode ser removido. Promoção e remoção entram no log de
+auditoria.
 
 ## Token do registro de imagens
 
@@ -63,6 +76,6 @@ troca é pela tela.
 | `License__Enforce` | `true` | Exige licença. Só a oferta em nuvem da Aamora desliga. |
 | `License__Key` | vazio | A chave `NXL-...` |
 | `License__KeyFile` | vazio | Caminho de um arquivo com a chave |
-| `License__Administrators` | vazio | E-mails que veem a tela e as faixas; vazio = `Plans__UnlimitedAccounts` |
+| `License__Administrators` | vazio | E-mails que administram a instalação; vazio = a primeira pessoa que entra, mais quem for promovido pela tela |
 | `License__TrialDays` | 30 | Dias de avaliação sem chave |
 | `License__WarningDays` | 30 | Antecedência do aviso de vencimento |

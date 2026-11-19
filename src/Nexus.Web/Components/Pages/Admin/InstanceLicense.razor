@@ -85,6 +85,53 @@
                 </EditForm>
             </div>
         }
+
+        <div class="card form-card">
+            <h2 class="form-section-title">Administradores da instalação</h2>
+            <p class="form-section-description">
+                Quem vê esta tela e a do Active Directory. Os da <strong>configuração</strong> vêm de <code>License__Administrators</code>
+                no compose; os da <strong>tela</strong> foram promovidos aqui ou entraram primeiro numa instalação sem administrador.
+            </p>
+            <ul class="license-admins">
+                @foreach (var admin in administrators)
+                {
+                    <li>
+                        <span>@admin.Email</span>
+                        <span class="badge @(admin.FromConfiguration ? "badge-status-inprogress" : "badge-status-done")">@(admin.FromConfiguration ? "configuração" : "tela")</span>
+                    </li>
+                }
+            </ul>
+            <EditForm Model="AdminInput" FormName="admin-add" OnValidSubmit="AddAdministratorAsync" method="post">
+                <DataAnnotationsValidator />
+                <div class="form-field">
+                    <label for="admin-email">Promover uma conta</label>
+                    <InputText id="admin-email" @bind-Value="AdminInput.Email" type="email" autocomplete="off" placeholder="pessoa@suaempresa.com.br" />
+                    <ValidationMessage For="() => AdminInput.Email" />
+                    <span class="field-hint">A conta precisa existir: a pessoa cria a conta e você promove aqui.</span>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn"><Icon Name="user-plus" /> Promover</button>
+                </div>
+            </EditForm>
+            @if (administrators.Any(a => !a.FromConfiguration))
+            {
+                <EditForm Model="RemoveInput" FormName="admin-remove" OnValidSubmit="RemoveAdministratorAsync" method="post">
+                    <div class="form-field">
+                        <label for="admin-remove">Remover um administrador da tela</label>
+                        <InputSelect id="admin-remove" @bind-Value="RemoveInput.Email">
+                            @foreach (var admin in administrators.Where(a => !a.FromConfiguration))
+                            {
+                                <option value="@admin.Email">@admin.Email</option>
+                            }
+                        </InputSelect>
+                        <span class="field-hint">Nunca fica ninguém: o último administrador não pode ser removido.</span>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-secondary"><Icon Name="x" /> Remover</button>
+                    </div>
+                </EditForm>
+            }
+        </div>
     </div>
 </div>
 
@@ -95,12 +142,22 @@
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
-    [SupplyParameterFromForm]
+    private IReadOnlyList<LicenseService.Administrator> administrators = [];
+
+    [SupplyParameterFromForm(FormName = "license-install")]
     private InputModel Input { get; set; } = default!;
 
-    protected override void OnInitialized()
+    [SupplyParameterFromForm(FormName = "admin-add")]
+    private AdminInputModel AdminInput { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "admin-remove")]
+    private RemoveInputModel RemoveInput { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
     {
         Input ??= new();
+        AdminInput ??= new();
+        RemoveInput ??= new();
         if (!License.IsAdministrator(HttpContext.User))
         {
             NavigationManager.NavigateTo("/not-found", replace: true);
@@ -108,6 +165,21 @@
         }
 
         status = License.Current;
+        administrators = await License.GetAdministratorsAsync(HttpContext.RequestAborted);
+    }
+
+    private string? ActorId => HttpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+    private async Task AddAdministratorAsync()
+    {
+        var (ok, text) = await License.AddAdministratorAsync(AdminInput.Email, ActorId, HttpContext.RequestAborted);
+        RedirectManager.RedirectToCurrentPageWithStatus(ok ? text : "Erro: " + text, HttpContext);
+    }
+
+    private async Task RemoveAdministratorAsync()
+    {
+        var (ok, text) = await License.RemoveAdministratorAsync(RemoveInput.Email, ActorId, HttpContext.RequestAborted);
+        RedirectManager.RedirectToCurrentPageWithStatus(ok ? text : "Erro: " + text, HttpContext);
     }
 
     private string StateLabel => status.State switch
@@ -153,5 +225,17 @@
     {
         [Required(ErrorMessage = "Cole a chave.")]
         public string Key { get; set; } = "";
+    }
+
+    private sealed class AdminInputModel
+    {
+        [Required(ErrorMessage = "Informe o e-mail.")]
+        [EmailAddress(ErrorMessage = "E-mail inválido.")]
+        public string Email { get; set; } = "";
+    }
+
+    private sealed class RemoveInputModel
+    {
+        public string Email { get; set; } = "";
     }
 }
