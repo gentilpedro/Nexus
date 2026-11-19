@@ -47,6 +47,10 @@ theme:
 extra_css:
   - assets/stylesheets/nexus.css
 
+# Montador de instalação (Self-hosted → Instalação, #90): gera compose e comandos no navegador.
+extra_javascript:
+  - assets/javascripts/instalador.js
+
 markdown_extensions:
   - admonition
   - attr_list
